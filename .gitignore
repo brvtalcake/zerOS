@@ -1,0 +1,9 @@
+**/*.out
+**/*.o
+**/*.d
+**/*.log
+**/*.txt
+toolchain/**
+config-temp/**
+.vscode/
+**/__pycache__/
