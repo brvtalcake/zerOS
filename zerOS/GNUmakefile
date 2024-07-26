@@ -2,6 +2,9 @@
 override MAKEFLAGS += -rR
 
 override KERNEL := zerOS
+override KERNEL_SECTIONS := text bootcode rodata data dynamic bss
+
+override COMMON_DEPS := GNUmakefile sectioninfo config
 
 include gnumake/gmsl
 
@@ -13,20 +16,80 @@ include gnumake/flags.mk
 include gnumake/prerequisites.mk
 
 override CFILES := $(shell cd src && find -L * -type f -name '*.c')
+override KLIBC_CFILES := $(addprefix klibc/,$(shell cd src/klibc && find -L * -type f -name '*.c'))
+override KERNEL_CFILES := $(filter-out $(KLIBC_CFILES),$(CFILES))
+
 override ASFILES := $(shell cd src && find -L * -type f -name '*.S')
+override KLIBC_ASFILES := $(addprefix klibc/,$(shell cd src/klibc && find -L * -type f -name '*.S'))
+override KERNEL_ASFILES := $(filter-out $(KLIBC_ASFILES),$(ASFILES))
+
 override NASMFILES := $(shell cd src && find -L * -type f -name '*.asm')
+override KLIBC_NASMFILES := $(addprefix klibc/,$(shell cd src/klibc && find -L * -type f -name '*.asm'))
+override KERNEL_NASMFILES := $(filter-out $(KLIBC_NASMFILES),$(NASMFILES))
+
 override OBJ := $(addprefix obj/,$(CFILES:.c=.c.o) $(ASFILES:.S=.S.o) $(NASMFILES:.asm=.asm.o))
+override KLIBC_OBJ := $(addprefix obj/,$(KLIBC_CFILES:.c=.c.o) $(KLIBC_ASFILES:.S=.S.o) $(KLIBC_NASMFILES:.asm=.asm.o))
+override KERNEL_OBJ := $(addprefix obj/,$(KERNEL_CFILES:.c=.c.o) $(KERNEL_ASFILES:.S=.S.o) $(KERNEL_NASMFILES:.asm=.asm.o))
+
 override HEADER_DEPS := $(addprefix obj/,$(CFILES:.c=.c.d) $(ASFILES:.S=.S.d))
 
 override KERNEL_MAP := linker-$(KARCH).ld
 
-.PHONY: all
+include gnumake/printvar.mk
+
+$(eval $(call PRINTVAR_RULE,KERNEL))
+$(eval $(call PRINTVAR_RULE,CFILES))
+$(eval $(call PRINTVAR_RULE,KLIBC_CFILES))
+$(eval $(call PRINTVAR_RULE,KERNEL_CFILES))
+$(eval $(call PRINTVAR_RULE,ASFILES))
+$(eval $(call PRINTVAR_RULE,KLIBC_ASFILES))
+$(eval $(call PRINTVAR_RULE,KERNEL_ASFILES))
+$(eval $(call PRINTVAR_RULE,NASMFILES))
+$(eval $(call PRINTVAR_RULE,KLIBC_NASMFILES))
+$(eval $(call PRINTVAR_RULE,KERNEL_NASMFILES))
+$(eval $(call PRINTVAR_RULE,OBJ))
+$(eval $(call PRINTVAR_RULE,KLIBC_OBJ))
+$(eval $(call PRINTVAR_RULE,KERNEL_OBJ))
+$(eval $(call PRINTVAR_RULE,HEADER_DEPS))
+$(eval $(call PRINTVAR_RULE,KERNEL_MAP))
+
+$(eval $(call PRINTVAR_RULE,BOOT_KCFLAGS))
+$(eval $(call PRINTVAR_RULE,KCFLAGS))
+
+# Default target: build the kernel.
+
+.PHONY: all sectioninfo iso config
+
+config: include/config.h
+
+sectioninfo: GNUmakefile $(KERNEL_MAP) include/klibc/generated/sections.h
+
 all: bin/$(KERNEL)
 
-bin/$(KERNEL): GNUmakefile $(KERNEL_MAP) $(OBJ)
+iso: bin/$(KERNEL).iso	
+
+bin/$(KERNEL).iso: bin/$(KERNEL) $(COMMON_DEPS) $(LIMINE_CFG)
 	mkdir -p "$$(dirname $@)"
-	$(KLD) $(OBJ) $(KLDFLAGS) -o $@
+	mkdir -p iso_root/boot/limine
+	cp bin/$(KERNEL) iso_root/boot/
+	cp $(LIMINE_CFG) iso_root/boot/limine/
+	cp $(LIMINE_DATADIR)/*.sys iso_root/boot/limine/
+	cp $(LIMINE_DATADIR)/*.bin iso_root/boot/limine/
+	mkdir -p iso_root/EFI/BOOT
+	cp $(LIMINE_DATADIR)/BOOTX64.EFI iso_root/EFI/BOOT/
+	cp $(LIMINE_DATADIR)/BOOTIA32.EFI iso_root/EFI/BOOT/
+	$(XORRISO) -as mkisofs -b boot/limine/limine-bios-cd.bin 		\
+        -no-emul-boot -boot-load-size 4 -boot-info-table 			\
+        --efi-boot boot/limine/limine-uefi-cd.bin 					\
+        -efi-boot-part --efi-boot-image --protective-msdos-label 	\
+        iso_root -o $@
+	$(LIMINE) bios-install $@
+
+bin/$(KERNEL): $(COMMON_DEPS) $(OBJ)
+	mkdir -p "$$(dirname $@)"
+	$(KCC) $(KCFLAGS) $(KCPPFLAGS) $(OBJ) $(KLINKFLAGS) -o $@
 	printf '\003' | dd of=$@ bs=1 count=1 seek=16 conv=notrunc 2>/dev/null
+	$(if $(call not,$(DEBUG_KERNEL)), $(KSTRIP) --strip-debug $@)
 
 # Include header dependencies.
 -include $(HEADER_DEPS)
@@ -40,33 +103,72 @@ obj/boot/%.c.d: src/boot/%.c GNUmakefile
 	$(KPP) $(BOOT_KCFLAGS) $(KCPPFLAGS) -M -MG -MP -MT $(@:.d=.o) $< -MF $@ > /dev/null
 
 # Compilation rules for *.c files.
-obj/%.c.o: src/%.c GNUmakefile
+obj/%.c.o: src/%.c $(COMMON_DEPS)
 	mkdir -p "$$(dirname $@)"
 	$(KCC) $(KCFLAGS) $(KCPPFLAGS) -c $< -o $@
-obj/boot/%.c.o: src/boot/%.c GNUmakefile
+obj/boot/%.c.o: src/boot/%.c $(COMMON_DEPS)
 	mkdir -p "$$(dirname $@)"
 	$(KCC) $(BOOT_KCFLAGS) $(KCPPFLAGS) -c $< -o $@
-#obj/klibc/string/%.c.o: src/klibc/string/%.c GNUmakefile
-#	mkdir -p "$$(dirname $@)"
-#	$(KCC) $(KCFLAGS) -minline-all-stringops $(KCPPFLAGS) -c $< -o $@
 
 # Compilation rules for *.S files.
-obj/%.S.o: src/%.S GNUmakefile
+obj/%.S.o: src/%.S $(COMMON_DEPS)
 	mkdir -p "$$(dirname $@)"
 	$(KCC) $(KCFLAGS) $(KCPPFLAGS) -c $< -o $@
-obj/boot/%.S.o: src/boot/%.S GNUmakefile
+obj/boot/%.S.o: src/boot/%.S $(COMMON_DEPS)
 	mkdir -p "$$(dirname $@)"
 	$(KCC) $(BOOT_KCFLAGS) $(KCPPFLAGS) -c $< -o $@
 
 # Compilation rules for *.asm (nasm) files.
-obj/%.asm.o: src/%.asm GNUmakefile
+obj/%.asm.o: src/%.asm $(COMMON_DEPS)
 	mkdir -p "$$(dirname $@)"
 	$(KNASM) $(KNASMFLAGS) $< -o $@
-obj/boot/%.asm.o: src/boot/%.asm GNUmakefile
+obj/boot/%.asm.o: src/boot/%.asm $(COMMON_DEPS)
 	mkdir -p "$$(dirname $@)"
 	$(KNASM) $(KNASMFLAGS) $< -o $@
+
+override define GENSECINFO =
+../scripts/gensectioninfo.py 						\
+--output-cfile include/klibc/generated/sections.h 	\
+--output-linkerfile $(KERNEL_MAP) 					\
+--input-linkerfile $(KERNEL_MAP).template 			\
+$(KERNEL_SECTIONS)
+endef
+
+$(KERNEL_MAP): GNUmakefile $(KERNEL_MAP).template ../scripts/gensectioninfo.py
+	$(GENSECINFO)
+
+include/klibc/generated/sections.h: GNUmakefile $(KERNEL_MAP).template ../scripts/gensectioninfo.py
+	mkdir -p "$$(dirname $@)"
+	$(GENSECINFO)
+
+override KCPU_FEATURES := $(shell cpuid_tool --flags | grep --invert-match -e '-')
+$(eval $(call PRINTVAR_RULE,KCPU_FEATURES))
+
+override define GENCONFIG =
+@echo "/* Automatically generated. Do not edit. */" > $@
+@echo "#ifndef zerOS_CONFIG_H_INCLUDED" >> $@
+@echo "#define zerOS_CONFIG_H_INCLUDED" >> $@
+@echo "" >> $@
+@echo "#undef  zerOS_CONFIG_CPU" >> $@
+@echo "#define zerOS_CONFIG_CPU $(KCPU)" >> $@
+@echo "" >> $@
+@echo "#undef  zerOS_CONFIG_ARCH" >> $@
+@echo "#define zerOS_CONFIG_ARCH $(KARCH)" >> $@
+@echo "" >> $@
+@echo "#undef  zerOS_CONFIG_DEBUG" >> $@
+@echo "#define zerOS_CONFIG_DEBUG $(if $(DEBUG_KERNEL),true,false)" >> $@
+@echo "" >> $@
+@echo "#undef  zerOS_CONFIG_CPU_FEATURES" >> $@
+@echo "#define zerOS_CONFIG_CPU_FEATURES $(KCPU_FEATURES)" >> $@
+@echo "" >> $@
+@echo "#endif" >> $@
+endef
+
+include/config.h: GNUmakefile
+	mkdir -p "$$(dirname $@)"
+	$(GENCONFIG)
 
 # Remove object files and the final executable.
 .PHONY: clean
 clean:
-	rm -rf bin obj
+	rm -rf bin obj include/klibc/generated/sections.h iso_root $(KERNEL_MAP)

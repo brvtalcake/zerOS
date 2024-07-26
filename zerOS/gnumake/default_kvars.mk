@@ -46,7 +46,7 @@ $(eval $(call DEFAULT_VAR,KSIZE,$(DEFAULT_KSIZE)))
 override DEFAULT_KPP := $(KTOOLCHAIN_DIR)/bin/$(KARCH)-elf-cpp
 $(eval $(call DEFAULT_VAR,KPP,$(DEFAULT_KPP)))
 
-override DEFAULT_KCFLAGS := -g -O2 -pipe
+override DEFAULT_KCFLAGS := -g -O3 -pipe
 $(eval $(call DEFAULT_VAR,KCFLAGS,$(DEFAULT_KCFLAGS)))
 override DEFAULT_KCPPFLAGS :=
 $(eval $(call DEFAULT_VAR,KCPPFLAGS,$(DEFAULT_KCPPFLAGS)))
@@ -54,3 +54,11 @@ override DEFAULT_KNASMFLAGS := -F dwarf -g
 $(eval $(call DEFAULT_VAR,KNASMFLAGS,$(DEFAULT_KNASMFLAGS)))
 override DEFAULT_KLDFLAGS :=
 $(eval $(call DEFAULT_VAR,KLDFLAGS,$(DEFAULT_KLDFLAGS)))
+
+LIMINE := $(KTOOLCHAIN_DIR)/bin/limine
+LIMINE_CFG := limine.cfg
+LIMINE_DATADIR := $(shell $(LIMINE) --print-datadir)
+
+XORRISO := $(shell which xorriso)
+
+DEBUG_KERNEL ?= $(false)

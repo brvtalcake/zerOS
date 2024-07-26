@@ -1,7 +1,16 @@
 #include <klibc/string.h>
 
-extern
-void* memset(void* restrict dest, int c, size_t n)
+static inline void* memset_naive(void* restrict dest, int c, size_t n);
+
+extern void* memset(void* restrict dest, int c, size_t n)
 {
-    return __builtin_memset(dest, c, n);
+    return memset_naive(dest, c, n);
+}
+
+static inline void* memset_naive(void* restrict dest, int c, size_t n)
+{
+    unsigned char* p = dest;
+    while (n--)
+        *p++ = c;
+    return dest;
 }

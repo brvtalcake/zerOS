@@ -1,86 +1,58 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
+
 #include <klibc/stdlib.h>
 #include <klibc/string.h>
+
 #include <limine.h>
 
-LIMINE_BASE_REVISION(3);
+#include <misc/sections.h>
+#include <misc/symbol.h>
 
-uint8_t zerOS_inb(uint16_t port)
+#include <boot/io.h>
+#include <boot/misc.h>
+
+IN_SECTION(".requests") SYMBOL_USED
+static volatile LIMINE_BASE_REVISION(2);
+
+// The Limine requests can be placed anywhere, but it is important that
+// the compiler does not optimise them away, so, usually, they should
+// be made volatile or equivalent, _and_ they should be accessed at least
+// once or marked as used with the "used" attribute as done here.
+
+IN_SECTION(".requests") SYMBOL_USED
+static volatile struct limine_framebuffer_request framebuffer_request = {
+    .id = LIMINE_FRAMEBUFFER_REQUEST,
+    .revision = 0
+};
+
+// Finally, define the start and end markers for the Limine requests.
+// These can also be moved anywhere, to any .c file, as seen fit.
+
+IN_SECTION(".requests_start_marker") SYMBOL_USED
+static volatile LIMINE_REQUESTS_START_MARKER;
+
+IN_SECTION(".requests_end_marker") SYMBOL_USED
+static volatile LIMINE_REQUESTS_END_MARKER;
+
+extern struct limine_framebuffer_response* get_framebuffers(void)
 {
-    uint8_t ret;
-    asm volatile(
-        "inb %1, %0" :
-        "=a"(ret)    :
-        "Nd"(port)
-    );
-    return ret;
+    return framebuffer_request.response;
 }
 
-uint16_t zerOS_inw(uint16_t port) {
-    uint16_t ret;
-    asm volatile(
-        "inw %1, %0" :
-        "=a"(ret)    :
-        "Nd"(port)
-    );
-    return ret;
-}
-
-uint32_t zerOS_inl(uint16_t port)
+void zerOS_boot_setup(void)
 {
-    uint32_t ret;
-    asm volatile(
-        "inl %1, %0" :
-        "=a"(ret)    :
-        "Nd"(port)
-    );
-    return ret;
-}
-
-void zerOS_outb(uint16_t port, uint8_t val)
-{
-    asm volatile(
-        "outb %0, %1" : : "a"(val), "Nd"(port)
-    );
-}
-
-void zerOS_outw(uint16_t port, uint16_t val)
-{
-    asm volatile(
-        "outw %0, %1" : : "a"(val), "Nd"(port)
-    );
-}
-
-void zerOS_outl(uint16_t port, uint32_t val)
-{
-    asm volatile(
-        "outl %0, %1" : : "a"(val), "Nd"(port)
-    );
-}
-
-void zerOS_halt(void)
-{
-    asm volatile("hlt");
-}
-
-void zerOS_reboot(void)
-{
-    zerOS_outw(0x64, 0xFE | (1 << 8));
-    zerOS_halt();
-}
-
-void zerOS_cli(void)
-{
-    asm volatile("cli");
-}
-
-void zerOS_hcf(void)
-{
-    zerOS_cli();
-    while (true)
+    if (LIMINE_BASE_REVISION_SUPPORTED == false)
     {
-        zerOS_halt();
+        zerOS_hcf();
     }
+
+    if (framebuffer_request.response == nullptr
+     || framebuffer_request.response->framebuffer_count < 1) {
+        zerOS_hcf();
+    }
+
+    void zerOS_kmain(void);
+    zerOS_kmain();
 }
