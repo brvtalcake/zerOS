@@ -103,11 +103,115 @@ enum zerOS_intel_cpu_feature_edx_bits
 enum zerOS_intel_strext_cpu_feature_leaf0_ebx_bits
     UNDERLYING_TYPE(uint32_t)
 {
-    zerOS_EBX_STREXT_CPU_FEATURE_FSGSBASE   = (UINT32_C(1) << 0),
-    zerOS_EBX_STREXT_CPU_FEATURE_TSC_ADJUST = (UINT32_C(1) << 1),
-    zerOS_EBX_STREXT_CPU_FEATURE_SGX        = (UINT32_C(1) << 2),
-    
-}
+    zerOS_EBX_STREXT_CPU_FEATURE_FSGSBASE    = (UINT32_C(1) << 0),
+    zerOS_EBX_STREXT_CPU_FEATURE_TSC_ADJUST  = (UINT32_C(1) << 1),
+    zerOS_EBX_STREXT_CPU_FEATURE_SGX         = (UINT32_C(1) << 2),
+    zerOS_EBX_STREXT_CPU_FEATURE_BMI1        = (UINT32_C(1) << 3),
+    zerOS_EBX_STREXT_CPU_FEATURE_HLE         = (UINT32_C(1) << 4),
+    zerOS_EBX_STREXT_CPU_FEATURE_AVX2        = (UINT32_C(1) << 5),
+    zerOS_EBX_STREXT_CPU_FEATURE_FDP_EXCPTN  = (UINT32_C(1) << 6),
+    zerOS_EBX_STREXT_CPU_FEATURE_SMEP        = (UINT32_C(1) << 7),
+    zerOS_EBX_STREXT_CPU_FEATURE_BMI2        = (UINT32_C(1) << 8),
+    zerOS_EBX_STREXT_CPU_FEATURE_ERMS        = (UINT32_C(1) << 9),
+    zerOS_EBX_STREXT_CPU_FEATURE_INVPCID     = (UINT32_C(1) << 10),
+    zerOS_EBX_STREXT_CPU_FEATURE_RTM         = (UINT32_C(1) << 11),
+    zerOS_EBX_STREXT_CPU_FEATURE_RDT_M       = (UINT32_C(1) << 12),
+    zerOS_EBX_STREXT_CPU_FEATURE_DEP_CS_DS   = (UINT32_C(1) << 13),
+    zerOS_EBX_STREXT_CPU_FEATURE_MPX         = (UINT32_C(1) << 14),
+    zerOS_EBX_STREXT_CPU_FEATURE_RDT_A       = (UINT32_C(1) << 15),
+    zerOS_EBX_STREXT_CPU_FEATURE_AVX512F     = (UINT32_C(1) << 16),
+    zerOS_EBX_STREXT_CPU_FEATURE_AVX512DQ    = (UINT32_C(1) << 17),
+    zerOS_EBX_STREXT_CPU_FEATURE_RDSEED      = (UINT32_C(1) << 18),
+    zerOS_EBX_STREXT_CPU_FEATURE_ADX         = (UINT32_C(1) << 19),
+    zerOS_EBX_STREXT_CPU_FEATURE_SMAP        = (UINT32_C(1) << 20),
+    zerOS_EBX_STREXT_CPU_FEATURE_AVX512_IFMA = (UINT32_C(1) << 21),
+    // RESERVED                              = (UINT32_C(1) << 22),
+    zerOS_EBX_STREXT_CPU_FEATURE_CLFLUSHOPT  = (UINT32_C(1) << 23),
+    zerOS_EBX_STREXT_CPU_FEATURE_CLWB        = (UINT32_C(1) << 24),
+    zerOS_EBX_STREXT_CPU_FEATURE_INTEL_PT    = (UINT32_C(1) << 25),
+    zerOS_EBX_STREXT_CPU_FEATURE_AVX512PF    = (UINT32_C(1) << 26), // (Xeon Phi only)
+    zerOS_EBX_STREXT_CPU_FEATURE_AVX512ER    = (UINT32_C(1) << 27), // (Xeon Phi only)
+    zerOS_EBX_STREXT_CPU_FEATURE_AVX512CD    = (UINT32_C(1) << 28),
+    zerOS_EBX_STREXT_CPU_FEATURE_SHA         = (UINT32_C(1) << 29),
+    zerOS_EBX_STREXT_CPU_FEATURE_AVX512BW    = (UINT32_C(1) << 30),
+    zerOS_EBX_STREXT_CPU_FEATURE_AVX512VL    = (UINT32_C(1) << 31)
+};
+
+enum zerOS_intel_strext_cpu_feature_leaf0_ecx_bits
+    UNDERLYING_TYPE(uint32_t)
+{
+    zerOS_ECX_STREXT_CPU_FEATURE_PREFETCHWT1      = (UINT32_C(1) << 0), // (Xeon Phi only)
+    zerOS_ECX_STREXT_CPU_FEATURE_AVX512_VBMI      = (UINT32_C(1) << 1),
+    zerOS_ECX_STREXT_CPU_FEATURE_UMIP             = (UINT32_C(1) << 2),
+    zerOS_ECX_STREXT_CPU_FEATURE_PKU              = (UINT32_C(1) << 3),
+    zerOS_ECX_STREXT_CPU_FEATURE_OSPKE            = (UINT32_C(1) << 4),
+    zerOS_ECX_STREXT_CPU_FEATURE_WAITPKG          = (UINT32_C(1) << 5),
+    zerOS_ECX_STREXT_CPU_FEATURE_AVX512_VBMI2     = (UINT32_C(1) << 6),
+    zerOS_ECX_STREXT_CPU_FEATURE_CET_SS           = (UINT32_C(1) << 7),
+    zerOS_ECX_STREXT_CPU_FEATURE_GFNI             = (UINT32_C(1) << 8),
+    zerOS_ECX_STREXT_CPU_FEATURE_VAES             = (UINT32_C(1) << 9),
+    zerOS_ECX_STREXT_CPU_FEATURE_VPCLMULQDQ       = (UINT32_C(1) << 10),
+    zerOS_ECX_STREXT_CPU_FEATURE_AVX512_VNNI      = (UINT32_C(1) << 11),
+    zerOS_ECX_STREXT_CPU_FEATURE_AVX512_BITALG    = (UINT32_C(1) << 12),
+    zerOS_ECX_STREXT_CPU_FEATURE_TME_EN           = (UINT32_C(1) << 13),
+    zerOS_ECX_STREXT_CPU_FEATURE_AVX512_VPOPCNTDQ = (UINT32_C(1) << 14),
+    // RESERVED                                   = (UINT32_C(1) << 15),
+    zerOS_ECX_STREXT_CPU_FEATURE_LA57             = (UINT32_C(1) << 16),
+    zerOS_ECX_STREXT_CPU_FEATURE_MAWAU            = (UINT32_C(1) << 17)
+                                                  | (UINT32_C(1) << 18)
+                                                  | (UINT32_C(1) << 19)
+                                                  | (UINT32_C(1) << 20)
+                                                  | (UINT32_C(1) << 21),
+    zerOS_ECX_STREXT_CPU_FEATURE_RDPID            = (UINT32_C(1) << 22),
+    zerOS_ECX_STREXT_CPU_FEATURE_KEYLOCKER        = (UINT32_C(1) << 23),
+    zerOS_ECX_STREXT_CPU_FEATURE_BUS_LOCK_DETECT  = (UINT32_C(1) << 24),
+    zerOS_ECX_STREXT_CPU_FEATURE_CLDEMOTE         = (UINT32_C(1) << 25),
+    // RESERVED                                   = (UINT32_C(1) << 26),
+    zerOS_ECX_STREXT_CPU_FEATURE_MOVDIRI          = (UINT32_C(1) << 27),
+    zerOS_ECX_STREXT_CPU_FEATURE_MOVDIR64B        = (UINT32_C(1) << 28),
+    zerOS_ECX_STREXT_CPU_FEATURE_ENQCMD           = (UINT32_C(1) << 29),
+    zerOS_ECX_STREXT_CPU_FEATURE_SGX_LC           = (UINT32_C(1) << 30),
+    zerOS_ECX_STREXT_CPU_FEATURE_PKS              = (UINT32_C(1) << 31)
+};
+
+enum zerOS_intel_strext_cpu_feature_leaf0_edx_bits
+    UNDERLYING_TYPE(uint32_t)
+{
+    // RESERVED                                      = (UINT32_C(1) << 0),
+    zerOS_EDX_STREXT_CPU_FEATURE_SGX_KEYS            = (UINT32_C(1) << 1),
+    zerOS_EDX_STREXT_CPU_FEATURE_AVX512_4VNNIW       = (UINT32_C(1) << 2), // (Xeon Phi only)
+    zerOS_EDX_STREXT_CPU_FEATURE_AVX512_4FMAPS       = (UINT32_C(1) << 3), // (Xeon Phi only)
+    zerOS_EDX_STREXT_CPU_FEATURE_FSRM                = (UINT32_C(1) << 4),
+    zerOS_EDX_STREXT_CPU_FEATURE_UINTR               = (UINT32_C(1) << 5),
+    // RESERVED                                      = (UINT32_C(1) << 6),
+    // RESERVED                                      = (UINT32_C(1) << 7),
+    zerOS_EDX_STREXT_CPU_FEATURE_AVX512_VP2INTERSECT = (UINT32_C(1) << 8),
+    zerOS_EDX_STREXT_CPU_FEATURE_SRBDS_CTRL          = (UINT32_C(1) << 9),
+    zerOS_EDX_STREXT_CPU_FEATURE_MD_CLEAR            = (UINT32_C(1) << 10),
+    zerOS_EDX_STREXT_CPU_FEATURE_RTM_ALWAYS_ABORT    = (UINT32_C(1) << 11),
+    // RESERVED                                      = (UINT32_C(1) << 12),
+    zerOS_EDX_STREXT_CPU_FEATURE_RTM_FORCE_ABORT     = (UINT32_C(1) << 13),
+    zerOS_EDX_STREXT_CPU_FEATURE_SERIALIZE           = (UINT32_C(1) << 14),
+    zerOS_EDX_STREXT_CPU_FEATURE_HYBRID              = (UINT32_C(1) << 15),
+    zerOS_EDX_STREXT_CPU_FEATURE_TSXLDTRK            = (UINT32_C(1) << 16),
+    // RESERVED                                      = (UINT32_C(1) << 17),
+    zerOS_EDX_STREXT_CPU_FEATURE_PCONFIG             = (UINT32_C(1) << 18),
+    zerOS_EDX_STREXT_CPU_FEATURE_ARCH_LBR            = (UINT32_C(1) << 19),
+    zerOS_EDX_STREXT_CPU_FEATURE_CET_IBT             = (UINT32_C(1) << 20),
+    // RESERVED                                      = (UINT32_C(1) << 21),
+    zerOS_EDX_STREXT_CPU_FEATURE_AMX_BF16            = (UINT32_C(1) << 22),
+    zerOS_EDX_STREXT_CPU_FEATURE_AVX512_FP16         = (UINT32_C(1) << 23),
+    zerOS_EDX_STREXT_CPU_FEATURE_AMX_TILE            = (UINT32_C(1) << 24),
+    zerOS_EDX_STREXT_CPU_FEATURE_AMX_INT8            = (UINT32_C(1) << 25),
+    zerOS_EDX_STREXT_CPU_FEATURE_IBRS_IBPB           = (UINT32_C(1) << 26),
+    zerOS_EDX_STREXT_CPU_FEATURE_STIBP               = (UINT32_C(1) << 27),
+    zerOS_EDX_STREXT_CPU_FEATURE_L1D_FLUSH           = (UINT32_C(1) << 28),
+    zerOS_EDX_STREXT_CPU_FEATURE_IA32_ARCH_CAP       = (UINT32_C(1) << 29),
+    zerOS_EDX_STREXT_CPU_FEATURE_IA32_CORE_CAP       = (UINT32_C(1) << 30),
+    zerOS_EDX_STREXT_CPU_FEATURE_SSBD                = (UINT32_C(1) << 31)
+};
+
+
 
 /**
  * @enum zerOS_intel_msr_address
