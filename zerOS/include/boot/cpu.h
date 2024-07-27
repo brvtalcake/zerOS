@@ -211,7 +211,43 @@ enum zerOS_intel_strext_cpu_feature_leaf0_edx_bits
     zerOS_EDX_STREXT_CPU_FEATURE_SSBD                = (UINT32_C(1) << 31)
 };
 
-
+enum zerOS_intel_strext_cpu_feature_leaf1_eax_bits
+    UNDERLYING_TYPE(uint32_t)
+{
+    // RESERVED                                      = (UINT32_C(1) << 0),
+    // RESERVED                                      = (UINT32_C(1) << 1),
+    // RESERVED                                      = (UINT32_C(1) << 2),
+    // RESERVED                                      = (UINT32_C(1) << 3),
+    zerOS_EAX_STREXT_CPU_FEATURE_AVX_VNNI            = (UINT32_C(1) << 4),
+    zerOS_EAX_STREXT_CPU_FEATURE_AVX512_BF16         = (UINT32_C(1) << 5),
+    // RESERVED                                      = (UINT32_C(1) << 6),
+    // RESERVED                                      = (UINT32_C(1) << 7),
+    // RESERVED                                      = (UINT32_C(1) << 8),
+    // RESERVED                                      = (UINT32_C(1) << 9),
+    zerOS_EAX_STREXT_CPU_FEATURE_FAST_0LEN_REPMOVSB  = (UINT32_C(1) << 10),
+    zerOS_EAX_STREXT_CPU_FEATURE_FAST_SHORT_REPSTOSB = (UINT32_C(1) << 11),
+    zerOS_EAX_STREXT_CPU_FEATURE_FAST_SHORT_REPCMPSB = (UINT32_C(1) << 12),
+    zerOS_EAX_STREXT_CPU_FEATURE_FAST_SHORT_REPSCASB = (UINT32_C(1) << 12),
+    // RESERVED                                      = (UINT32_C(1) << 13),
+    // RESERVED                                      = (UINT32_C(1) << 14),
+    // RESERVED                                      = (UINT32_C(1) << 15),
+    // RESERVED                                      = (UINT32_C(1) << 16),
+    // RESERVED                                      = (UINT32_C(1) << 17),
+    // RESERVED                                      = (UINT32_C(1) << 18),
+    // RESERVED                                      = (UINT32_C(1) << 19),
+    // RESERVED                                      = (UINT32_C(1) << 20),
+    // RESERVED                                      = (UINT32_C(1) << 21),
+    zerOS_EAX_STREXT_CPU_FEATURE_HRESET              = (UINT32_C(1) << 22),
+    // RESERVED                                      = (UINT32_C(1) << 23),
+    // RESERVED                                      = (UINT32_C(1) << 24),
+    // RESERVED                                      = (UINT32_C(1) << 25),
+    // RESERVED                                      = (UINT32_C(1) << 26),
+    // RESERVED                                      = (UINT32_C(1) << 27),
+    // RESERVED                                      = (UINT32_C(1) << 28),
+    // RESERVED                                      = (UINT32_C(1) << 29),
+    zerOS_EAX_STREXT_CPU_FEATURE_NO_INVD_POST_BIOS   = (UINT32_C(1) << 30),
+    // RESERVED                                      = (UINT32_C(1) << 31)
+};
 
 /**
  * @enum zerOS_intel_msr_address

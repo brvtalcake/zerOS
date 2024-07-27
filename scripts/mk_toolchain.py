@@ -516,7 +516,23 @@ def build_gcc(src: str) -> None:
             "--target=" + ENV_VARS["TARGET"],
             "--prefix=" + ENV_VARS["PREFIX"],
             "--enable-languages=c,c++",
+            "--enable-decimal-float=yes",
+            "--enable-fixed-point=auto",
+            "--enable-lto",
+            "--enable-long-long",
+            "--with-long-double-128",
+            "--enable-plugin",
             "--without-headers",
+            "--disable-shared",
+            "--disable-host-shared",
+            "--disable-libssp",
+            "--disable-libstdcxx-pch",
+            "--disable-libada",
+            "--disable-libsanitizer",
+            "--disable-libquadmath",
+            "--disable-libgomp",
+            "--disable-libstdcxx",
+            "--disable-thread",
             "--with-gnu-as",
             "--with-gnu-ld",
             *gcc_additional_config
@@ -542,7 +558,9 @@ def build_gcc(src: str) -> None:
                 *env,
                 "make",
                 *MAKEFLAGS,
-                "all-gcc"
+                "all",
+                "CFLAGS_FOR_TARGET=" + ENV_VARS["CFLAGS_FOR_TARGET"],
+                "CXXFLAGS_FOR_TARGET=" + ENV_VARS["CXXFLAGS_FOR_TARGET"]
             ],
             check=True
         )
@@ -562,7 +580,9 @@ def build_gcc(src: str) -> None:
             [
                 *env,
                 "make",
-                "install-gcc"
+                "install",
+                "CFLAGS_FOR_TARGET=" + ENV_VARS["CFLAGS_FOR_TARGET"],
+                "CXXFLAGS_FOR_TARGET=" + ENV_VARS["CXXFLAGS_FOR_TARGET"]
             ],
             check=True
         )
@@ -576,6 +596,9 @@ def build_gcc(src: str) -> None:
             perror("Aborting")
             sys.exit(1)
     pinfo("Installed GCC")
+    if True:
+        os.chdir(currdir)
+        return None
     pinfo("Building libgcc")
     try:
         subprocess.run(
