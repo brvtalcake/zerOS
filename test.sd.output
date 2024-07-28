@@ -1,0 +1,15 @@
+
+
+
+
+
+
+
+
+C_TYPE_SIZE_IS_XBITS(long long, 128)
+
+C_TYPE_SIZE_IS_XBITS(long long, 64) C_TYPE_SIZE_IS_XBITS(long long, 64) C_TYPE_SIZE_IS_XBITS(long long, 64)
+
+C_TYPE_SIZE_IS_XBITS(int, 32)
+
+C_TYPE_SIZE_IS_XBITS(short, 16)
