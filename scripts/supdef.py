@@ -297,30 +297,72 @@ class FileContent(object):
                 if ret is not None:
                     return ret
             return None
+        def _parse_macro_calls(content: str, pragma_names: list[str]) -> list[tuple[int, tuple[int, int], str, str]]:
+            '''We must handle nested calls such as:
+            MACRO1(arg1, MACRO2(arg2, arg3), arg4)
+            '''
+            ret: list[tuple[int, tuple[int, int], str, str]] = []
+            i: int = 0
+            def _find_prev_encountered_name_start(c: str, start: int) -> int:
+                for k in range(start - 1, -1, -1):
+                    if c[k].isspace() or c[k] in ['(', ')']:
+                        return k + 1
+                return 0
+            while i < len(content):
+                encountered_names: list[str] = []
+                openparen_count: int = 0
+                if content[i] == '(':
+                    potential_name_start: int = _find_prev_encountered_name_start(content, i)
+                    if i - potential_name_start > 0:
+                        encountered_names.append(content[potential_name_start:i])
+                    else:
+                        continue
+                    
+                    openparen_count += 1
+                    j: int = i + 1
+                    while j < len(content):
+                        if content[j] == '(':
+                            openparen_count += 1
+                        elif content[j] == ')':
+                            openparen_count -= 1
+                            if openparen_count == 0:
+                                break
+                        j += 1
+                    if j == len(content):
+                        perror("Unmatched parenthesis")
+                        sys.exit(1)
+
+
         unified_content: str = '\n'.join([p if isinstance(p, str) else '' for (_, p) in self.m_content])
-        FUNCCALL_REGEX = re.compile(r'^(.*\s)?(%s)\s*\((.*)\)\s+(.*)' % '|'.join(replaceable_pragma_names))
-        while True:
-            matched = re.search(FUNCCALL_REGEX, unified_content)
-            if matched is None:
-                break
-            for group in matched.groups():
-                print(f"Group: {group}")
-            sys.exit(0)
-            pragmaname = matched.group(1)
-            args = matched.group(2).split(',')
-            processed_content = ''
-            pragma = _find_pragma_by_name(pragmaname)
-            if pragma is None:
-                perror(f"Pragma {pragmaname} not found")
-                sys.exit(1)
-            if isinstance(pragma, DefinePragma):
-                processed_content = self._process_define_pragma(pragma, args)
-            elif isinstance(pragma, RunnablePragma):
-                processed_content = self._process_runnable_pragma(pragma, args)
-            else:
-                perror(f"Unsupported pragma type {pragma.m_pragma_type}")
-                sys.exit(1)
-            unified_content = unified_content[:matched.start()] + f' {processed_content} ' + unified_content[matched.end():]
+        #FUNCCALL_REGEX = re.compile(r'^(.*\s)?(%s)\s*\((.*)\)\s+(.*)' % '|'.join(replaceable_pragma_names))
+        pdebug(f"Unified content: {unified_content}")
+        pdebug(f"Replaceable pragma names: {'|'.join(replaceable_pragma_names)}")
+
+        # list[(line, (start, end), pragma_name, result)]
+        macro_calls: list[tuple[int, tuple[int, int], str, str]] = _parse_macro_calls(unified_content, replaceable_pragma_names)
+
+        #while True:
+        #    matched = re.search(FUNCCALL_REGEX, unified_content)
+        #    if matched is None:
+        #        break
+            #for group in matched.groups():
+            #    print(f"Group: {group}")
+            #continue
+            #pragmaname = matched.group(1)
+            #args = matched.group(2).split(',')
+            #processed_content = ''
+            #pragma = _find_pragma_by_name(pragmaname)
+            #if pragma is None:
+            #    perror(f"Pragma {pragmaname} not found")
+            #    sys.exit(1)
+            #if isinstance(pragma, DefinePragma):
+            #    processed_content = self._process_define_pragma(pragma, args)
+            #elif isinstance(pragma, RunnablePragma):
+            #    processed_content = self._process_runnable_pragma(pragma, args)
+            #else:
+            #    perror(f"Unsupported pragma type {pragma.m_pragma_type}")
+            #    sys.exit(1)
+            #unified_content = unified_content[:matched.start()] + f' {processed_content} ' + unified_content[matched.end():]
         realoutput.write(unified_content)
         realoutput.close()
         return None
