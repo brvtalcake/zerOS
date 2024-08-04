@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import readline
 import os
 import sys
 import subprocess
@@ -9,8 +10,10 @@ import traceback
 import argparse
 import re
 import enum
+import lark
+from lark import Lark
 import typing
-from typing import Union, Any
+from typing import Union, Any, TypeAlias, Callable
 from errprint import set_debug_mode, get_debug_mode, pdebug, pinfo, pwarning, perror
 
 def _handle_error() -> int:
@@ -64,6 +67,61 @@ def _get_tmpfile() -> str:
     t = tempfile.mkstemp()
     os.close(t[0])
     return t[1]
+
+def _get_unicode_alnums_ranges() -> list[tuple[int, int]]:
+    ret: list[tuple[int, int]] = []
+    start = -1
+    end = -1
+    for i in range(0x10FFFF):
+        if chr(i).isalnum():
+            if start == -1:
+                start = i
+            end = i
+        else:
+            if start != -1:
+                ret.append((start, end))
+                start = -1
+                end = -1
+    if start != -1:
+        ret.append((start, end))
+    return ret
+
+def _get_unicode_alnums_list2(quote=True) -> str:
+    def _maybe_quote(x):
+        if quote:
+            return f"\\U{x:08X}"
+        return f"{x:08X}"
+    return ''.join([_maybe_quote(x) for t in _get_unicode_alnums_ranges() for x in range(t[0], t[1] + 1)])
+
+def _get_unicode_alnums_list(quote=True) -> str:
+    def _maybe_quote(x):
+        if quote:
+            return f"\\U{x:08X}"
+        return f"{x:08X}"
+    ranges = _get_unicode_alnums_ranges()
+    ret = ''
+    for i, t in enumerate(ranges):
+        if i > 0:
+            ret += '|'
+        for x in range(t[0], t[1] + 1):
+            ret += _maybe_quote(x)
+    return ret
+
+def _time_function(func, *args, **kwargs):
+    import time
+    start = time.time()
+    _ret = func(*args, **kwargs)
+    end = time.time()
+    funcname = func.__name__
+    print(f"Elapsed time during {funcname} execution: {end - start}")
+    return _ret
+
+def _timed(func):
+    def _wrapper(*args, **kwargs):
+        return _time_function(func, *args, **kwargs)
+    return _wrapper
+
+REGEX_FLAGS = re.UNICODE
 
 PRAGMA_IMPORT_REGEX = re.compile(r'^\s*#\s*pragma\s+supdef\s+import\s*<(.*)>\s*$')
 
@@ -150,6 +208,7 @@ class RunnablePragma(Pragma):
         return self.m_op == 'stdout'
 
 class FileContent(object):
+    DefineApplier: TypeAlias = Callable[..., str]
     m_filepath: str
     m_content: list[tuple[int, Union[str, Pragma]]]
     m_imports: list[Any]
@@ -297,49 +356,109 @@ class FileContent(object):
                 if ret is not None:
                     return ret
             return None
-        def _parse_macro_calls(content: str, pragma_names: list[str]) -> list[tuple[int, tuple[int, int], str, str]]:
-            '''We must handle nested calls such as:
-            MACRO1(arg1, MACRO2(arg2, arg3), arg4)
+        def _parse_invocations(content: str, pragma_names: list[str]) -> list[tuple[int, tuple[int, int], str, FileContent.DefineApplier]]:
             '''
-            ret: list[tuple[int, tuple[int, int], str, str]] = []
-            i: int = 0
-            def _find_prev_encountered_name_start(c: str, start: int) -> int:
-                for k in range(start - 1, -1, -1):
-                    if c[k].isspace() or c[k] in ['(', ')']:
-                        return k + 1
-                return 0
-            while i < len(content):
-                encountered_names: list[str] = []
-                openparen_count: int = 0
-                if content[i] == '(':
-                    potential_name_start: int = _find_prev_encountered_name_start(content, i)
-                    if i - potential_name_start > 0:
-                        encountered_names.append(content[potential_name_start:i])
-                    else:
-                        continue
-                    
-                    openparen_count += 1
-                    j: int = i + 1
-                    while j < len(content):
-                        if content[j] == '(':
-                            openparen_count += 1
-                        elif content[j] == ')':
-                            openparen_count -= 1
-                            if openparen_count == 0:
-                                break
-                        j += 1
-                    if j == len(content):
-                        perror("Unmatched parenthesis")
-                        sys.exit(1)
+            We must handle nested calls such as:
+            MACRO1(arg1, MACRO2(arg2, arg3), "arg4", ...)
 
+            We must also handle things like:
+            MACRO1     (arg1, arg2,
+                arg3    , arg4)
 
+            And of course, we must also handle classic invocations like:
+            MACRO1(arg1, arg2, arg3, arg4)
+            '''
+            ret: list[tuple[int, tuple[int, int], str, FileContent.DefineApplier]] = []
+            def _fmt4lark(formatter) -> str:
+                return '(' + '|'.join(map(formatter, pragma_names)) + ')'
+
+            LARK_HIGH_PRIO: str = '.1'
+            LARK_MID_PRIO : str = '.0'
+            LARK_LOW_PRIO : str = '.-1'
+            lark_spec: str = \
+f"""
+
+program: (code | invocation)*
+
+invocation{LARK_HIGH_PRIO}: known_ident WS* LPAREN args? RPAREN WS*
+code{LARK_LOW_PRIO}: ((LPAREN code* RPAREN) | REST)*
+argcode{LARK_LOW_PRIO}: ((LPAREN code* RPAREN) | RESTNOCOMMA)*
+
+args: _separated{{arg, COMMA}}
+arg: invocation
+   | argcode
+
+known_ident{LARK_HIGH_PRIO}: KNOWN_IDENT1 | KNOWN_IDENT2
+
+REST{LARK_LOW_PRIO}: ALL | WS
+ALL{LARK_LOW_PRIO}: /./u
+RESTNOCOMMA{LARK_LOW_PRIO}: ALLNOCOMMA | WS
+ALLNOCOMMA{LARK_LOW_PRIO}: /[^,]/u
+
+LPAREN{LARK_HIGH_PRIO}: "("
+RPAREN{LARK_HIGH_PRIO}: ")"
+COMMA{LARK_HIGH_PRIO}: ","
+
+KNOWN_IDENT1: /^{_fmt4lark(lambda x: f'{x}')}/u
+KNOWN_IDENT2 /[^{_get_unicode_alnums_list()}]{_fmt4lark(lambda x: f'{x}')}/u
+
+_separated{{x, sep}}: x (sep x)*
+
+%import unicode.WS
+%import unicode.WS_INLINE
+%import common.DIGIT
+%import common.HEXDIGIT
+%import common.INT
+%import common.SIGNED_INT
+%import common.DECIMAL
+%import common.FLOAT
+%import common.SIGNED_FLOAT
+%import common.NUMBER
+%import common.SIGNED_NUMBER
+%import common.ESCAPED_STRING
+%import common.LCASE_LETTER
+%import common.UCASE_LETTER
+%import common.LETTER
+%import common.WORD
+%import common.CNAME
+%import common.CR
+%import common.LF
+%import common.NEWLINE
+%import common.SH_COMMENT
+%import common.CPP_COMMENT
+%import common.C_COMMENT
+%import common.SQL_COMMENT
+
+%ignore C_COMMENT
+%ignore CPP_COMMENT
+"""
+            parser = Lark(
+                lark_spec,
+                start='program',
+                parser='lalr',
+                lexer='contextual',
+                #parser='earley',
+                #lexer='dynamic_complete',
+                debug=get_debug_mode()
+            )
+            tree = parser.parse("aC_TYPE_SIZE_IS_XBITS(long,128)")
+            pdebug(f"Tree: {tree.pretty()}")
+            tree = parser.parse("C_TYPE_SIZE_IS_XBITS(long,128)")
+            pdebug(f"Tree: {tree.pretty()}")
+            tree = parser.parse(" C_TYPE_SIZE_IS_XBITS(long,128)")
+            pdebug(f"Tree: {tree.pretty()}")
+            tree = parser.parse( "\nC_TYPE_SIZE_IS_XBITS(long,128)")
+            pdebug(f"Tree: {tree.pretty()}")
+            tree = parser.parse("C_TYPE_SIZE_IS_XBITS(long long, 128)")
+            pdebug(f"Tree: {tree.pretty()}")
+            return ret
         unified_content: str = '\n'.join([p if isinstance(p, str) else '' for (_, p) in self.m_content])
         #FUNCCALL_REGEX = re.compile(r'^(.*\s)?(%s)\s*\((.*)\)\s+(.*)' % '|'.join(replaceable_pragma_names))
         pdebug(f"Unified content: {unified_content}")
         pdebug(f"Replaceable pragma names: {'|'.join(replaceable_pragma_names)}")
 
-        # list[(line, (start, end), pragma_name, result)]
-        macro_calls: list[tuple[int, tuple[int, int], str, str]] = _parse_macro_calls(unified_content, replaceable_pragma_names)
+        # list[(line, (start, end), pragma_name, applier)] where applier(args...) -> str
+        macro_calls: list[tuple[int, tuple[int, int], str, FileContent.DefineApplier]] = _parse_invocations(unified_content, replaceable_pragma_names)
 
         #while True:
         #    matched = re.search(FUNCCALL_REGEX, unified_content)
@@ -429,6 +548,7 @@ def parse_cmdline():
     )
     return parser.parse_args()
 
+@_timed
 def main() -> int:
     args = parse_cmdline()
     if args.debug:
