@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import readline
+import unicodedata
 import os
 import sys
 import subprocess
@@ -10,26 +11,14 @@ import traceback
 import argparse
 import re
 import enum
+import lark
+from lark import Lark
 import typing
 from typing import Union, Any, TypeAlias, Callable
 from errprint import set_debug_mode, get_debug_mode, pdebug, pinfo, pwarning, perror
-from mk_escape_seq import ALNUM_LIST, DIGIT_LIST, ALPHA_LIST, WHITESPACE_LIST, PUNCT_LIST, SYMBOL_LIST
-import functools
-
-def static_vars(**kwargs):
-    @functools.wraps
-    def decorate(func):
-        for k in kwargs:
-            setattr(func, k, kwargs[k])
-        return func
-    return decorate
 
 class OnlyExitType(Exception):
     pass
-
-def unimplemented(msg: str | None = None):
-    perror(f"found an unimplemented code path: {msg}" if msg is not None else "found an unimplemented code path!")
-    sys.exit(1)
 
 OnlyExit = OnlyExitType()
 
@@ -84,43 +73,6 @@ def _get_tmpfile() -> str:
     t = tempfile.mkstemp()
     os.close(t[0])
     return t[1]
-
-
-def _preprocess_backslashes(text: str) -> str:
-    newtext = ''
-    textlen = len(text)
-    i = 0
-    in_string_lit = False
-    in_char_lit = False
-    while i < textlen:
-        match text[i]:
-            case "\\":
-                if in_string_lit or in_char_lit:
-                    if i + 1 < textlen:
-                        newtext += text[i] + text[i + 1]
-                        i += 2
-                    else:
-                        raise ValueError("Untermianted string or character literal") # TODO: Add more info to the error
-                else:
-                    if i + 1 < textlen:
-                        if text[i + 1] != '\n':
-                            raise ValueError("Backslash outside of string or character literal must be at the end of the line")
-                        i += 2
-                    else:
-                        i += 1
-            case "\"":
-                if not in_char_lit:
-                    in_string_lit = not in_string_lit
-                    newtext += text[i]
-            case "'":
-                if not in_string_lit:
-                    in_char_lit = not in_char_lit
-                    newtext += text[i]
-            case _:
-                newtext += text[i]
-                i += 1
-    return newtext
-
 
 def _rm_clike_comments(text):
     'TODO: Test this function'
@@ -235,403 +187,21 @@ class RunnablePragma(Pragma):
         return self.m_op == 'stderr'
     def opt_stdout(self) -> bool:
         return self.m_op == 'stdout'
-    
-class Invocation(object):
-    def __init__(self, parent_text: str, pragma_name: str, start: int, end: int) -> None:
-        self.m_parent_text = parent_text
-        self.m_pragma_name = pragma_name
-        self.m_start = start
-        self.m_end = end
-        return None
-    @property
-    def parent_text(self) -> str:
-        return self.m_parent_text
-    @property
-    def pragma_name(self) -> str:
-        return self.m_pragma_name
-    @property
-    def start(self) -> int:
-        return self.m_start
-    @property
-    def end(self) -> int:
-        return self.m_end
-    def invocation_text(self) -> str:
-        return self.m_parent_text[self.m_start:self.m_end + 1]
-    
-class RawInvocation(Invocation):
-    def __init__(self, parent_text: str, pragma_name: str, start: int, end: int, argstart: int, argend: int) -> None:
-        super().__init__(parent_text, pragma_name, start, end)
-        self.m_argstart = argstart
-        self.m_argend = argend
-        return None
-    @property
-    def argstart(self) -> int:
-        return self.m_argstart
-    @property
-    def argend(self) -> int:
-        return self.m_argend
-    def argtext(self) -> str:
-        return self.m_parent_text[self.m_argstart:self.m_argend + 1]
-
-class ProcessedInvocation(Invocation):
-    def __init1(self, parent_text: str, pragma_name: str, start: int, end: int, args: list[str], result: str) -> None:
-        super().__init__(parent_text, pragma_name, start, end)
-        self.m_args = args
-        self.m_result = result
-        return None
-    def __init2(self, raw: Invocation, args: list[str], result: str) -> None:
-        super().__init__(raw.m_parent_text, raw.m_pragma_name, raw.m_start, raw.m_end)
-        self.m_args = args
-        self.m_result = result
-        return None
-    def __init__(self, *args, **kwargs) -> None:
-        if len(args) == 6:
-            self.__init1(*args)
-        elif len(args) == 3:
-            self.__init2(*args)
-        else:
-            raise ValueError("Invalid number of arguments")
-        return None
-    @property
-    def args(self) -> list[str]:
-        return self.m_args
-    @property
-    def result(self) -> str:
-        return self.m_result
-
-class InvocationParser(object):
-    def __init__(self, text: str, known_idents: list[str], get_prag: Callable[[str], Pragma | None], driver_instance) -> None:
-        self.m_text = text
-        self.m_known_idents = known_idents
-        self.m_get_prag_func = get_prag
-        self.m_driver = driver_instance
-        return
-    
-    def _get_prag(self, name: str) -> Pragma:
-        maybeprag = self.m_get_prag_func(name)
-        if maybeprag is None:
-            raise RuntimeError("Can't find pragma: %s" % (name))
-        return maybeprag
-    
-    def _substitute(self, name: str, args: list[str]) -> str:
-        return self.m_driver._process_replaceable_pragma(self._get_prag(name), args)
-    
-    def _basic_substitute_at(self, res: str, into: str, start: int, end: int) -> str:
-        return into[0:start] + res + into[end + 1:len(into)]
-    
-    def _substitute_at(self, name: str, args: list[str], into: str, start: int, end: int) -> str:
-        return self._basic_substitute_at(self._substitute(name, args), into, start, end)
-    
-    def _char_is_identifier(self, c: str, first: bool = False) -> bool:
-        if first:
-            return ord(c) in ALPHA_LIST or ord(c) == ord('_')
-        return ord(c) in ALNUM_LIST or ord(c) == ord('_')
-    def _str_is_known_identifier(self, ident: str) -> bool:
-        return ident in self.m_known_idents
-    def _str_is_identifier(self, ident: str) -> bool:
-        return self._char_is_identifier(ident[0], True) and all([self._char_is_identifier(c) for c in ident[1:]])
-
-    def _char_is_whitespace(self, c: str) -> bool:
-        return ord(c) in WHITESPACE_LIST
-    def _str_is_whitespace(self, s: str) -> bool:
-        return all([self._char_is_whitespace(c) for c in s])
-    
-    def _get_next_invocation(self, text: str | None = None, start: int = 0) -> RawInvocation | None:
-        text = text or self.m_text
-        textlen = len(text)
-        i = start
-        in_string_lit = False
-        in_char_lit = False
-        potential_ident = None
-        start = -1
-        end = -1
-        while i < textlen:
-            if self._char_is_whitespace(text[i]):
-                i += 1
-                continue
-            if self._char_is_identifier(text[i], potential_ident is None):
-                potential_ident = (potential_ident or '') + text[i]
-                i += 1
-                continue
-            if potential_ident is not None:
-                if self._str_is_known_identifier(potential_ident):
-                    start = i - len(potential_ident)
-                    break
-                potential_ident = None
-                i += 1
-                continue
-            if text[i] == "\\":
-                if not (in_string_lit or in_char_lit):
-                    raise RuntimeError("Backslash outside of string or character literal should be processed at this stage")
-                else:
-                    i += 2
-                continue
-            if text[i] == "\"":
-                if not in_char_lit:
-                    in_string_lit = not in_string_lit
-                i += 1
-                continue
-            if text[i] == "'":
-                if not in_string_lit:
-                    in_char_lit = not in_char_lit
-                i += 1
-                continue
-            i += 1
-        if start == -1:
-            return None
-        assert potential_ident is not None
-        openparens = 0
-        j = start
-        argstart = -1
-        argend   = -1
-        while j < textlen:
-            if text[j] == '(':
-                if argstart == -1:
-                    argstart = j
-                openparens += 1
-            elif text[j] == ')':
-                openparens -= 1
-                if openparens == 0:
-                    end = j
-                    argend = j
-                    break
-            j += 1
-        if end == -1:
-            raise ValueError("Unterminated invocation")
-        return RawInvocation(text, potential_ident.strip(), start, end, argstart + 1, argend - 1)
-    
-    def _get_next_arg(self, text: str, start: int) -> tuple[int, int]:
-        textlen = len(text)
-        i = start
-        in_string_lit = False
-        in_char_lit = False
-        openparens = 0
-        while i < textlen:
-            if text[i] == '(' and not (in_string_lit or in_char_lit):
-                openparens += 1
-            elif text[i] == ')' and not (in_string_lit or in_char_lit):
-                openparens -= 1
-            elif text[i] == ',' and openparens == 0 and not (in_string_lit or in_char_lit):
-                return (start, i)
-            elif text[i] == "\\":
-                if not (in_string_lit or in_char_lit):
-                    raise RuntimeError("Backslash outside of string or character literal should be processed at this stage")
-                else:
-                    i += 1
-            elif text[i] == "\"":
-                if not in_char_lit:
-                    in_string_lit = not in_string_lit
-            elif text[i] == "'":
-                if not in_string_lit:
-                    in_char_lit = not in_char_lit
-            i += 1
-        return (start, i)
-    
-    def _parse_invocation(self, raw: RawInvocation) -> ProcessedInvocation:
-        args: list[str] = []
-        expanded_args: list[str] = []
-        result: str = ''
-        nextarg_bounds: tuple[int, int] = (0, 0)
-        text = raw.argtext()
-        raw_argslen = len(text)
-        while True:
-            arg = self._get_next_arg(text, nextarg_bounds[1])
-            if arg[0] >= raw_argslen or arg[1] >= raw_argslen:
-                break
-            argtext = text[arg[0]:arg[1]]
-            args.append(argtext)
-            expanded_argtext: str
-            if len(argtext) < 3:
-                expanded_argtext = argtext
-            else:
-                expanded_argtext = argtext
-                maybenested = self._get_next_invocation(expanded_argtext, 0)
-                while maybenested is not None:
-                    processed = self._parse_invocation(maybenested)
-                    expanded_argtext = self._basic_substitute_at(processed.result, expanded_argtext, processed.start, processed.end)
-                    maybenested = self._get_next_invocation(expanded_argtext, 0)
-            expanded_args.append(expanded_argtext)
-        unimplemented()
-                    
-    #def _parse_args(self, args: str) -> list[str]:
-    #    """
-    #    Precondition(s) : `args` is a string containing all the text in the invocation left-paren and its corresponding right-paren.
-    #    Postcondition(s): Returns a list of strings containing the arguments of the invocation. All arguments containing other invocations are treated and expanded.
-    #    """
-    #    argslen = len(args)
-    #    i = 0
-    #    current_arg: str | None = None
-    #    in_string_lit = False
-    #    in_char_lit = False
-    #    openparens = 0
-    #    ret: list[str] = []
-    #    while i < argslen:
-    #        if current_arg is None:
-    #            if self._char_is_whitespace(args[i]):
-    #                i += 1
-    #                continue
-    #            if args[i] == ',':
-    #                ret.append('')
-    #                i += 1
-    #                continue
-    #            current_arg = ''
-    #        if args[i] == '(':
-    #            openparens += 1
-    #        elif args[i] == ')':
-    #            openparens -= 1
-    #        if openparens == 0:
-    #            if args[i] == ',':
-    #                ret.append(current_arg)
-    #                current_arg = None
-    #            else:
-    #                current_arg += args[i]
-    #        else:
-    #            current_arg += args[i]
-    #        i += 1
-    #    if current_arg is not None:
-    #        ret.append(current_arg)
-    #    else:
-    #        ret.append('')
-    #    return ret
-    #def _parse_invocation(
-    #    content: str,
-    #    pragma_names: list[str],
-    #    i: int,
-    #    invocations: list[tuple[int, tuple[int, int], str, str]],
-    #    known_ident: str
-    #) -> tuple[int, list[tuple[int, tuple[int, int], str, str]]]:
-    #    def _search_invocations(args: list[str]) -> list[int]:
-    #        '''
-    #        In the currently parsed invocation, search for other invocations,
-    #        and return the argument index and the resulting content. Code should
-    #        be similar to the one in _parse_invocations. All nested invocations are
-    #        passed recursively to this _parse_invocation function to get the invocation results.
-    #        '''
-    #        nargs = len(args)
-    #        i = 0
-    #        while i < nargs:
-    #            in_string_lit = False
-    #            in_char_lit = False
-    #            potential_ident = None
-    #            arglen = len(args[i])
-    #            argn = args[i]
-    #            j = 0
-    #            while j < arglen:
-    #                if self._char_is_whitespace(argn[j]):
-    #                    j += 1
-    #                    continue
-    #                if self._char_is_identifier(argn[j], potential_ident is None):
-    #                    potential_ident = (potential_ident or '') + argn[j]
-    #                    j += 1
-    #                    continue
-    #                if potential_ident is not None:
-    #                    if self._str_is_known_identifier(potential_ident, pragma_names):
-    #                        j, invocations = _parse_invocation(argn, pragma_names, j, invocations, potential_ident)
-    #                    else:
-    #                        potential_ident = None
-    #                        j += 1
-    #                    continue
-    #                if argn[j] == "\\":
-    #                    if not (in_string_lit or in_char_lit):
-    #                        raise RuntimeError("Backslash outside of string or character literal should be processed at this stage")
-    #                    else:
-    #                        j += 2
-    #                    continue
-    #                if argn[j] == "\"":
-    #                    if not in_char_lit:
-    #                        in_string_lit = not in_string_lit
-    #                    j += 1
-    #                    continue
-    #                if argn[j] == "'":
-    #                    if not in_string_lit:
-    #                        in_char_lit = not in_char_lit
-    #                    j += 1
-    #                    continue
-    #                j += 1                        
-    #    invocation = (0,)
-    #    # Search parenthesis
-    #    start = -1
-    #    end = -1
-    #    openparens = 0
-    #    j = i
-    #    while j < len(content):
-    #        if content[j] == '(':
-    #            if start == -1:
-    #                start = j
-    #            openparens += 1
-    #        elif content[j] == ')':
-    #            openparens -= 1
-    #            if openparens == 0:
-    #                end = j
-    #                break
-    #        j += 1
-    #    if start == -1 or end == -1:
-    #        raise ValueError("Unterminated invocation")
-    #    args = _parse_args(content[start + 1:end].strip())
-    #def _parse_invocations(content: str, pragma_names: list[str]) -> list[tuple[int, tuple[int, int], str, str]]:
-    #    '''
-    #    We must handle nested calls such as:
-    #    MACRO1(arg1, MACRO2(arg2, arg3), "arg4", ...)
-#
-    #    We must also handle things like:
-    #    MACRO1     (arg1, arg2,
-    #        arg3    , arg4)
-#
-    #    And of course, we must also handle classic invocations like:
-    #    MACRO1(arg1, arg2, arg3, arg4)
-    #    '''
-    #    i: int = 0
-    #    in_string_lit: bool = False
-    #    in_char_lit: bool = False
-    #    potential_ident: str | None = None
-    #    invocations: list[tuple[int, tuple[int, int], str, str]] = []
-    #    while i < len(content):
-    #        if self._char_is_whitespace(content[i]):
-    #            i += 1
-    #            continue
-    #        if self._char_is_identifier(content[i], potential_ident is None):
-    #            potential_ident = (potential_ident or '') + content[i]
-    #            i += 1
-    #            continue
-    #        if potential_ident is not None:
-    #            if self._str_is_known_identifier(potential_ident, pragma_names):
-    #                i, invocations = _parse_invocation(content, pragma_names, i, invocations, potential_ident)
-    #            else:
-    #                potential_ident = None
-    #                i += 1
-    #            continue
-    #        if content[i] == "\\":
-    #            if not (in_string_lit or in_char_lit):
-    #                raise RuntimeError("Backslash outside of string or character literal should be processed at this stage")
-    #            else:
-    #                i += 2
-    #            continue
-    #        if content[i] == "\"":
-    #            if not in_char_lit:
-    #                in_string_lit = not in_string_lit
-    #            i += 1
-    #            continue
-    #        if content[i] == "'":
-    #            if not in_string_lit:
-    #                in_char_lit = not in_char_lit
-    #            i += 1
-    #            continue
-    #        i += 1
-    #    return invocations
 
 class FileContent(object):
     DefineApplier: TypeAlias = Callable[..., str]
-
+    m_filepath: str
+    m_content: list[tuple[int, Union[str, Pragma]]]
+    m_imports: list[Any]
     def __init__(self, filepath: str):
         self.m_filepath = filepath
         self.m_content = []
         self.m_imports = []
         return None
-    
     def get_file_content(self, file_path: str) -> None:
+        # TODO: Don't forget to process all `\` characters as well
         with open(file_path, 'r') as file:
-            noeolbackslashes: str = _preprocess_backslashes(file.read())
-            noclikecomments: str = _rm_clike_comments(noeolbackslashes)
+            noclikecomments: str = _rm_clike_comments(file.read())
             lines: list[str] = noclikecomments.split('\n')
             i: int = 0
             line: str
@@ -680,20 +250,12 @@ class FileContent(object):
         return None
     def _process_import_pragma(self, pragma: ImportPragma):
         return FileContent(pragma.m_name)
-    def _process_replaceable_pragma(self, pragma: Pragma, args: list[str]) -> str:
-        if isinstance(pragma, DefinePragma) and pragma.m_pragma_type == PragmaType.DEFINE:
-            return self._process_define_pragma(pragma, args)
-        if isinstance(pragma, RunnablePragma) and pragma.m_pragma_type == PragmaType.RUNNABLE:
-            return self._process_runnable_pragma(pragma, args)
-        raise RuntimeError("Unknown pragma kind")
     def _process_define_pragma(self, pragma: DefinePragma, args: list[str]) -> str:
-        '''TODO: Move this code into DefinePragma'''
         pcontent: str = pragma.m_content
         for i, arg in enumerate(args, 1):
             pcontent = pcontent.replace(f"${i}", arg)
         return pcontent
     def _process_runnable_pragma(self, pragma: RunnablePragma, args: list[str]) -> str:
-        '''TODO: Move this code into RunnablePragma'''
         if not pragma.is_c():
             pwarning("For now, only supported language is C")
             perror("Unsupported language. Aborting")
@@ -776,24 +338,98 @@ class FileContent(object):
                 if ret is not None:
                     return ret
             return None
-        
+        def _parse_invocations(content: str, pragma_names: list[str]) -> list[tuple[int, tuple[int, int], str, FileContent.DefineApplier]]:
+            '''
+            We must handle nested calls such as:
+            MACRO1(arg1, MACRO2(arg2, arg3), "arg4", ...)
+
+            We must also handle things like:
+            MACRO1     (arg1, arg2,
+                arg3    , arg4)
+
+            And of course, we must also handle classic invocations like:
+            MACRO1(arg1, arg2, arg3, arg4)
+            '''
+            ret: list[tuple[int, tuple[int, int], str, FileContent.DefineApplier]] = []
+            def _fmt4lark(formatter) -> str:
+                return '(' + '|'.join(map(formatter, pragma_names)) + ')'
+
+            LARK_HIGH_PRIO: str = '.1'
+            LARK_MID_PRIO : str = '.0'
+            LARK_LOW_PRIO : str = '.-1'
+            lark_spec: str = \
+f"""
+
+%import escaped_unicode.WHITESPACE -> WS
+%import escaped_unicode.ALNUM
+%import escaped_unicode.ALPHA
+
+program: (code | invocation)*
+
+invocation{LARK_HIGH_PRIO}: known_ident WS* LPAREN args? RPAREN
+
+code{LARK_LOW_PRIO}:    (inparen_code | rest)*
+argcode{LARK_LOW_PRIO}: (inparen_code | restnocomma)*
+
+inparen_code: (LPAREN (code | invocation)* RPAREN)
+
+args: _separated{{arg, COMMA}}
+arg: invocation
+   | argcode
+
+known_ident: KNOWN_IDENT
+
+rest: (ALL | COMMA)+ ( WS+ (ALL | COMMA)+ )*
+restnocomma: ALL+ ( WS+ ALL+ )*
+ALL{LARK_LOW_PRIO}: /[^,\\(\\)\\u0000]/u
+
+LPAREN{LARK_HIGH_PRIO}: "("
+RPAREN{LARK_HIGH_PRIO}: ")"
+COMMA{LARK_HIGH_PRIO}: ","
+
+KNOWN_IDENT: /(?<!(ALNUM)){_fmt4lark(lambda x: f'{x}')}/u
+
+_separated{{x, sep}}: WS* x WS* (sep WS* x WS*)*
+
+"""
+            parser = Lark(
+                lark_spec,
+                start='program',
+                parser='lalr',
+                lexer='contextual',
+                #parser='earley',
+                #lexer='dynamic',
+                debug=get_debug_mode(),
+                import_paths=[os.path.dirname(__file__)]
+            )
+            try:
+                tree = parser.parse(content)
+                #tree = parser.parse("C_TYPE_SIZE_IS_XBITS(short, (long long, 1 2 8 , C_TYPE_SIZE_IS_XBITS(test) , long C_TYPE_SIZE_IS_XBITS(test) long *, (long C_TYPE_SIZE_IS_XBITS(test) long *), long (C_TYPE_SIZE_IS_XBITS(test) ) long *))")
+                #tree = parser.parse("C_TYPE_SIZE_IS_XBITS(short ë, C_TYPE_SIZE_IS_XBITS(long long, 128))")
+                print(tree.pretty("-"))
+            except lark.exceptions.UnexpectedCharacters as e:
+                perror(f"An error occurred: {e}")
+                perror(f"Context: {e.get_context(content, 100)}")
+                pdebug(f"Traceback: {traceback.format_exc()}")
+                raise OnlyExit
+            except lark.exceptions.UnexpectedToken as e:
+                perror(f"An error occurred: {e}")
+                perror(f"Context: {e.get_context(content, 100)}")
+                pdebug(f"Traceback: {traceback.format_exc()}")
+                raise OnlyExit
+            except lark.exceptions.UnexpectedInput as e:
+                perror(f"An error occurred: {e}")
+                perror(f"Context: {e.get_context(content, 100)}")
+                pdebug(f"Traceback: {traceback.format_exc()}")
+                raise OnlyExit
+            return ret
         unified_content: str = '\n'.join([p if isinstance(p, str) else '' for (_, p) in self.m_content])
         #FUNCCALL_REGEX = re.compile(r'^(.*\s)?(%s)\s*\((.*)\)\s+(.*)' % '|'.join(replaceable_pragma_names))
         pdebug(f"Unified content: {unified_content}")
         pdebug(f"Replaceable pragma names: {'|'.join(replaceable_pragma_names)}")
 
-        parser = InvocationParser(unified_content, replaceable_pragma_names, lambda s: _find_pragma_by_name(s, self), self)
-        next = parser._get_next_invocation()
-        if next is not None:
-            pinfo(f"invocation text: {next.invocation_text()}")
-            pinfo(f"arg text: {next.argtext()}")
-            pinfo(f"pragma name: {next.pragma_name}")
-        else:
-            perror("INVOCATION NOT FOUND!")
-        
-        unimplemented()
-        # list[(line, (start, end), pragma_name, result)]
-        #macro_calls: list[tuple[int, tuple[int, int], str, str]] = _parse_invocations(unified_content, replaceable_pragma_names)
+        # list[(line, (start, end), pragma_name, applier)] where applier(args...) -> str
+        macro_calls: list[tuple[int, tuple[int, int], str, FileContent.DefineApplier]] = _parse_invocations(unified_content, replaceable_pragma_names)
 
         #while True:
         #    matched = re.search(FUNCCALL_REGEX, unified_content)
