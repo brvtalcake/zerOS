@@ -32,6 +32,8 @@ override KLIBC_OBJ := $(addprefix obj/,$(KLIBC_CFILES:.c=.c.o) $(KLIBC_ASFILES:.
 override KERNEL_OBJ := $(addprefix obj/,$(KERNEL_CFILES:.c=.c.o) $(KERNEL_ASFILES:.S=.S.o) $(KERNEL_NASMFILES:.asm=.asm.o))
 
 override HEADER_DEPS := $(addprefix obj/,$(CFILES:.c=.c.d) $(ASFILES:.S=.S.d))
+override KERNEL_SUPDEF_CONFIG := include/config.h.sd
+override CONFIG_DEPS := $(shell find -L include/config.d/ -type f)
 
 override KERNEL_MAP := linker-$(KARCH).ld
 
@@ -161,10 +163,20 @@ override define GENCONFIG =
 @echo "#undef  zerOS_CONFIG_CPU_FEATURES" >> $@
 @echo "#define zerOS_CONFIG_CPU_FEATURES $(KCPU_FEATURES)" >> $@
 @echo "" >> $@
+@cat  $(KERNEL_SUPDEF_CONFIG) >> $@
+@echo "" >> $@
 @echo "#endif" >> $@
 endef
 
-include/config.h: GNUmakefile
+override define SUPDEF =
+../scripts/supdef.py $@ -o $<
+endef
+
+include/config.h: include/config.h.in GNUmakefile
+	mkdir -p "$$(dirname $@)"
+	$(SUPDEF)
+
+include/config.h.in: GNUmakefile $(CONFIG_DEPS)  $(KERNEL_SUPDEF_CONFIG)
 	mkdir -p "$$(dirname $@)"
 	$(GENCONFIG)
 

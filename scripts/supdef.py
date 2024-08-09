@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+from multiprocessing import freeze_support
 import readline
 import os
 import sys
@@ -13,8 +14,17 @@ import enum
 import typing
 from typing import Union, Any, TypeAlias, Callable
 from errprint import set_debug_mode, get_debug_mode, pdebug, pinfo, pwarning, perror
-from mk_escape_seq import ALNUM_LIST, DIGIT_LIST, ALPHA_LIST, WHITESPACE_LIST, PUNCT_LIST, SYMBOL_LIST
 import functools
+
+if __name__ == '__main__':
+    freeze_support()
+    from mk_escape_seq import get_dicts_parallel
+    import mpire as mp
+    workers = mp.WorkerPool(n_jobs=6, daemon=True, use_dill=True, enable_insights=True, start_method='forkserver')
+    ALNUM_DICT, DIGIT_DICT, ALPHA_DICT, WHITESPACE_DICT, PUNCT_DICT, SYMBOL_DICT = get_dicts_parallel(workers)
+
+def _get_exe_dir() -> str:
+    return os.path.dirname(os.path.realpath(__file__))
 
 def static_vars(**kwargs):
     @functools.wraps
@@ -322,19 +332,27 @@ class InvocationParser(object):
     def _substitute_at(self, name: str, args: list[str], into: str, start: int, end: int) -> str:
         return self._basic_substitute_at(self._substitute(name, args), into, start, end)
     
-    def _char_is_identifier(self, c: str, first: bool = False) -> bool:
-        if first:
-            return ord(c) in ALPHA_LIST or ord(c) == ord('_')
-        return ord(c) in ALNUM_LIST or ord(c) == ord('_')
     def _str_is_known_identifier(self, ident: str) -> bool:
         return ident in self.m_known_idents
-    def _str_is_identifier(self, ident: str) -> bool:
-        return self._char_is_identifier(ident[0], True) and all([self._char_is_identifier(c) for c in ident[1:]])
 
-    def _char_is_whitespace(self, c: str) -> bool:
-        return ord(c) in WHITESPACE_LIST
-    def _str_is_whitespace(self, s: str) -> bool:
-        return all([self._char_is_whitespace(c) for c in s])
+    @staticmethod
+    def _char_is_identifier(c: str, first: bool = False) -> bool:
+        matched_alnum = ALNUM_DICT()[ord(c)]
+        matched_alpha = ALPHA_DICT()[ord(c)]
+        if first:
+            return ord(c) == ord('_') or matched_alpha
+        return ord(c) == ord('_') or matched_alnum
+    @staticmethod
+    def _str_is_identifier(ident: str) -> bool:
+        return InvocationParser._char_is_identifier(ident[0], True) and all([InvocationParser._char_is_identifier(c) for c in ident[1:]])
+
+    @staticmethod
+    def _char_is_whitespace(c: str) -> bool:
+        matched_whitespace = WHITESPACE_DICT()[ord(c)]
+        return matched_whitespace
+    @staticmethod
+    def _str_is_whitespace(s: str) -> bool:
+        return all([InvocationParser._char_is_whitespace(c) for c in s])
     
     def _get_next_invocation(self, text: str | None = None, start: int = 0) -> RawInvocation | None:
         text = text or self.m_text
@@ -427,6 +445,18 @@ class InvocationParser(object):
             i += 1
         return (start, i)
     
+    @staticmethod
+    def _handle_strip_whitespaces(txt: str) -> str:
+        if len(txt) <= 0:
+            return ''
+        has_leading = InvocationParser._char_is_whitespace(txt[0])
+        has_trailing = InvocationParser._char_is_whitespace(txt[-1])
+        def __lstrip(t: str) -> str:
+            return ' ' + t.lstrip() if has_leading else t
+        def __tstrip(t: str) -> str:
+            return t.rstrip() + ' ' if has_leading else t
+        return __lstrip(__tstrip(txt))
+
     def _parse_invocation(self, raw: RawInvocation) -> ProcessedInvocation:
         args: list[str] = []
         expanded_args: list[str] = []
@@ -436,9 +466,10 @@ class InvocationParser(object):
         raw_argslen = len(text)
         while True:
             arg = self._get_next_arg(text, nextarg_bounds[1])
-            if arg[0] >= raw_argslen or arg[1] >= raw_argslen:
+            if arg[0] >= arg[1]:
                 break
             argtext = text[arg[0]:arg[1]]
+            argtext = self._handle_strip_whitespaces(argtext)
             args.append(argtext)
             expanded_argtext: str
             if len(argtext) < 3:
@@ -451,182 +482,76 @@ class InvocationParser(object):
                     expanded_argtext = self._basic_substitute_at(processed.result, expanded_argtext, processed.start, processed.end)
                     maybenested = self._get_next_invocation(expanded_argtext, 0)
             expanded_args.append(expanded_argtext)
-        unimplemented()
-                    
-    #def _parse_args(self, args: str) -> list[str]:
-    #    """
-    #    Precondition(s) : `args` is a string containing all the text in the invocation left-paren and its corresponding right-paren.
-    #    Postcondition(s): Returns a list of strings containing the arguments of the invocation. All arguments containing other invocations are treated and expanded.
-    #    """
-    #    argslen = len(args)
-    #    i = 0
-    #    current_arg: str | None = None
-    #    in_string_lit = False
-    #    in_char_lit = False
-    #    openparens = 0
-    #    ret: list[str] = []
-    #    while i < argslen:
-    #        if current_arg is None:
-    #            if self._char_is_whitespace(args[i]):
-    #                i += 1
-    #                continue
-    #            if args[i] == ',':
-    #                ret.append('')
-    #                i += 1
-    #                continue
-    #            current_arg = ''
-    #        if args[i] == '(':
-    #            openparens += 1
-    #        elif args[i] == ')':
-    #            openparens -= 1
-    #        if openparens == 0:
-    #            if args[i] == ',':
-    #                ret.append(current_arg)
-    #                current_arg = None
-    #            else:
-    #                current_arg += args[i]
-    #        else:
-    #            current_arg += args[i]
-    #        i += 1
-    #    if current_arg is not None:
-    #        ret.append(current_arg)
-    #    else:
-    #        ret.append('')
-    #    return ret
-    #def _parse_invocation(
-    #    content: str,
-    #    pragma_names: list[str],
-    #    i: int,
-    #    invocations: list[tuple[int, tuple[int, int], str, str]],
-    #    known_ident: str
-    #) -> tuple[int, list[tuple[int, tuple[int, int], str, str]]]:
-    #    def _search_invocations(args: list[str]) -> list[int]:
-    #        '''
-    #        In the currently parsed invocation, search for other invocations,
-    #        and return the argument index and the resulting content. Code should
-    #        be similar to the one in _parse_invocations. All nested invocations are
-    #        passed recursively to this _parse_invocation function to get the invocation results.
-    #        '''
-    #        nargs = len(args)
-    #        i = 0
-    #        while i < nargs:
-    #            in_string_lit = False
-    #            in_char_lit = False
-    #            potential_ident = None
-    #            arglen = len(args[i])
-    #            argn = args[i]
-    #            j = 0
-    #            while j < arglen:
-    #                if self._char_is_whitespace(argn[j]):
-    #                    j += 1
-    #                    continue
-    #                if self._char_is_identifier(argn[j], potential_ident is None):
-    #                    potential_ident = (potential_ident or '') + argn[j]
-    #                    j += 1
-    #                    continue
-    #                if potential_ident is not None:
-    #                    if self._str_is_known_identifier(potential_ident, pragma_names):
-    #                        j, invocations = _parse_invocation(argn, pragma_names, j, invocations, potential_ident)
-    #                    else:
-    #                        potential_ident = None
-    #                        j += 1
-    #                    continue
-    #                if argn[j] == "\\":
-    #                    if not (in_string_lit or in_char_lit):
-    #                        raise RuntimeError("Backslash outside of string or character literal should be processed at this stage")
-    #                    else:
-    #                        j += 2
-    #                    continue
-    #                if argn[j] == "\"":
-    #                    if not in_char_lit:
-    #                        in_string_lit = not in_string_lit
-    #                    j += 1
-    #                    continue
-    #                if argn[j] == "'":
-    #                    if not in_string_lit:
-    #                        in_char_lit = not in_char_lit
-    #                    j += 1
-    #                    continue
-    #                j += 1                        
-    #    invocation = (0,)
-    #    # Search parenthesis
-    #    start = -1
-    #    end = -1
-    #    openparens = 0
-    #    j = i
-    #    while j < len(content):
-    #        if content[j] == '(':
-    #            if start == -1:
-    #                start = j
-    #            openparens += 1
-    #        elif content[j] == ')':
-    #            openparens -= 1
-    #            if openparens == 0:
-    #                end = j
-    #                break
-    #        j += 1
-    #    if start == -1 or end == -1:
-    #        raise ValueError("Unterminated invocation")
-    #    args = _parse_args(content[start + 1:end].strip())
-    #def _parse_invocations(content: str, pragma_names: list[str]) -> list[tuple[int, tuple[int, int], str, str]]:
-    #    '''
-    #    We must handle nested calls such as:
-    #    MACRO1(arg1, MACRO2(arg2, arg3), "arg4", ...)
-#
-    #    We must also handle things like:
-    #    MACRO1     (arg1, arg2,
-    #        arg3    , arg4)
-#
-    #    And of course, we must also handle classic invocations like:
-    #    MACRO1(arg1, arg2, arg3, arg4)
-    #    '''
-    #    i: int = 0
-    #    in_string_lit: bool = False
-    #    in_char_lit: bool = False
-    #    potential_ident: str | None = None
-    #    invocations: list[tuple[int, tuple[int, int], str, str]] = []
-    #    while i < len(content):
-    #        if self._char_is_whitespace(content[i]):
-    #            i += 1
-    #            continue
-    #        if self._char_is_identifier(content[i], potential_ident is None):
-    #            potential_ident = (potential_ident or '') + content[i]
-    #            i += 1
-    #            continue
-    #        if potential_ident is not None:
-    #            if self._str_is_known_identifier(potential_ident, pragma_names):
-    #                i, invocations = _parse_invocation(content, pragma_names, i, invocations, potential_ident)
-    #            else:
-    #                potential_ident = None
-    #                i += 1
-    #            continue
-    #        if content[i] == "\\":
-    #            if not (in_string_lit or in_char_lit):
-    #                raise RuntimeError("Backslash outside of string or character literal should be processed at this stage")
-    #            else:
-    #                i += 2
-    #            continue
-    #        if content[i] == "\"":
-    #            if not in_char_lit:
-    #                in_string_lit = not in_string_lit
-    #            i += 1
-    #            continue
-    #        if content[i] == "'":
-    #            if not in_string_lit:
-    #                in_char_lit = not in_char_lit
-    #            i += 1
-    #            continue
-    #        i += 1
-    #    return invocations
+            nextarg_bounds = (arg[1] + 1, arg[1] + 1)
+        pdebug(f"Before processing result of invocation '{raw.invocation_text()}':\nExpanded args: {expanded_args}")
+        result = self._substitute(raw.pragma_name, expanded_args)
+        return ProcessedInvocation(raw, args, result)
+    
+    def parse_impl(self) -> int:
+        pos: int = 0
+        count: int = 0
+        while True:
+            textlen = len(self.m_text)
+            nextinv = self._get_next_invocation(start=pos)
+            if nextinv is None:
+                break
+            count += 1
+            inv: ProcessedInvocation = self._parse_invocation(nextinv)
+            self.m_text = self._substitute_at(inv.pragma_name, inv.args, self.m_text, inv.start, inv.end)
+            diff = textlen - len(self.m_text)
+            pos = inv.end - diff
+        return count
 
+    def parse(self) -> str:
+        def _handle_stage(st, r):
+            pdebug(f'Stage {st}:\n\treplaced: {r} macros\n\ttemporary result:\n`{self.m_text}`')
+            return st + 1
+        stage: int = 0
+        replaced = self.parse_impl()
+        stage = _handle_stage(stage, replaced)
+        while replaced != 0:
+            replaced = self.parse_impl()
+            stage = _handle_stage(stage, replaced)
+        return self.m_text
+
+from typing import ClassVar
 class FileContent(object):
     DefineApplier: TypeAlias = Callable[..., str]
+
+    import_paths: ClassVar[list[str]] = []
 
     def __init__(self, filepath: str):
         self.m_filepath = filepath
         self.m_content = []
         self.m_imports = []
         return None
+    
+    @classmethod
+    def add_import_path(cls: type[typing.Self], path: str) -> None:
+        try:
+            real = os.path.realpath(path)
+            if os.path.exists(real) and os.path.isdir(real):
+                cls.import_paths.append(real)
+                return None
+        except: pass
+        raise ValueError(f"Incorrect import path `{path}`")
+    
+    @classmethod
+    def _find_import(cls: type[typing.Self], path: str, fromwhere: str) -> str:
+        fromwhere_dir = os.path.dirname(fromwhere) if not os.path.isdir(fromwhere) else fromwhere
+        assert os.path.exists(fromwhere_dir) and os.path.isdir(fromwhere_dir)
+        joined_paths = map(lambda p: os.path.join(p, path), cls.import_paths)
+        paths_exists = list(map(lambda p: os.path.exists(p) and os.path.isfile(p), joined_paths))
+        count = paths_exists.count(True)
+        if count <= 0:
+            if os.path.exists(os.path.join(fromwhere_dir, path)) and os.path.isfile(os.path.join(fromwhere_dir, path)):
+                return os.path.join(fromwhere_dir, path)
+            raise ValueError(f"Error while trying to import `{path}`: couldn't find such a path. Please update your include paths (use supdef.py --help for more information)")
+        if count > 1:
+            if os.path.exists(os.path.join(fromwhere_dir, path)) and os.path.isfile(os.path.join(fromwhere_dir, path)):
+                return os.path.join(fromwhere_dir, path)
+            raise ValueError(f"Error while trying to import `{path}`: path is ambiguate. Please remove any ambiguity by either removing an import path, or by using an absolute path")
+        return list(joined_paths)[paths_exists.index(True)]
     
     def get_file_content(self, file_path: str) -> None:
         with open(file_path, 'r') as file:
@@ -654,7 +579,7 @@ class FileContent(object):
                             break
                         define_content += lines[j]
                         j += 1
-                    self.m_content.append((i + 1, DefinePragma(matchdefine.group(1).strip(), define_content)))
+                    self.m_content.append((i + 1, DefinePragma(matchdefine.group(1).strip(), define_content.strip())))
                     pdebug(f"Define name: {matchdefine.group(1).strip()}")
                     pdebug(f"Define content: {define_content}")
                     i = j + 1
@@ -679,7 +604,7 @@ class FileContent(object):
                     i += 1
         return None
     def _process_import_pragma(self, pragma: ImportPragma):
-        return FileContent(pragma.m_name)
+        return FileContent(FileContent._find_import(pragma.m_name, self.m_filepath))
     def _process_replaceable_pragma(self, pragma: Pragma, args: list[str]) -> str:
         if isinstance(pragma, DefinePragma) and pragma.m_pragma_type == PragmaType.DEFINE:
             return self._process_define_pragma(pragma, args)
@@ -783,41 +708,8 @@ class FileContent(object):
         pdebug(f"Replaceable pragma names: {'|'.join(replaceable_pragma_names)}")
 
         parser = InvocationParser(unified_content, replaceable_pragma_names, lambda s: _find_pragma_by_name(s, self), self)
-        next = parser._get_next_invocation()
-        if next is not None:
-            pinfo(f"invocation text: {next.invocation_text()}")
-            pinfo(f"arg text: {next.argtext()}")
-            pinfo(f"pragma name: {next.pragma_name}")
-        else:
-            perror("INVOCATION NOT FOUND!")
         
-        unimplemented()
-        # list[(line, (start, end), pragma_name, result)]
-        #macro_calls: list[tuple[int, tuple[int, int], str, str]] = _parse_invocations(unified_content, replaceable_pragma_names)
-
-        #while True:
-        #    matched = re.search(FUNCCALL_REGEX, unified_content)
-        #    if matched is None:
-        #        break
-            #for group in matched.groups():
-            #    print(f"Group: {group}")
-            #continue
-            #pragmaname = matched.group(1)
-            #args = matched.group(2).split(',')
-            #processed_content = ''
-            #pragma = _find_pragma_by_name(pragmaname)
-            #if pragma is None:
-            #    perror(f"Pragma {pragmaname} not found")
-            #    sys.exit(1)
-            #if isinstance(pragma, DefinePragma):
-            #    processed_content = self._process_define_pragma(pragma, args)
-            #elif isinstance(pragma, RunnablePragma):
-            #    processed_content = self._process_runnable_pragma(pragma, args)
-            #else:
-            #    perror(f"Unsupported pragma type {pragma.m_pragma_type}")
-            #    sys.exit(1)
-            #unified_content = unified_content[:matched.start()] + f' {processed_content} ' + unified_content[matched.end():]
-        realoutput.write(unified_content)
+        realoutput.write(parser.parse())
         realoutput.close()
         return None
 
@@ -888,6 +780,10 @@ def main() -> int:
     args = parse_cmdline()
     if args.debug:
         set_debug_mode(True)
+
+    if args.include is not None:
+        for inc in args.include:
+            FileContent.add_import_path(inc)
     
     pdebug("Debug mode enabled")
     pdebug(f"Args: {args}")
@@ -901,6 +797,48 @@ def main() -> int:
     pdebug(f"PRAGMA_RUNNABLE_OPTIONS_REGEX: {PRAGMA_RUNNABLE_OPTIONS_REGEX}")
     pdebug(f"PRAGMA_RUNNABLE_LANGUAGE_OPTION_REGEX: {PRAGMA_RUNNABLE_LANGUAGE_OPTION_REGEX}")
     pdebug(f"PRAGMA_RUNNABLE_OPERATION_OPTION_REGEX: {PRAGMA_RUNNABLE_OPERATION_OPTION_REGEX}")
+
+    def _test_is(c: str, cat: str):
+        import unicodedata
+        dic = eval(f'{cat.upper()}_DICT')
+        cp = ord(c)
+        value = dic()[cp]
+        as_hex = hex(cp)[0:]
+        reprc = repr(c)
+        pdebug(f"U+{as_hex} '{unicodedata.name(c, reprc[1:len(reprc) - 1])}' is {cat.lower()}: {value}")
+        return
+
+    _test_is(' ', 'alnum')
+    _test_is('\t', 'alnum')
+    _test_is('\n', 'alnum')
+    _test_is('\v', 'alnum')
+    _test_is('a', 'alnum')
+    _test_is('é', 'alnum')
+    _test_is('9', 'alnum')
+
+    _test_is(' ', 'alpha')
+    _test_is('\t', 'alpha')
+    _test_is('\n', 'alpha')
+    _test_is('\v', 'alpha')
+    _test_is('a', 'alpha')
+    _test_is('é', 'alpha')
+    _test_is('9', 'alpha')
+    
+    _test_is(' ', 'digit')
+    _test_is('\t', 'digit')
+    _test_is('\n', 'digit')
+    _test_is('\v', 'digit')
+    _test_is('a', 'digit')
+    _test_is('é', 'digit')
+    _test_is('9', 'digit')
+    
+    _test_is(' ', 'whitespace')
+    _test_is('\t', 'whitespace')
+    _test_is('\n', 'whitespace')
+    _test_is('\v', 'whitespace')
+    _test_is('a', 'whitespace')
+    _test_is('é', 'whitespace')
+    _test_is('9', 'whitespace')
 
     if args.cc_cmdline:
         if not _modify_cc_cmdline(args.cc_cmdline):
