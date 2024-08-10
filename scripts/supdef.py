@@ -354,6 +354,14 @@ class InvocationParser(object):
     def _str_is_whitespace(s: str) -> bool:
         return all([InvocationParser._char_is_whitespace(c) for c in s])
     
+    @staticmethod
+    def _invocation_args(txt, ident_end) -> tuple[int, int] | tuple[None, None]:
+        txtlen = len(txt)
+        openparens = 0
+        in_string_lit = False
+        in_char_lit = False
+        return (None, None)
+    
     def _get_next_invocation(self, text: str | None = None, start: int = 0) -> RawInvocation | None:
         text = text or self.m_text
         textlen = len(text)
@@ -363,18 +371,25 @@ class InvocationParser(object):
         potential_ident = None
         start = -1
         end = -1
+        argstart = -1
+        argend   = -1
         while i < textlen:
             if self._char_is_whitespace(text[i]):
                 i += 1
                 continue
-            if self._char_is_identifier(text[i], potential_ident is None):
+            if not (in_char_lit or in_string_lit) and self._char_is_identifier(text[i], potential_ident is None):
                 potential_ident = (potential_ident or '') + text[i]
                 i += 1
                 continue
             if potential_ident is not None:
                 if self._str_is_known_identifier(potential_ident):
                     start = i - len(potential_ident)
-                    break
+                    argstart, argend = self._invocation_args(text, i)
+                    if argend is not None:
+                        end = argend
+                        break
+                    argstart = -1
+                    argend   = -1
                 potential_ident = None
                 i += 1
                 continue
@@ -387,11 +402,13 @@ class InvocationParser(object):
             if text[i] == "\"":
                 if not in_char_lit:
                     in_string_lit = not in_string_lit
+                    potential_ident = None
                 i += 1
                 continue
             if text[i] == "'":
                 if not in_string_lit:
                     in_char_lit = not in_char_lit
+                    potential_ident = None
                 i += 1
                 continue
             i += 1
@@ -400,8 +417,6 @@ class InvocationParser(object):
         assert potential_ident is not None
         openparens = 0
         j = start
-        argstart = -1
-        argend   = -1
         while j < textlen:
             if text[j] == '(':
                 if argstart == -1:

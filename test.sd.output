@@ -1,24 +1,10 @@
 
- 
 
+C_TYPE_SIZE_IS_XBITS
+    C_TYPE_SIZE_IS_XBITS         
+    (
+        char,
+        8
+    )
 
-
-
-
-
-
-
-
- 
- 
- 
- 
-
-(8 * 8)
-(8 *  8 )
- 
-
- 
-
-(8 * 0)
-(8 * 1)
+    1

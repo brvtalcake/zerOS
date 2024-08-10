@@ -1,0 +1,2 @@
+#pragma supdef import <int128.sd>
+#pragma supdef import <define.sd>
