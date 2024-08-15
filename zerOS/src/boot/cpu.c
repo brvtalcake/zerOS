@@ -14,7 +14,7 @@
 #include <klibc/bitset.h>
 
 BOOT_FUNC
-extern bool zerOS_cpuid_explicit(uint32_t leaf, uint32_t subleaf, struct zerOS_cpuid_info* info)
+extern bool zerOS_cpuid_count(uint32_t leaf, uint32_t subleaf, struct zerOS_cpuid_info* info)
 {
     return (bool)__get_cpuid_count(leaf, subleaf, &info->eax, &info->ebx, &info->ecx, &info->edx);
 }
@@ -22,7 +22,7 @@ extern bool zerOS_cpuid_explicit(uint32_t leaf, uint32_t subleaf, struct zerOS_c
 BOOT_FUNC
 extern bool zerOS_cpuid(uint32_t leaf, struct zerOS_cpuid_info* info)
 {
-    return zerOS_cpuid_explicit(leaf, 0, info);
+    return zerOS_cpuid_count(leaf, 0, info);
 }
 
 BOOT_FUNC

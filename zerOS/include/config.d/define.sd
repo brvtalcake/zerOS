@@ -1,0 +1,11 @@
+
+#pragma supdef begin DEFINE
+#undef  $1
+#define $1 $2
+#pragma supdef end
+
+#pragma supdef begin DEFINE_ZEROS_CONFIG
+DEFINE(
+    zerOS_CONFIG_$1, $2
+)
+#pragma supdef end

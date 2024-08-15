@@ -15,13 +15,15 @@ import typing
 from typing import Union, Any, TypeAlias, Callable
 from errprint import set_debug_mode, get_debug_mode, pdebug, pinfo, pwarning, perror
 import functools
+import cProfile, profile, pstats
 
 if __name__ == '__main__':
     freeze_support()
-    from mk_escape_seq import get_dicts_parallel
+    from mk_escape_seq import get_dicts_parallel, get_fake_dicts
     import mpire as mp
-    workers = mp.WorkerPool(n_jobs=6, daemon=True, use_dill=True, enable_insights=True, start_method='forkserver')
-    ALNUM_DICT, DIGIT_DICT, ALPHA_DICT, WHITESPACE_DICT, PUNCT_DICT, SYMBOL_DICT = get_dicts_parallel(workers)
+    #workers = mp.WorkerPool(n_jobs=6, daemon=True, use_dill=True, enable_insights=True, start_method='forkserver')
+    #ALNUM_DICT, DIGIT_DICT, ALPHA_DICT, WHITESPACE_DICT, PUNCT_DICT, SYMBOL_DICT = get_dicts_parallel(workers)
+    ALNUM_DICT, DIGIT_DICT, ALPHA_DICT, WHITESPACE_DICT, PUNCT_DICT, SYMBOL_DICT = get_fake_dicts()
 
 def _get_exe_dir() -> str:
     return os.path.dirname(os.path.realpath(__file__))
@@ -355,12 +357,58 @@ class InvocationParser(object):
         return all([InvocationParser._char_is_whitespace(c) for c in s])
     
     @staticmethod
-    def _invocation_args(txt, ident_end) -> tuple[int, int] | tuple[None, None]:
+    def _invocation_args(txt: str, ident_end: int) -> tuple[int, int] | tuple[None, None]:
         txtlen = len(txt)
+        i = ident_end
+        if i >= txtlen:
+            return None, None
         openparens = 0
         in_string_lit = False
         in_char_lit = False
-        return (None, None)
+        argstart = -1
+        argend = -1
+        while i < txtlen and __class__._char_is_whitespace(txt[i]):
+            i += 1
+        if i >= txtlen or txt[i] != '(':
+            return None, None
+        openparens += 1
+        argstart = i
+        i += 1
+        while i < txtlen and openparens != 0:
+            if __class__._char_is_whitespace(txt[i]):
+                i += 1
+                continue
+            if txt[i] == '(' and not (in_string_lit or in_char_lit):
+                openparens += 1
+                i += 1
+                continue
+            if txt[i] == ')' and not (in_string_lit or in_char_lit):
+                openparens -= 1
+                i += 1
+                continue
+            if txt[i] == "\\":
+                if not (in_string_lit or in_char_lit):
+                    raise RuntimeError("Backslash outside of string or character literal should be processed at this stage")
+                else:
+                    i += 2
+                continue
+            if txt[i] == "\"":
+                if not in_char_lit:
+                    in_string_lit = not in_string_lit
+                i += 1
+                continue
+            if txt[i] == "'":
+                if not in_string_lit:
+                    in_char_lit = not in_char_lit
+                i += 1
+                continue
+            i += 1
+        if openparens == 0:
+            argend = i - 1
+            return argstart, argend
+        if i >= txtlen:
+            return argstart, argend
+        return None, None
     
     def _get_next_invocation(self, text: str | None = None, start: int = 0) -> RawInvocation | None:
         text = text or self.m_text
@@ -374,7 +422,7 @@ class InvocationParser(object):
         argstart = -1
         argend   = -1
         while i < textlen:
-            if self._char_is_whitespace(text[i]):
+            if self._char_is_whitespace(text[i]) and potential_ident is None:
                 i += 1
                 continue
             if not (in_char_lit or in_string_lit) and self._char_is_identifier(text[i], potential_ident is None):
@@ -385,9 +433,11 @@ class InvocationParser(object):
                 if self._str_is_known_identifier(potential_ident):
                     start = i - len(potential_ident)
                     argstart, argend = self._invocation_args(text, i)
-                    if argend is not None:
+                    if argstart is not None and argend is not None:
                         end = argend
                         break
+                    start    = -1
+                    end      = -1
                     argstart = -1
                     argend   = -1
                 potential_ident = None
@@ -415,21 +465,7 @@ class InvocationParser(object):
         if start == -1:
             return None
         assert potential_ident is not None
-        openparens = 0
-        j = start
-        while j < textlen:
-            if text[j] == '(':
-                if argstart == -1:
-                    argstart = j
-                openparens += 1
-            elif text[j] == ')':
-                openparens -= 1
-                if openparens == 0:
-                    end = j
-                    argend = j
-                    break
-            j += 1
-        if end == -1:
+        if end == -1 or argend == -1:
             raise ValueError("Unterminated invocation")
         return RawInvocation(text, potential_ident.strip(), start, end, argstart + 1, argend - 1)
     
@@ -462,15 +498,18 @@ class InvocationParser(object):
     
     @staticmethod
     def _handle_strip_whitespaces(txt: str) -> str:
-        if len(txt) <= 0:
-            return ''
-        has_leading = InvocationParser._char_is_whitespace(txt[0])
-        has_trailing = InvocationParser._char_is_whitespace(txt[-1])
-        def __lstrip(t: str) -> str:
-            return ' ' + t.lstrip() if has_leading else t
-        def __tstrip(t: str) -> str:
-            return t.rstrip() + ' ' if has_leading else t
-        return __lstrip(__tstrip(txt))
+        if False:
+            if len(txt) <= 0:
+                return ''
+            has_leading = InvocationParser._char_is_whitespace(txt[0])
+            has_trailing = InvocationParser._char_is_whitespace(txt[-1])
+            def __lstrip(t: str) -> str:
+                return ' ' + t.lstrip() if has_leading else t
+            def __tstrip(t: str) -> str:
+                return t.rstrip() + ' ' if has_trailing else t
+            return __lstrip(__tstrip(txt))
+        else:
+            return txt.strip()
 
     def _parse_invocation(self, raw: RawInvocation) -> ProcessedInvocation:
         args: list[str] = []
@@ -538,11 +577,11 @@ class FileContent(object):
     def __init__(self, filepath: str):
         self.m_filepath = filepath
         self.m_content = []
-        self.m_imports = []
+        self.m_imports: list[FileContent] = []
         return None
     
     @classmethod
-    def add_import_path(cls: type[typing.Self], path: str) -> None:
+    def add_import_path(cls, path: str) -> None:
         try:
             real = os.path.realpath(path)
             if os.path.exists(real) and os.path.isdir(real):
@@ -552,11 +591,19 @@ class FileContent(object):
         raise ValueError(f"Incorrect import path `{path}`")
     
     @classmethod
-    def _find_import(cls: type[typing.Self], path: str, fromwhere: str) -> str:
+    def get_import_paths(cls) -> list[str]:
+        return cls.import_paths
+    
+    @classmethod
+    def _find_import(cls, path: str, fromwhere: str) -> str:
         fromwhere_dir = os.path.dirname(fromwhere) if not os.path.isdir(fromwhere) else fromwhere
         assert os.path.exists(fromwhere_dir) and os.path.isdir(fromwhere_dir)
-        joined_paths = map(lambda p: os.path.join(p, path), cls.import_paths)
-        paths_exists = list(map(lambda p: os.path.exists(p) and os.path.isfile(p), joined_paths))
+        if len(cls.get_import_paths()) <= 0:
+            if os.path.exists(os.path.join(fromwhere_dir, path)) and os.path.isfile(os.path.join(fromwhere_dir, path)):
+                return os.path.join(fromwhere_dir, path)
+            raise ValueError(f"Error while trying to import `{path}`: couldn't find such a path. Please update your include paths (use supdef.py --help for more information)")
+        joined_paths = [os.path.join(p, path) for p in cls.get_import_paths()]
+        paths_exists = [os.path.exists(p) and os.path.isfile(p) for p in joined_paths]
         count = paths_exists.count(True)
         if count <= 0:
             if os.path.exists(os.path.join(fromwhere_dir, path)) and os.path.isfile(os.path.join(fromwhere_dir, path)):
@@ -566,7 +613,7 @@ class FileContent(object):
             if os.path.exists(os.path.join(fromwhere_dir, path)) and os.path.isfile(os.path.join(fromwhere_dir, path)):
                 return os.path.join(fromwhere_dir, path)
             raise ValueError(f"Error while trying to import `{path}`: path is ambiguate. Please remove any ambiguity by either removing an import path, or by using an absolute path")
-        return list(joined_paths)[paths_exists.index(True)]
+        return joined_paths[paths_exists.index(True)]
     
     def get_file_content(self, file_path: str) -> None:
         with open(file_path, 'r') as file:
@@ -592,7 +639,7 @@ class FileContent(object):
                     while j < len(lines):
                         if re.match(PRAGMA_DEFINE_END_REGEX, lines[j]):
                             break
-                        define_content += lines[j]
+                        define_content += lines[j] + '\n'
                         j += 1
                     self.m_content.append((i + 1, DefinePragma(matchdefine.group(1).strip(), define_content.strip())))
                     pdebug(f"Define name: {matchdefine.group(1).strip()}")
@@ -680,7 +727,7 @@ class FileContent(object):
                 if pragma.m_pragma_type == PragmaType.IMPORT:
                     self.m_imports.append(self._process_import_pragma(pragma)) # TODO: Add some code to handle inclusion loops
         for imp in self.m_imports:
-            imp.get_file_content()
+            imp.get_file_content(imp.m_filepath)
             imp.process_imports()
     def output_processed_content(self, output_file: str | None = None) -> None:
         realoutput: typing.TextIO
@@ -706,7 +753,7 @@ class FileContent(object):
                 ret += _get_all_supdefs(imp)
             return ret
         replaceable_pragma_names: list[str] = _get_all_supdefs(self)
-        def _find_pragma_by_name(name: str, instance = self) -> Pragma | None:
+        def _find_pragma_by_name(name: str, instance: FileContent = self) -> Pragma | None:
             for (_, p) in instance.m_content:
                 if isinstance(p, Pragma) and p.m_name == name:
                     return p
@@ -792,9 +839,15 @@ def parse_cmdline():
 
 @_timed
 def main() -> int:
+    ALWAYS_PROFILE: bool = False
     args = parse_cmdline()
+    pr = cProfile.Profile()
+    pr.disable()
     if args.debug:
         set_debug_mode(True)
+
+    if get_debug_mode() or ALWAYS_PROFILE:
+        pr.enable()
 
     if args.include is not None:
         for inc in args.include:
@@ -812,6 +865,7 @@ def main() -> int:
     pdebug(f"PRAGMA_RUNNABLE_OPTIONS_REGEX: {PRAGMA_RUNNABLE_OPTIONS_REGEX}")
     pdebug(f"PRAGMA_RUNNABLE_LANGUAGE_OPTION_REGEX: {PRAGMA_RUNNABLE_LANGUAGE_OPTION_REGEX}")
     pdebug(f"PRAGMA_RUNNABLE_OPERATION_OPTION_REGEX: {PRAGMA_RUNNABLE_OPERATION_OPTION_REGEX}")
+    pdebug(f"Import paths: {FileContent.get_import_paths()}")
 
     def _test_is(c: str, cat: str):
         import unicodedata
@@ -823,38 +877,6 @@ def main() -> int:
         pdebug(f"U+{as_hex} '{unicodedata.name(c, reprc[1:len(reprc) - 1])}' is {cat.lower()}: {value}")
         return
 
-    _test_is(' ', 'alnum')
-    _test_is('\t', 'alnum')
-    _test_is('\n', 'alnum')
-    _test_is('\v', 'alnum')
-    _test_is('a', 'alnum')
-    _test_is('é', 'alnum')
-    _test_is('9', 'alnum')
-
-    _test_is(' ', 'alpha')
-    _test_is('\t', 'alpha')
-    _test_is('\n', 'alpha')
-    _test_is('\v', 'alpha')
-    _test_is('a', 'alpha')
-    _test_is('é', 'alpha')
-    _test_is('9', 'alpha')
-    
-    _test_is(' ', 'digit')
-    _test_is('\t', 'digit')
-    _test_is('\n', 'digit')
-    _test_is('\v', 'digit')
-    _test_is('a', 'digit')
-    _test_is('é', 'digit')
-    _test_is('9', 'digit')
-    
-    _test_is(' ', 'whitespace')
-    _test_is('\t', 'whitespace')
-    _test_is('\n', 'whitespace')
-    _test_is('\v', 'whitespace')
-    _test_is('a', 'whitespace')
-    _test_is('é', 'whitespace')
-    _test_is('9', 'whitespace')
-
     if args.cc_cmdline:
         if not _modify_cc_cmdline(args.cc_cmdline):
             if _handle_error() != 0:
@@ -865,13 +887,18 @@ def main() -> int:
                 return 1
     try:
         process_file(args.input, args.output)
+        return 0
     except OnlyExitType:
         return 1
     except Exception as e:
         perror(f"An error occurred: {e}")
         pdebug(traceback.format_exc())
         return 1
-    return 0
+    finally:
+        if get_debug_mode() or ALWAYS_PROFILE:
+            pr.disable()
+            ps = pstats.Stats(pr)
+            ps.print_stats()
 
 if __name__ == '__main__':
     sys.exit(main())

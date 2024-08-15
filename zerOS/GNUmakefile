@@ -32,7 +32,7 @@ override KLIBC_OBJ := $(addprefix obj/,$(KLIBC_CFILES:.c=.c.o) $(KLIBC_ASFILES:.
 override KERNEL_OBJ := $(addprefix obj/,$(KERNEL_CFILES:.c=.c.o) $(KERNEL_ASFILES:.S=.S.o) $(KERNEL_NASMFILES:.asm=.asm.o))
 
 override HEADER_DEPS := $(addprefix obj/,$(CFILES:.c=.c.d) $(ASFILES:.S=.S.d))
-override KERNEL_SUPDEF_CONFIG := include/config.h.sd
+override KERNEL_SUPDEF_CONFIG := include/config.sd
 override CONFIG_DEPS := $(shell find -L include/config.d/ -type f)
 
 override KERNEL_MAP := linker-$(KARCH).ld
@@ -169,7 +169,7 @@ override define GENCONFIG =
 endef
 
 override define SUPDEF =
-../scripts/supdef.py $@ -o $<
+../scripts/supdef.py $< -o $@ -Iinclude/config.d/
 endef
 
 include/config.h: include/config.h.in GNUmakefile

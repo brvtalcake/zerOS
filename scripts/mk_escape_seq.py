@@ -5,8 +5,65 @@ import unicodedata
 import inspect
 import re
 import mpire as mp
-from typing import Callable
+from typing import Callable, Any
 from string import Template
+
+from multiprocessing import Lock
+
+class PathManipulator(object):
+    _lock = Lock()
+    def __init__(self) -> None:
+        return None
+    @classmethod
+    def mk_dirs(cls, path: str) -> None:
+        if not cls._lock.acquire(block=True, timeout=1.0):
+            raise RuntimeError('Failed to acquire a lock')
+        try:
+            os.makedirs(path, exist_ok=True)
+        except:
+            raise
+        finally:
+            cls._lock.release()
+        return None
+    @classmethod
+    def mk_file(cls, path: str) -> None:
+        if not cls._lock.acquire(block=True, timeout=1.0):
+            raise RuntimeError('Failed to acquire a lock')
+        try:
+            if not os.path.exists(path):
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, 'xt') as f:
+                    f.write('')
+        except:
+            raise
+        finally:
+            cls._lock.release()
+        return None
+    @classmethod
+    def pickle_to_file(cls, o: Any, path: str) -> None:
+        if not cls._lock.acquire(block=True, timeout=1.0):
+            raise RuntimeError('Failed to acquire a lock')
+        try:
+            with open(path, 'wb') as f:
+                marshal.dump(o, f, 4)
+                f.flush()
+        except:
+            raise
+        finally:
+            cls._lock.release()
+        return None
+    @classmethod
+    def unpickle_from_file(cls, path: str) -> Any:
+        if not cls._lock.acquire(block=True, timeout=1.0):
+            raise RuntimeError('Failed to acquire a lock')
+        try:
+            with open(path, 'rb') as f:
+                o = marshal.load(f)
+        except:
+            return None
+        finally:
+            cls._lock.release()
+        return o
 
 def _get_rettype(func):
     return inspect.signature(func).return_annotation
@@ -71,8 +128,26 @@ def _get_unicode_cat_list(catpred: Callable[[str], bool], escape=True) -> str:
 def _get_unicode_cat_as_list(catpred: Callable[[str], bool]) -> list[int]:
     return [c for c in range(0x10FFFF) if catpred(chr(c))]
 
-def _get_unicode_cat_as_dict(catpred: Callable[[str], bool]) -> dict[int, bool]:
+def _do_get_unicode_cat_as_dict(catpred: Callable[[str], bool]) -> dict[int, bool]:
     return {c: catpred(chr(c)) for c in range(0x10FFFF)}
+
+from build_utils import needs_regen
+import marshal
+import typing
+from errprint import pinfo
+def _get_unicode_cat_as_dict(catpred: Callable[[str], bool]) -> dict[int, bool]:
+    pickled_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'pickled', 'mk_escape_seq')
+    pickled_file_path = os.path.join(pickled_path, f"{catpred.__name__}_dict.pickled.marshal")
+    instance = PathManipulator()
+    instance.mk_dirs(pickled_path)
+    if not needs_regen(pickled_file_path, [__file__]):
+        o = instance.unpickle_from_file(pickled_file_path)
+        if o is not None:
+            return typing.cast(dict[int, bool], o)
+    o = _do_get_unicode_cat_as_dict(catpred)
+    pinfo(f"Trying to marshal {o.__repr__} to file {pickled_file_path}")
+    instance.pickle_to_file(o, pickled_file_path)
+    return o
 
 ALNUM_DICT: dict[int, bool]
 DIGIT_DICT: dict[int, bool]
@@ -153,6 +228,34 @@ def get_dicts_parallel(p: mp.WorkerPool) -> tuple[DictWrapper, ...]:
         )
     return get_wrappers(
         *apply([_isalnum, _isdigit, _isalpha, _iswhitespace, _ispunct, _issymbol])
+    )
+
+from typing import Generic, TypeVar
+
+_KT = TypeVar('_KT')
+_VT = TypeVar('_VT')
+
+class FakeDict(Generic[_KT, _VT]):
+    def __init__(self, pred: Callable[[_KT], _VT]) -> None:
+        self.m_func = pred
+        return super().__init__()
+    def __call__(self):
+        return self
+    def __getitem__(self, key: _KT) -> _VT:
+        return self.m_func(key)
+
+def get_fake_dicts() -> tuple[FakeDict[int, bool], ...]:
+    def mkfunc(f: Callable[[str], bool]) -> Callable[[int], bool]:
+        def _ret(c: int) -> bool:
+            return f(chr(c))
+        return _ret
+    return tuple(
+        map(
+            FakeDict,
+            list(
+                map(mkfunc, [_isalnum, _isdigit, _isalpha, _iswhitespace, _ispunct, _issymbol])
+            )
+        )
     )
 
 if __name__ in ['__main__']:

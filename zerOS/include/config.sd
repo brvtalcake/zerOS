@@ -1,2 +1,13 @@
-#pragma supdef import <int128.sd>
+
+#pragma supdef import <ctypesize.sd>
 #pragma supdef import <define.sd>
+
+DEFINE_ZEROS_CONFIG(
+    HAVE_128BITS_LONGLONG,
+    CTYPE_SIZE_IS_XBITS(long long, 128)
+)
+
+DEFINE_ZEROS_CONFIG(
+    HAVE_128BITS_LONGDOUBLE,
+    CTYPE_SIZE_IS_XBITS(long double, 128)
+)
