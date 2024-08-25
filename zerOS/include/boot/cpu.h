@@ -9,6 +9,8 @@
 
 #include <misc/sections.h>
 
+#include <machine/path.h>
+
 #include <klibc/detail/enum.h>
 
 enum zerOS_supported_cpus
@@ -249,16 +251,7 @@ enum zerOS_intel_strext_cpu_feature_subleaf1_eax_bits
     // RESERVED                                            = (UINT32_C(1) << 31)
 };
 
-/**
- * @enum zerOS_intel_msr_address
- * @brief An enumeration of Intel MSR addresses.
- * @details This enumeration is used to define the addresses of Intel IA32 MSRs.
- */
-enum zerOS_intel_msr_address
-    UNDERLYING_TYPE(uint32_t)
-{
-
-};
+#include MK_MACHINE_PATH(msr.h)
 
 static constexpr const uint32_t zerOS_intel_cpuid_valid_eaxs[] = {
     // Basic CPUID information

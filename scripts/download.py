@@ -1,8 +1,19 @@
-def from_http(url):
-    import requests
-    return requests.get(url).content
+import tqdm
 
-def from_ftp(url):
+def from_http(url, showstatus=False) -> bytes:
+    import requests
+    import io
+    response = requests.get(url, stream=True)
+    fsize = int(response.headers.get("content-length", 0))
+    block_size = 1024
+    with io.BytesIO() as f:
+        with tqdm.tqdm(total=fsize, unit='B', unit_scale=True, unit_divisor=1024, disable=not showstatus, desc=f'downloading {url}') as status:
+            for data in response.iter_content(block_size):
+                written = f.write(data)
+                status.update(written)
+        return f.getvalue()
+
+def from_ftp(url, showstatus=False) -> bytes:
     import ftplib
     if not "://" in url:
         actual_host = url
@@ -19,6 +30,12 @@ def from_ftp(url):
         ftp.login()
         ftp.cwd(directory)
         import io
+        fsize = ftp.size(file)
         with io.BytesIO() as f:
-            ftp.retrbinary("RETR " + file, f.write)
+            with tqdm.tqdm(total=fsize, unit='B', unit_scale=True, unit_divisor=1024, disable=not showstatus, desc=f'downloading {url}') as status:
+                def _cb(b: bytes) -> int:
+                    ret = f.write(b)
+                    status.update(ret)
+                    return ret
+                ftp.retrbinary("RETR " + file, _cb)
             return f.getvalue()

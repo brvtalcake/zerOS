@@ -13,7 +13,11 @@ override KCFLAGS += -Wall -Wextra -std=gnu23	\
 	-nostdlib -nostartfiles	-flto 				\
 	-m128bit-long-double -ffat-lto-objects
 
-override KCPPFLAGS := -I include $(KCPPFLAGS)
+override KCPPFLAGS := 		\
+	-Iinclude 		  		\
+	-Ithird_party	  		\
+	-Ithird_party/chaos-pp	\
+	$(KCPPFLAGS)
 
 # Internal linker flags that should not be changed by the user.
 override KLDFLAGS += -m elf_x86_64 -nostdlib -pie	\

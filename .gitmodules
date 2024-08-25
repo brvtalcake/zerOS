@@ -1,0 +1,3 @@
+[submodule "zerOS/third_party/chaos-pp"]
+	path = zerOS/third_party/chaos-pp
+	url = https://github.com/rofl0r/chaos-pp.git
