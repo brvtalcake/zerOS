@@ -8,7 +8,7 @@
 enum zerOS_msr_address
     UNDERLYING_TYPE(uintmax_t)
 {
-
-}:
+    zerOS_MSR_COUNT = 0
+};
 
 #endif

@@ -11,8 +11,8 @@
  * @param y The second type or variable.
  * @return true if the types are equal, false otherwise.
  */
-#define KLIBC_TYPES_EQUAL(x, y) \
-    ((bool)(                    \
+#define KLIBC_TYPES_EQUAL(x, y)         \
+    ((bool)(                            \
         !!__builtin_types_compatible_p( \
             typeof(x),                  \
             typeof(y)                   \

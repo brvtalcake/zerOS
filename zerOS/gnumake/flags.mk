@@ -1,6 +1,6 @@
 override BOOT_KCFLAGS := $(KCFLAGS) -Wall -Wextra 	\
 	-std=gnu23 -ffreestanding -fno-stack-protector 	\
-    -fno-stack-check -fPIE -m64 -mno-80387 -mno-mmx	\
+    -fno-stack-check -m64 -mno-80387 -mno-mmx		\
 	$(call CC_TUNE_FOR,x86-64)	-mno-sse -mno-sse2 	\
 	-mno-red-zone -mno-avx -mno-avx2 -mno-avx512f	\
 	-nodefaultlibs -nostdlib -nostartfiles 			\
@@ -8,10 +8,10 @@ override BOOT_KCFLAGS := $(KCFLAGS) -Wall -Wextra 	\
 
 override KCFLAGS += -Wall -Wextra -std=gnu23	\
 	-ffreestanding -fno-stack-protector 		\
-    -fno-stack-check -fPIE -m64 -mno-red-zone	\
+    -fno-stack-check -m64 -mno-red-zone			\
 	$(call CC_TUNE_FOR,$(KCPU))	-nodefaultlibs 	\
 	-nostdlib -nostartfiles	-flto 				\
-	-m128bit-long-double -ffat-lto-objects
+	-m128bit-long-double -fno-fat-lto-objects
 
 override KCPPFLAGS := 		\
 	-Iinclude 		  		\
@@ -20,15 +20,25 @@ override KCPPFLAGS := 		\
 	$(KCPPFLAGS)
 
 # Internal linker flags that should not be changed by the user.
-override KLDFLAGS += -m elf_x86_64 -nostdlib -pie	\
-    -z text -z max-page-size=0x1000 -T $(KERNEL_MAP)
+override KLDFLAGS += -m elf_x86_64 -nostdlib -z text	\
+	-z max-page-size=0x1000 -T $(KERNEL_MAP)
 
-override KLINKFLAGS = -T $(KERNEL_MAP) -nostdlib -pie	\
-	-Wl,-z,text -Wl,-z,max-page-size=0x1000
+override KLINKFLAGS = -T $(KERNEL_MAP) -nostdlib -Wl,-z,text	\
+	-Wl,-z,max-page-size=0x1000
 
 override KNASMFLAGS += -Wall -f elf64
 
 ifeq ($(call CC_SUPPORTS_OPTION,-Wno-deprecated),$(true))
 	override KCFLAGS += -Wno-deprecated
 	override BOOT_KCFLAGS += -Wno-deprecated
+endif
+
+ifeq ($(call CC_SUPPORTS_OPTION,-Wno-comment),$(true))
+	override KCFLAGS += -Wno-comment
+	override BOOT_KCFLAGS += -Wno-comment
+endif
+
+ifeq ($(call CC_SUPPORTS_OPTION,-mcmodel=kernel),$(true))
+	override KCFLAGS += -mcmodel=kernel
+	override BOOT_KCFLAGS += -mcmodel=kernel
 endif

@@ -33,7 +33,7 @@ SECTIONS
     /* Emit zerOS_<section_name>_start and zerOS_<section_name>_end symbols for each section. */
 
     .text : {
-        *(.text .text.* *.lto *.lto.*)
+        *(.text .text.*)
     } :text
 
     .bootcode : {

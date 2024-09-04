@@ -228,8 +228,8 @@ ENV_VARS: dict[str, str] = {
     "STRINGS": "/usr/bin/strings",
     "ADDR2LINE": "/usr/bin/addr2line",
 
-    "CFLAGS_FOR_TARGET": "-O2 -g -mno-red-zone -mcmodel=large -frecord-gcc-switches",
-    "CXXFLAGS_FOR_TARGET": "-O2 -g -mno-red-zone -mcmodel=large -frecord-gcc-switches",
+    "CFLAGS_FOR_TARGET": "-O2 -g -mno-red-zone -mcmodel=kernel -frecord-gcc-switches",
+    "CXXFLAGS_FOR_TARGET": "-O2 -g -mno-red-zone -mcmodel=kernel -frecord-gcc-switches",
 
     "TARGET": "x86_64-elf",
     "PREFIX": get_toolchain_installdir(),
@@ -472,12 +472,10 @@ def gcc_prerequisites(extracted_dir: str) -> None:
     try:
         subprocess.run(
             [
-                "./contrib/download_prerequisites",
-                "--directory=./prerequisites"
+                "./contrib/download_prerequisites"
             ],
             cwd=extracted_dir,
-            check=True,
-            preexec_fn=lambda: create_dir(joinpaths(extracted_dir, "prerequisites"))
+            check=True
         )
     except subprocess.CalledProcessError as e:
         pwarning(f"{str(e)}: prerequisites not installed")
@@ -486,7 +484,7 @@ def gcc_prerequisites(extracted_dir: str) -> None:
 
 def _build_env_list(package: str) -> list[str]:
     def _rm_mcmodel(envstr: str) -> str:
-        return envstr.replace("-mcmodel=large", "") if package.lower() == "limine" else envstr
+        return envstr.replace("-mcmodel=kernel", "") if package.lower() == "limine" else envstr
     env: list[str] = ["/usr/bin/env"]
     pdebug(f"{package} environment:")
     if package.lower() == "limine":
@@ -508,6 +506,7 @@ def build_gcc(src: str) -> None:
     pinfo(f"Configuring GCC in {builddir}")
     import subprocess
     env: list[str] = _build_env_list("GCC")
+
     try:
         global gcc_additional_config
         params: list[str] = [
@@ -551,29 +550,104 @@ def build_gcc(src: str) -> None:
             perror("Aborting")
             sys.exit(1)
     pinfo("Configured GCC")
-    pinfo("Building GCC")
-    try:
-        subprocess.run(
-            [
-                *env,
-                "make",
-                *MAKEFLAGS,
-                "all",
-                "CFLAGS_FOR_TARGET=" + ENV_VARS["CFLAGS_FOR_TARGET"],
-                "CXXFLAGS_FOR_TARGET=" + ENV_VARS["CXXFLAGS_FOR_TARGET"]
-            ],
-            check=True
-        )
-    except subprocess.CalledProcessError as e:
-        import traceback
-        pwarning(f"GCC not built: {traceback.format_exc()}")
-        prompt = input("Continue without GCC build? [y/N]: ")
-        if prompt.lower() == "y":
-            return None
-        else:
-            perror("Aborting")
-            sys.exit(1)
-    pinfo("Built GCC")
+
+    if (
+        ENV_VARS["CXXFLAGS_FOR_TARGET"].find("-mcmodel=kernel") != -1 or
+        ENV_VARS["CFLAGS_FOR_TARGET"].find('-mcmodel=kernel') != -1
+    ):
+        pinfo("Start first part of GCC build")
+        try:
+            subprocess.run(
+                [
+                    *env,
+                    "make",
+                    *MAKEFLAGS,
+                    "configure-target-libgcc",
+                    "CFLAGS_FOR_TARGET=" + ENV_VARS["CFLAGS_FOR_TARGET"],
+                    "CXXFLAGS_FOR_TARGET=" + ENV_VARS["CXXFLAGS_FOR_TARGET"]
+                ],
+                check=True
+            )
+        except subprocess.CalledProcessError as e:
+            import traceback
+            pwarning(f"First part of GCC build failed: {traceback.format_exc()}")
+            prompt = input("Continue without building GCC? [y/N]: ")
+            if prompt.lower() == "y":
+                return None
+            else:
+                perror("Aborting")
+                sys.exit(1)
+        pinfo("First part of GCC build succeded")
+        pinfo("Patching libgcc to enable building with -mcmodel=kernel")
+        try:
+            subprocess.run(
+                [
+                    *env,
+                    "sed",
+                    "-i",
+                    "s/PICFLAG/DISABLED_PICFLAG/g",
+                    joinpaths(ENV_VARS["TARGET"], "libgcc", "Makefile")
+                ],
+                check=True
+            )
+        except subprocess.CalledProcessError as e:
+            import traceback
+            pwarning(f"libgcc not patched: {traceback.format_exc()}")
+            prompt = input("Continue without patching libgcc? [y/N]: ")
+            if prompt.lower() == "y":
+                return None
+            else:
+                perror("Aborting")
+                sys.exit(1)
+        pinfo("Patched libgcc")
+        pinfo("Start second part of GCC build")
+        try:
+            subprocess.run(
+                [
+                    *env,
+                    "make",
+                    *MAKEFLAGS,
+                    "all",
+                    "CFLAGS_FOR_TARGET=" + ENV_VARS["CFLAGS_FOR_TARGET"],
+                    "CXXFLAGS_FOR_TARGET=" + ENV_VARS["CXXFLAGS_FOR_TARGET"]
+                ],
+                check=True
+            )
+        except subprocess.CalledProcessError as e:
+            import traceback
+            pwarning(f"Second part of GCC build failed: {traceback.format_exc()}")
+            prompt = input("Continue without building GCC? [y/N]: ")
+            if prompt.lower() == "y":
+                return None
+            else:
+                perror("Aborting")
+                sys.exit(1)
+        pinfo("Second part of GCC build succeded")
+    else:
+        pinfo("Building GCC")
+        try:
+            subprocess.run(
+                [
+                    *env,
+                    "make",
+                    *MAKEFLAGS,
+                    "all",
+                    "CFLAGS_FOR_TARGET=" + ENV_VARS["CFLAGS_FOR_TARGET"],
+                    "CXXFLAGS_FOR_TARGET=" + ENV_VARS["CXXFLAGS_FOR_TARGET"]
+                ],
+                check=True
+            )
+        except subprocess.CalledProcessError as e:
+            import traceback
+            pwarning(f"GCC not built: {traceback.format_exc()}")
+            prompt = input("Continue without GCC build? [y/N]: ")
+            if prompt.lower() == "y":
+                return None
+            else:
+                perror("Aborting")
+                sys.exit(1)
+        pinfo("Built GCC")
+
     pinfo("Installing GCC")
     try:
         subprocess.run(

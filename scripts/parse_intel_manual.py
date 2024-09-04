@@ -39,7 +39,7 @@ def _intel_extract_caption(page: Any, table_bbox: pymupdf.Rect) -> str:
         raise RuntimeError("Error while trying to extract caption")
     return res
 
-def _intel_extract_table_with_name(pages: list[Any], number: str, contains: str | None = None) -> list[pymupdf.table.Table]:
+def _intel_extract_table_with_name(pages: list[Any], number: str, contains: str | None = None) -> list[pandas.DataFrame]:
     ret = []
     table_regex = f'Table {number.strip()}' + r'\.'
     if contains is not None:
@@ -51,7 +51,7 @@ def _intel_extract_table_with_name(pages: list[Any], number: str, contains: str 
         captions = [_intel_extract_caption(page, pymupdf.Rect(*(table.bbox))) for table in finder.tables]
         for tab, cap in [(finder.tables[i], captions[i]) for i in range(len(captions))]:
             if re.match(table_regex, cap) is not None:
-                ret.append(tab)
+                ret.append(tab.to_pandas())
     return ret
 
 def _intel_isolate_volume4(doc: Any) -> list[Any]:
