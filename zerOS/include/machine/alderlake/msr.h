@@ -3,7 +3,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include <klibc/detail/enum.h>
+#include <kernel/compiler/enum.h>
 
 enum zerOS_msr_address
     UNDERLYING_TYPE(uintmax_t)

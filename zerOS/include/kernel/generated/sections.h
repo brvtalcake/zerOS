@@ -26,12 +26,6 @@ extern const char*  zerOS_data_end;
 extern const size_t zerOS_data_size;
 // --- SECTIONINFO END: data ---
 
-// --- SECTIONINFO START: dynamic ---
-extern const char*  zerOS_dynamic_start;
-extern const char*  zerOS_dynamic_end;
-extern const size_t zerOS_dynamic_size;
-// --- SECTIONINFO END: dynamic ---
-
 // --- SECTIONINFO START: bss ---
 extern const char*  zerOS_bss_start;
 extern const char*  zerOS_bss_end;

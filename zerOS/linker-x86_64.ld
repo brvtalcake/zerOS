@@ -77,12 +77,6 @@ zerOS_data_end = ADDR(.data) + SIZEOF(.data);
 zerOS_data_size = SIZEOF(.data);
 /* --- SECTIONINFO END: data --- */
 
-/* --- SECTIONINFO START: dynamic --- */
-zerOS_dynamic_start = ADDR(.dynamic);
-zerOS_dynamic_end = ADDR(.dynamic) + SIZEOF(.dynamic);
-zerOS_dynamic_size = SIZEOF(.dynamic);
-/* --- SECTIONINFO END: dynamic --- */
-
 /* --- SECTIONINFO START: bss --- */
 zerOS_bss_start = ADDR(.bss);
 zerOS_bss_end = ADDR(.bss) + SIZEOF(.bss);
@@ -107,9 +101,9 @@ zerOS_bss_size = SIZEOF(.bss);
     } :data
 
     /* Dynamic section for relocations, both in its own PHDR and inside data PHDR. */
-    .dynamic : {
+    /*.dynamic : {
         *(.dynamic)
-    } :data :dynamic
+    } :data :dynamic*/
 
     /* NOTE: .bss needs to be the last thing mapped to :data, otherwise lots of */
     /* unnecessary zeros will be written to the binary. */

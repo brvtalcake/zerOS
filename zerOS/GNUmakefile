@@ -2,7 +2,7 @@
 override MAKEFLAGS += -rR
 
 override KERNEL := zerOS
-override KERNEL_SECTIONS := text bootcode rodata data dynamic bss
+override KERNEL_SECTIONS := text bootcode rodata data bss # dynamic
 
 override COMMON_DEPS := GNUmakefile sectioninfo config
 
@@ -57,6 +57,8 @@ $(eval $(call PRINTVAR_RULE,KERNEL_MAP))
 
 $(eval $(call PRINTVAR_RULE,BOOT_KCFLAGS))
 $(eval $(call PRINTVAR_RULE,KCFLAGS))
+$(eval $(call PRINTVAR_RULE,KCPPFLAGS))
+$(eval $(call PRINTVAR_RULE,KLDFLAGS))
 
 # Default target: build the kernel.
 
@@ -64,7 +66,7 @@ $(eval $(call PRINTVAR_RULE,KCFLAGS))
 
 config: include/config.h
 
-sectioninfo: GNUmakefile $(KERNEL_MAP) include/klibc/generated/sections.h
+sectioninfo: GNUmakefile $(KERNEL_MAP) include/kernel/generated/sections.h
 
 all: bin/$(KERNEL)
 
@@ -89,7 +91,7 @@ bin/$(KERNEL).iso: bin/$(KERNEL) $(COMMON_DEPS) $(LIMINE_CFG)
 
 bin/$(KERNEL): $(COMMON_DEPS) $(OBJ)
 	mkdir -p "$$(dirname $@)"
-	$(KCC) $(KCFLAGS) $(KCPPFLAGS) $(OBJ) $(KLINKFLAGS) -o $@
+	$(KLD) $(KLDFLAGS) $(OBJ) -o $@
 	printf '\003' | dd of=$@ bs=1 count=1 seek=16 conv=notrunc 2>/dev/null
 	$(if $(call not,$(DEBUG_KERNEL)), $(KSTRIP) --strip-debug $@)
 
@@ -129,8 +131,9 @@ obj/boot/%.asm.o: src/boot/%.asm $(COMMON_DEPS)
 	$(KNASM) $(KNASMFLAGS) $< -o $@
 
 override define GENSECINFO =
+mkdir -p "$$(dirname include/kernel/generated/sections.h)"
 ../scripts/gensectioninfo.py 						\
---output-cfile include/klibc/generated/sections.h 	\
+--output-cfile include/kernel/generated/sections.h 	\
 --output-linkerfile $(KERNEL_MAP) 					\
 --input-linkerfile $(KERNEL_MAP).template 			\
 $(KERNEL_SECTIONS)
@@ -139,7 +142,7 @@ endef
 $(KERNEL_MAP): GNUmakefile $(KERNEL_MAP).template ../scripts/gensectioninfo.py
 	$(GENSECINFO)
 
-include/klibc/generated/sections.h: GNUmakefile $(KERNEL_MAP).template ../scripts/gensectioninfo.py
+include/kernel/generated/sections.h: GNUmakefile $(KERNEL_MAP).template ../scripts/gensectioninfo.py
 	mkdir -p "$$(dirname $@)"
 	$(GENSECINFO)
 
@@ -183,4 +186,4 @@ include/config.h.in: GNUmakefile $(CONFIG_DEPS)  $(KERNEL_SUPDEF_CONFIG)
 # Remove object files and the final executable.
 .PHONY: clean
 clean:
-	rm -rf bin obj include/klibc/generated/sections.h iso_root $(KERNEL_MAP)
+	rm -rf bin obj include/kernel/generated/sections.h iso_root $(KERNEL_MAP)

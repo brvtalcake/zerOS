@@ -3,6 +3,6 @@
 
 #include <limine.h>
 
-extern struct limine_framebuffer_response* get_framebuffers(void);
+extern struct limine_framebuffer_response* zerOS_get_limine_framebuffers(void);
 
 #endif

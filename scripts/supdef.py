@@ -53,7 +53,7 @@ def _handle_error() -> int:
     return 0
 
 # TODO: Get these different library paths portably
-SD_CALLABLE_CMDLINE = '#CC# -x none -O3 -ffreestanding -nostdlib -std=gnu23 /usr/lib/../lib64/crt1.o /usr/lib/../lib64/crti.o /usr/local/lib64/gcc/x86_64-solus-linux/14.1.0/crtbegin.o -L/usr/local/lib64/gcc/x86_64-solus-linux/14.1.0 -L/usr/local/lib64/gcc/x86_64-solus-linux/14.1.0/../../../../lib64 -L/lib/../lib64 -L/usr/lib/../lib64 -L/usr/local/lib64/gcc/x86_64-solus-linux/14.1.0/../../.. #IN# /usr/local/lib64/gcc/x86_64-solus-linux/14.1.0/crtend.o /usr/lib/../lib64/crtn.o -lc -lgcc -lgcc_s -Wl,-z,noexecstack -Wl,--dynamic-linker,/usr/lib64/ld-linux-x86-64.so.2 -o #OUT#'
+SD_CALLABLE_CMDLINE = '#CC# -x none -O3 -ffreestanding -nostdlib -std=gnu23 /usr/lib/../lib64/crt1.o /usr/lib/../lib64/crti.o /usr/local/lib64/gcc/x86_64-solus-linux/14.2.0/crtbegin.o -L/usr/local/lib64/gcc/x86_64-solus-linux/14.2.0 -L/usr/local/lib64/gcc/x86_64-solus-linux/14.2.0/../../../../lib64 -L/lib/../lib64 -L/usr/lib/../lib64 -L/usr/local/lib64/gcc/x86_64-solus-linux/14.2.0/../../.. #IN# /usr/local/lib64/gcc/x86_64-solus-linux/14.2.0/crtend.o /usr/lib/../lib64/crtn.o -lc -lgcc -lgcc_s -Wl,-z,noexecstack -Wl,--dynamic-linker,/usr/lib64/ld-linux-x86-64.so.2 -o #OUT#'
 SD_CALLABLE_CC = os.path.realpath(os.path.join(os.path.dirname(sys.argv[0]), '..', 'toolchain', 'install', 'bin', 'x86_64-elf-gcc'))
 
 def _modify_cc_cmdline(cmdline: str) -> bool:

@@ -13,6 +13,7 @@
 /**
  * @def BOOT_FUNC
  * @brief Marks a function as being a boot function.
+ * @todo Add some attributes to disable ISA extensions
  */
 #define BOOT_FUNC IN_SECTION(".bootcode")
 

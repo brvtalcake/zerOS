@@ -67,9 +67,9 @@ SECTIONS
     } :data
 
     /* Dynamic section for relocations, both in its own PHDR and inside data PHDR. */
-    .dynamic : {
+    /*.dynamic : {
         *(.dynamic)
-    } :data :dynamic
+    } :data :dynamic*/
 
     /* NOTE: .bss needs to be the last thing mapped to :data, otherwise lots of */
     /* unnecessary zeros will be written to the binary. */

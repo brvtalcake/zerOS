@@ -1,6 +1,6 @@
 override BOOT_KCFLAGS := $(KCFLAGS) -Wall -Wextra 	\
 	-std=gnu23 -ffreestanding -fno-stack-protector 	\
-    -fno-stack-check -m64 -mno-80387 -mno-mmx		\
+    -fno-stack-check -m64 -mno-mmx					\
 	$(call CC_TUNE_FOR,x86-64)	-mno-sse -mno-sse2 	\
 	-mno-red-zone -mno-avx -mno-avx2 -mno-avx512f	\
 	-nodefaultlibs -nostdlib -nostartfiles 			\
@@ -10,8 +10,8 @@ override KCFLAGS += -Wall -Wextra -std=gnu23	\
 	-ffreestanding -fno-stack-protector 		\
     -fno-stack-check -m64 -mno-red-zone			\
 	$(call CC_TUNE_FOR,$(KCPU))	-nodefaultlibs 	\
-	-nostdlib -nostartfiles	-flto 				\
-	-m128bit-long-double -fno-fat-lto-objects
+	-nostdlib -nostartfiles	-fno-lto			\
+	-m128bit-long-double
 
 override KCPPFLAGS := 		\
 	-Iinclude 		  		\
@@ -41,4 +41,8 @@ endif
 ifeq ($(call CC_SUPPORTS_OPTION,-mcmodel=kernel),$(true))
 	override KCFLAGS += -mcmodel=kernel
 	override BOOT_KCFLAGS += -mcmodel=kernel
+endif
+
+ifeq ($(call CC_SUPPORTS_OPTION,-fno-omit-frame-pointer),$(true))
+	override BOOT_KCFLAGS += -fno-omit-frame-pointer
 endif

@@ -1,17 +1,10 @@
-#ifndef zerOS_BOOT_CPU_H_INCLUDED
-#define zerOS_BOOT_CPU_H_INCLUDED
+#ifndef zerOS_KERNEL_CPU_CPU_H_INCLUDED
+#define zerOS_KERNEL_CPU_CPU_H_INCLUDED
 
 #include <stddef.h>
 #include <stdint.h>
 
-#include <boot/io.h>
-#include <boot/misc.h>
-
-#include <misc/sections.h>
-
-#include <machine/path.h>
-
-#include <klibc/detail/enum.h>
+#include <kernel/compiler/enum.h>
 
 enum zerOS_supported_cpus
 {
@@ -251,6 +244,7 @@ enum zerOS_intel_strext_cpu_feature_subleaf1_eax_bits
     // RESERVED                                            = (UINT32_C(1) << 31)
 };
 
+#include <machine/path.h>
 #include MK_MACHINE_PATH(msr.h)
 
 static constexpr const uint32_t zerOS_intel_cpuid_valid_eaxs[] = {
@@ -305,12 +299,9 @@ static constexpr const uint32_t zerOS_amd_cpuid_valid_eaxs[] = {
     // TODO
 };
 
-BOOT_FUNC
 extern bool zerOS_cpuid_count(uint32_t leaf, uint32_t subleaf, struct zerOS_cpuid_info* info);
-BOOT_FUNC
 extern bool zerOS_cpuid(uint32_t leaf, struct zerOS_cpuid_info* info);
 
-BOOT_FUNC
 extern void zerOS_set_ia32_misc(bool value, uint8_t bit);
 
 #endif
