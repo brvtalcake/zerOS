@@ -8,4 +8,11 @@
  */
 #define SYMBOL_USED [[__gnu__::__used__]]
 
+#undef  SYMBOL_ALIGNED
+/**
+ * @def SYMBOL_ALIGNED
+ * @brief Aligns a symbol to a specific alignment.
+ */
+#define SYMBOL_ALIGNED(align) [[__gnu__::__aligned__(align)]]
+
 #endif

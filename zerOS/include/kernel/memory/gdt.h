@@ -9,7 +9,7 @@
 
 #include <kernel/compiler/bitfield.h>
 
-struct TYPE_PACKED gdt_normal_segment_descriptor_raw
+struct TYPE_PACKED zerOS_gdt_normal_segment_descriptor
 {
     BITFIELD_VALUE(limit_low, 16);
     BITFIELD_VALUE(base_low, 24);
@@ -28,39 +28,23 @@ struct TYPE_PACKED gdt_normal_segment_descriptor_raw
         };
     };
     BITFIELD_VALUE(limit_hi, 4);
-#if 0
-    union TYPE_PACKED
-    {
-        BITFIELD_VALUE(flags, 4);
-        struct TYPE_PACKED
-        {
-            BITFIELD_VALUE(reserved, 1);
-            BITFIELD_VALUE(granularity, 1);
-            BITFIELD_VALUE(size, 1);
-            BITFIELD_VALUE(long_mode, 1);
-        };
-    };
-#else
-    BITFIELD_VALUE(flags, 4);
-#endif
-    BITFIELD_VALUE(base_hi, 8);
-};
-typedef struct gdt_normal_segment_descriptor_raw gdt_norm_seg_desc_raw_t;
 
-struct gdt_normal_segment_descriptor
-{
-    uint32_t base;
-    _BitInt(20) limit;
-    uint8_t access;
-    uint8_t flags;
+    // FLAGS
+    BITFIELD_VALUE(reserved, 1);
+    BITFIELD_VALUE(granularity, 1);
+    BITFIELD_VALUE(size, 1);
+    BITFIELD_VALUE(long_mode, 1);
+    // END FLAGS
+
+    BITFIELD_VALUE(base_hi, 8);
 };
 
 static_assert(
-    sizeof(struct gdt_normal_segment_descriptor_raw) * 8 == 64,
+    sizeof(struct zerOS_gdt_normal_segment_descriptor) * 8 == 64,
     "Normal GDT segment should have a 64-bits size"
 );
 
-struct TYPE_PACKED gdt_system_segment_descriptor_raw
+struct TYPE_PACKED zerOS_gdt_system_segment_descriptor
 {
     BITFIELD_VALUE(limit_low, 16);
     BITFIELD_VALUE(base_low, 24);
@@ -76,27 +60,105 @@ struct TYPE_PACKED gdt_system_segment_descriptor_raw
         };
     };
     BITFIELD_VALUE(limit_hi, 4);
-    BITFIELD_VALUE(flags, 4);
+
+    // FLAGS
+    BITFIELD_VALUE(reserved, 1);
+    BITFIELD_VALUE(granularity, 1);
+    BITFIELD_VALUE(size, 1);
+    BITFIELD_VALUE(long_mode, 1);
+    // END FLAGS
+
     BITFIELD_VALUE(base_hi, 40);
     BITFIELD_VALUE(reserved, 32);
 };
-typedef struct gdt_system_segment_descriptor_raw gdt_sys_seg_desc_raw_t;
 
 static_assert(
-    sizeof(struct gdt_system_segment_descriptor_raw) == 2 * sizeof(struct gdt_normal_segment_descriptor_raw),
+    sizeof(struct zerOS_gdt_system_segment_descriptor) == 2 * sizeof(struct zerOS_gdt_normal_segment_descriptor),
     "System GDT segment should occupy two times the space occupied by a normal one"
 );
 
-struct TYPE_PACKED gdt_descriptor_raw
+struct TYPE_PACKED zerOS_gdt_descriptor
 {
     uint16_t size;
-    uint32_t offset;
+    uint64_t offset;
 };
 
-struct gdt_descriptor
+static_assert(
+    sizeof(struct zerOS_gdt_descriptor) * 8 == 80,
+    "GDT descriptor shall be 80 bits"
+);
+
+union TYPE_PACKED zerOS_gdt_entry
 {
-    uint32_t offset;
-    uint16_t size;
+    struct zerOS_gdt_normal_segment_descriptor norm[2];
+    struct zerOS_gdt_system_segment_descriptor sys;
 };
+
+typedef union zerOS_gdt_entry* zerOS_gdt_t;
+
+#undef  zerOS_GDT_ENTRY_INDEX_KERNEL32_CS
+#undef  zerOS_GDT_ENTRY_INDEX_KERNEL64_CS
+#undef  zerOS_GDT_ENTRY_INDEX_KERNEL_DS
+
+#undef  zerOS_GDT_ENTRY_INDEX_USER32_CS
+#undef  zerOS_GDT_ENTRY_INDEX_USER_DS
+#undef  zerOS_GDT_ENTRY_INDEX_USER64_CS
+
+#undef  zerOS_GDT_ENTRY_INDEX_TSS
+
+#undef  zerOS_GDT_ENTRY_INDEX_KERNEL_TLS
+#undef  zerOS_GDT_ENTRY_INDEX_USER_TLS
+
+/**
+ * @def zerOS_GDT_ENTRY_INDEX_KERNEL32_CS
+ * @brief The kernel's 32-bit code segment index in the GDT.
+ */
+#define zerOS_GDT_ENTRY_INDEX_KERNEL32_CS 1
+/**
+ * @def zerOS_GDT_ENTRY_INDEX_KERNEL64_CS
+ * @brief The kernel's 64-bit code segment index in the GDT.
+ */
+#define zerOS_GDT_ENTRY_INDEX_KERNEL64_CS 2
+/**
+ * @def zerOS_GDT_ENTRY_INDEX_KERNEL_DS
+ * @brief The kernel's data segment index in the GDT.
+ */
+#define zerOS_GDT_ENTRY_INDEX_KERNEL_DS 3
+
+/**
+ * @def zerOS_GDT_ENTRY_INDEX_USER32_CS
+ * @brief The user's 32-bit code segment index in the GDT.
+ */
+#define zerOS_GDT_ENTRY_INDEX_USER32_CS 4
+/**
+ * @def zerOS_GDT_ENTRY_INDEX_USER_DS
+ * @brief The user's data segment index in the GDT.
+ */
+#define zerOS_GDT_ENTRY_INDEX_USER_DS 5
+/**
+ * @def zerOS_GDT_ENTRY_INDEX_USER64_CS
+ * @brief The user's 64-bit code segment index in the GDT.
+ */
+#define zerOS_GDT_ENTRY_INDEX_USER64_CS 6
+
+/**
+ * @def zerOS_GDT_ENTRY_INDEX_TSS
+ * @brief The Task State Segment index in the GDT.
+ * @warning Needs 2 entries in the GDT as it is a "system segment".
+ */
+#define zerOS_GDT_ENTRY_INDEX_TSS 8
+
+/**
+ * @def zerOS_GDT_ENTRY_INDEX_KERNEL_TLS
+ * @brief The kernel's Thread Local Storage segment index in the GDT.
+ */
+#define zerOS_GDT_ENTRY_INDEX_KERNEL_TLS 10
+/**
+ * @def zerOS_GDT_ENTRY_INDEX_USER_TLS
+ * @brief The user's Thread Local Storage segment index in the GDT.
+ */
+#define zerOS_GDT_ENTRY_INDEX_USER_TLS 11
+
+
 
 #endif
