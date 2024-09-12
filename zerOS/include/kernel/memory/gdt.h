@@ -6,8 +6,12 @@
 #include <assert.h>
 
 #include <misc/type.h>
+#include <misc/bits.h>
 
 #include <kernel/compiler/bitfield.h>
+#include <kernel/compiler/enum.h>
+
+#include <chaos/preprocessor/cat.h>
 
 struct TYPE_PACKED zerOS_gdt_normal_segment_descriptor
 {
@@ -62,14 +66,14 @@ struct TYPE_PACKED zerOS_gdt_system_segment_descriptor
     BITFIELD_VALUE(limit_hi, 4);
 
     // FLAGS
-    BITFIELD_VALUE(reserved, 1);
+    BITFIELD_VALUE(reserved1, 1);
     BITFIELD_VALUE(granularity, 1);
     BITFIELD_VALUE(size, 1);
     BITFIELD_VALUE(long_mode, 1);
     // END FLAGS
 
     BITFIELD_VALUE(base_hi, 40);
-    BITFIELD_VALUE(reserved, 32);
+    BITFIELD_VALUE(reserved2, 32);
 };
 
 static_assert(
@@ -96,6 +100,8 @@ union TYPE_PACKED zerOS_gdt_entry
 
 typedef union zerOS_gdt_entry* zerOS_gdt_t;
 
+#undef  zerOS_GDT_ENTRY_INDEX_NULL
+
 #undef  zerOS_GDT_ENTRY_INDEX_KERNEL32_CS
 #undef  zerOS_GDT_ENTRY_INDEX_KERNEL64_CS
 #undef  zerOS_GDT_ENTRY_INDEX_KERNEL_DS
@@ -108,6 +114,14 @@ typedef union zerOS_gdt_entry* zerOS_gdt_t;
 
 #undef  zerOS_GDT_ENTRY_INDEX_KERNEL_TLS
 #undef  zerOS_GDT_ENTRY_INDEX_USER_TLS
+
+#undef  zerOS_GDT_ENTRY_INDEX_MAX
+
+/**
+ * @def zerOS_GDT_ENTRY_INDEX_NULL
+ * @brief The null segment index in the GDT.
+ */
+#define zerOS_GDT_ENTRY_INDEX_NULL 0
 
 /**
  * @def zerOS_GDT_ENTRY_INDEX_KERNEL32_CS
@@ -159,6 +173,329 @@ typedef union zerOS_gdt_entry* zerOS_gdt_t;
  */
 #define zerOS_GDT_ENTRY_INDEX_USER_TLS 11
 
+/**
+ * @def zerOS_GDT_ENTRY_INDEX_MAX
+ * @brief The maximum number of entries in the GDT.
+ */
+#define zerOS_GDT_ENTRY_INDEX_MAX 12
 
+#undef  zerOS_GDT_ENTRY_INIT
+/**
+ * @def zerOS_GDT_ENTRY_INIT
+ * @brief Initializer for a GDT entry.
+ */
+#define zerOS_GDT_ENTRY_INIT(kind) CHAOS_PP_CAT(__GDT_MK_ENTRY_, kind)
+
+#undef  __GDT_NORMAL_ENTRY_BASE_LOW
+#undef  __GDT_NORMAL_ENTRY_BASE_HIGH
+#undef  __GDT_NORMAL_ENTRY_LIMIT_LOW
+#undef  __GDT_NORMAL_ENTRY_LIMIT_HIGH
+
+#define __GDT_NORMAL_ENTRY_BASE_LOW(base) ((base) & 0xFFFFFFU)
+#define __GDT_NORMAL_ENTRY_BASE_HIGH(base) (((base) >> 24) & 0xFFU)
+#define __GDT_NORMAL_ENTRY_LIMIT_LOW(limit) ((limit) & 0xFFFFU)
+#define __GDT_NORMAL_ENTRY_LIMIT_HIGH(limit) (((limit) >> 16) & 0xFU)
+
+#undef  __GDT_SYSTEM_ENTRY_BASE_LOW
+#undef  __GDT_SYSTEM_ENTRY_BASE_HIGH
+#undef  __GDT_SYSTEM_ENTRY_LIMIT_LOW
+#undef  __GDT_SYSTEM_ENTRY_LIMIT_HIGH
+
+#define __GDT_SYSTEM_ENTRY_BASE_LOW(base) __GDT_NORMAL_ENTRY_BASE_LOW(base)
+#define __GDT_SYSTEM_ENTRY_BASE_HIGH(base) (((base) >> 24) & UINT64_C(0xFFFFFFFFFF))
+#define __GDT_SYSTEM_ENTRY_LIMIT_LOW(limit) __GDT_NORMAL_ENTRY_LIMIT_LOW(limit)
+#define __GDT_SYSTEM_ENTRY_LIMIT_HIGH(limit) __GDT_NORMAL_ENTRY_LIMIT_HIGH(limit)
+
+#undef  __GDT_MK_ENTRY_null
+#undef  __GDT_MK_ENTRY_normal
+#undef  __GDT_MK_ENTRY_system
+
+#define __GDT_MK_ENTRY_null(...) \
+    ((struct zerOS_gdt_normal_segment_descriptor) { 0, 0, { 0, 0, 0, 0, 0, 0, 0 }, 0, 0, 0, 0, 0, 0, 0 })
+#define __GDT_MK_ENTRY_normal(base, limit, access, flags)       \
+    ((struct zerOS_gdt_normal_segment_descriptor) {             \
+        .base_low = __GDT_NORMAL_ENTRY_BASE_LOW(base),          \
+        .base_hi = __GDT_NORMAL_ENTRY_BASE_HIGH(base),          \
+        .limit_low = __GDT_NORMAL_ENTRY_LIMIT_LOW(limit),       \
+        .limit_hi = __GDT_NORMAL_ENTRY_LIMIT_HIGH(limit),       \
+        .accessed = GET_BITS_AT(access, 0, 0),                  \
+        .rw_bit = GET_BITS_AT(access, 1, 1),                    \
+        .dc_bit = GET_BITS_AT(access, 2, 2),                    \
+        .exec_bit = GET_BITS_AT(access, 3, 3),                  \
+        .desc_type = GET_BITS_AT(access, 4, 4),                 \
+        .priv_lvl = GET_BITS_AT(access, 5, 6),                  \
+        .present = GET_BITS_AT(access, 7, 7),                   \
+        .reserved = 0,                                          \
+        .granularity = GET_BITS_AT(flags, 1, 1),                \
+        .size = GET_BITS_AT(flags, 2, 2),                       \
+        .long_mode = GET_BITS_AT(flags, 3, 3)                   \
+    })
+#define __GDT_MK_ENTRY_system(base, limit, access, flags)       \
+    ((struct zerOS_gdt_system_segment_descriptor) {             \
+        .base_low = __GDT_SYSTEM_ENTRY_BASE_LOW(base),          \
+        .base_hi = __GDT_SYSTEM_ENTRY_BASE_HIGH(base),          \
+        .limit_low = __GDT_SYSTEM_ENTRY_LIMIT_LOW(limit),       \
+        .limit_hi = __GDT_SYSTEM_ENTRY_LIMIT_HIGH(limit),       \
+        .type = GET_BITS_AT(access, 0, 3),                      \
+        .desc_type = GET_BITS_AT(access, 4, 4),                 \
+        .priv_lvl = GET_BITS_AT(access, 5, 6),                  \
+        .present = GET_BITS_AT(access, 7, 7),                   \
+        .reserved1 = 0,                                         \
+        .granularity = GET_BITS_AT(flags, 1, 1),                \
+        .size = GET_BITS_AT(flags, 2, 2),                       \
+        .long_mode = GET_BITS_AT(flags, 3, 3),                  \
+        .reserved2 = 0                                          \
+    })
+
+#undef  zerOS_MK_GDT_NORMAL_ENTRY_ACCESS
+#undef  zerOS_MK_GDT_NORMAL_ENTRY_FLAGS
+
+/**
+ * @def zerOS_MK_GDT_NORMAL_ENTRY_ACCESS
+ * @brief Creates the access byte for a normal GDT entry.
+ * @param accessed Is the segment accessed ?
+ * @param rw_bit Additional read or write permissions
+ * @param dc_bit Grows down or up ? (for data segments). Conforming ? (for code segments)
+ * @param exec_bit Code segment if 1, data segment if 0
+ * @param desc_type Descriptor type
+ * @param priv_lvl Privilege level
+ * @param present Present bit
+ * @return The access byte.
+ * @see zerOS_GDT_ENTRY_INIT
+ * @see zerOS_MK_GDT_NORMAL_ENTRY_FLAGS
+ */
+#define zerOS_MK_GDT_NORMAL_ENTRY_ACCESS(   \
+    accessed, rw_bit, dc_bit, exec_bit,     \
+    desc_type, priv_lvl, present            \
+)                                           \
+    (                                       \
+        ((accessed)  << 0) |                \
+        ((rw_bit)    << 1) |                \
+        ((dc_bit)    << 2) |                \
+        ((exec_bit)  << 3) |                \
+        ((desc_type) << 4) |                \
+        ((priv_lvl)  << 5) |                \
+        ((present)   << 7)                  \
+    )
+/**
+ * @def zerOS_MK_GDT_NORMAL_ENTRY_FLAGS
+ * @brief Creates the flags byte for a normal GDT entry.
+ * @param granularity Granularity bit
+ * @param size Size bit
+ * @return The flags byte.
+ * @see zerOS_GDT_ENTRY_INIT
+ * @see zerOS_MK_GDT_NORMAL_ENTRY_ACCESS
+ */
+#define zerOS_MK_GDT_NORMAL_ENTRY_FLAGS(    \
+    granularity, size, long_mode            \
+)                                           \
+    (                                       \
+        ((0)           << 0) |              \
+        ((granularity) << 1) |              \
+        ((size)        << 2) |              \
+        ((long_mode)   << 3)                \
+    )
+
+#undef  zerOS_MK_GDT_SYSTEM_ENTRY_ACCESS
+#undef  zerOS_MK_GDT_SYSTEM_ENTRY_FLAGS
+
+/**
+ * @def zerOS_MK_GDT_SYSTEM_ENTRY_ACCESS
+ * @brief Creates the access byte for a system GDT entry.
+ * @param type Type of system segment
+ * @param desc_type Descriptor type
+ * @param priv_lvl Privilege level
+ * @param present Present bit
+ * @return The access byte.
+ * @see zerOS_GDT_ENTRY_INIT
+ * @see zerOS_MK_GDT_SYSTEM_ENTRY_FLAGS
+ */
+#define zerOS_MK_GDT_SYSTEM_ENTRY_ACCESS(   \
+    type, desc_type, priv_lvl, present      \
+)                                           \
+    (                                       \
+        ((type)      << 0) |                \
+        ((desc_type) << 4) |                \
+        ((priv_lvl)  << 5) |                \
+        ((present)   << 7)                  \
+    )
+/**
+ * @def zerOS_MK_GDT_SYSTEM_ENTRY_FLAGS
+ * @brief Creates the flags byte for a system GDT entry.
+ * @param granularity Granularity bit
+ * @param size Size bit
+ * @return The flags byte.
+ * @see zerOS_GDT_ENTRY_INIT
+ * @see zerOS_MK_GDT_SYSTEM_ENTRY_ACCESS
+ */
+#define zerOS_MK_GDT_SYSTEM_ENTRY_FLAGS(    \
+    granularity, size, long_mode            \
+)                                           \
+    (                                       \
+        ((0)           << 0) |              \
+        ((granularity) << 1) |              \
+        ((size)        << 2) |              \
+        ((long_mode)   << 3)                \
+    )
+
+#undef  zerOS_GDT_ENTRY_NULL
+/**
+ * @def zerOS_GDT_ENTRY_NULL
+ * @brief The null segment in the GDT.
+ */
+#define zerOS_GDT_ENTRY_NULL zerOS_GDT_ENTRY_INIT(null)()
+
+#undef  zerOS_GDT_ENTRY_KERNEL32_CS
+/**
+ * @def zerOS_GDT_ENTRY_KERNEL32_CS
+ * @brief The kernel's 32-bit code segment in the GDT.
+ */
+#define zerOS_GDT_ENTRY_KERNEL32_CS         \
+    zerOS_GDT_ENTRY_INIT(normal)(           \
+        0,                                  \
+        0xFFFFFU,                           \
+        zerOS_MK_GDT_NORMAL_ENTRY_ACCESS(   \
+            0, 1, 0, 1, 1, 0, 1             \
+        ),                                  \
+        zerOS_MK_GDT_NORMAL_ENTRY_FLAGS(    \
+            1, 1, 0                         \
+        )                                   \
+    )
+
+#undef  zerOS_GDT_ENTRY_KERNEL64_CS
+/**
+ * @def zerOS_GDT_ENTRY_KERNEL64_CS
+ * @brief The kernel's 64-bit code segment in the GDT.
+ */
+#define zerOS_GDT_ENTRY_KERNEL64_CS         \
+    zerOS_GDT_ENTRY_INIT(normal)(           \
+        0,                                  \
+        UINT64_MAX,                         \
+        zerOS_MK_GDT_NORMAL_ENTRY_ACCESS(   \
+            0, 1, 0, 1, 1, 0, 1             \
+        ),                                  \
+        zerOS_MK_GDT_NORMAL_ENTRY_FLAGS(    \
+            1, 1, 1                         \
+        )                                   \
+    )
+
+#undef  zerOS_GDT_ENTRY_KERNEL_DS
+/**
+ * @def zerOS_GDT_ENTRY_KERNEL_DS
+ * @brief The kernel's data segment in the GDT.
+ */
+#define zerOS_GDT_ENTRY_KERNEL_DS           \
+    zerOS_GDT_ENTRY_INIT(normal)(           \
+        0,                                  \
+        UINT64_MAX,                         \
+        zerOS_MK_GDT_NORMAL_ENTRY_ACCESS(   \
+            0, 1, 0, 0, 1, 0, 1             \
+        ),                                  \
+        zerOS_MK_GDT_NORMAL_ENTRY_FLAGS(    \
+            1, 1, 1                         \
+        )                                   \
+    )
+
+#undef  zerOS_GDT_ENTRY_USER32_CS
+/**
+ * @def zerOS_GDT_ENTRY_USER32_CS
+ * @brief The user's 32-bit code segment in the GDT.
+ */
+#define zerOS_GDT_ENTRY_USER32_CS           \
+    zerOS_GDT_ENTRY_INIT(normal)(           \
+        0,                                  \
+        0xFFFFFU,                           \
+        zerOS_MK_GDT_NORMAL_ENTRY_ACCESS(   \
+            0, 1, 0, 1, 1, 3, 1             \
+        ),                                  \
+        zerOS_MK_GDT_NORMAL_ENTRY_FLAGS(    \
+            1, 1, 0                         \
+        )                                   \
+    )
+
+#undef  zerOS_GDT_ENTRY_USER_DS
+/**
+ * @def zerOS_GDT_ENTRY_USER_DS
+ * @brief The user's data segment in the GDT.
+ */
+#define zerOS_GDT_ENTRY_USER_DS             \
+    zerOS_GDT_ENTRY_INIT(normal)(           \
+        0,                                  \
+        UINT64_MAX,                         \
+        zerOS_MK_GDT_NORMAL_ENTRY_ACCESS(   \
+            0, 1, 0, 0, 1, 3, 1             \
+        ),                                  \
+        zerOS_MK_GDT_NORMAL_ENTRY_FLAGS(    \
+            1, 1, 1                         \
+        )                                   \
+    )
+
+#undef  zerOS_GDT_ENTRY_USER64_CS
+/**
+ * @def zerOS_GDT_ENTRY_USER64_CS
+ * @brief The user's 64-bit code segment in the GDT.
+ */
+#define zerOS_GDT_ENTRY_USER64_CS           \
+    zerOS_GDT_ENTRY_INIT(normal)(           \
+        0,                                  \
+        UINT64_MAX,                         \
+        zerOS_MK_GDT_NORMAL_ENTRY_ACCESS(   \
+            0, 1, 0, 1, 1, 3, 1             \
+        ),                                  \
+        zerOS_MK_GDT_NORMAL_ENTRY_FLAGS(    \
+            1, 1, 1                         \
+        )                                   \
+    )
+
+#undef  zerOS_GDT_ENTRY_TSS
+/**
+ * @def zerOS_GDT_ENTRY_TSS
+ * @brief The Task State Segment in the GDT.
+ */
+#define zerOS_GDT_ENTRY_TSS                 \
+    zerOS_GDT_ENTRY_INIT(system)(           \
+        0,                                  \
+        0,                                  \
+        zerOS_MK_GDT_SYSTEM_ENTRY_ACCESS(   \
+            9, 0, 0, 1                     \
+        ),                                  \
+        zerOS_MK_GDT_SYSTEM_ENTRY_FLAGS(    \
+            0, 0, 0                         \
+        )                                   \
+    )
+
+#undef  zerOS_GDT_ENTRY_KERNEL_TLS
+/**
+ * @def zerOS_GDT_ENTRY_KERNEL_TLS
+ * @brief The kernel's Thread Local Storage segment in the GDT.
+ */
+#define zerOS_GDT_ENTRY_KERNEL_TLS          \
+    zerOS_GDT_ENTRY_INIT(normal)(           \
+        0,                                  \
+        UINT64_MAX,                         \
+        zerOS_MK_GDT_NORMAL_ENTRY_ACCESS(   \
+            0, 1, 0, 0, 1, 0, 1             \
+        ),                                  \
+        zerOS_MK_GDT_NORMAL_ENTRY_FLAGS(    \
+            1, 1, 1                         \
+        )                                   \
+    )
+
+#undef  zerOS_GDT_ENTRY_USER_TLS
+/**
+ * @def zerOS_GDT_ENTRY_USER_TLS
+ * @brief The user's Thread Local Storage segment in the GDT.
+ */
+#define zerOS_GDT_ENTRY_USER_TLS            \
+    zerOS_GDT_ENTRY_INIT(normal)(           \
+        0,                                  \
+        UINT64_MAX,                         \
+        zerOS_MK_GDT_NORMAL_ENTRY_ACCESS(   \
+            0, 1, 0, 0, 1, 3, 1             \
+        ),                                  \
+        zerOS_MK_GDT_NORMAL_ENTRY_FLAGS(    \
+            1, 1, 1                         \
+        )                                   \
+    )
 
 #endif
