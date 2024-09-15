@@ -19,19 +19,23 @@ override CFILES := $(shell cd src && find -L * -type f -name '*.c')
 override KLIBC_CFILES := $(addprefix klibc/,$(shell cd src/klibc && find -L * -type f -name '*.c'))
 override KERNEL_CFILES := $(filter-out $(KLIBC_CFILES),$(CFILES))
 
-override ASFILES := $(shell cd src && find -L * -type f -name '*.S')
-override KLIBC_ASFILES := $(addprefix klibc/,$(shell cd src/klibc && find -L * -type f -name '*.S'))
+override ASFILES := $(shell cd src && find -L * -type f -name '*.s')
+override KLIBC_ASFILES := $(addprefix klibc/,$(shell cd src/klibc && find -L * -type f -name '*.s'))
 override KERNEL_ASFILES := $(filter-out $(KLIBC_ASFILES),$(ASFILES))
+
+override GCCASFILES := $(shell cd src && find -L * -type f -name '*.S')
+override KLIBC_GCCASFILES := $(addprefix klibc/,$(shell cd src/klibc && find -L * -type f -name '*.S'))
+override KERNEL_GCCASFILES := $(filter-out $(KLIBC_GCCASFILES),$(GCCASFILES))
 
 override NASMFILES := $(shell cd src && find -L * -type f -name '*.asm')
 override KLIBC_NASMFILES := $(addprefix klibc/,$(shell cd src/klibc && find -L * -type f -name '*.asm'))
 override KERNEL_NASMFILES := $(filter-out $(KLIBC_NASMFILES),$(NASMFILES))
 
-override OBJ := $(addprefix obj/,$(CFILES:.c=.c.o) $(ASFILES:.S=.S.o) $(NASMFILES:.asm=.asm.o))
-override KLIBC_OBJ := $(addprefix obj/,$(KLIBC_CFILES:.c=.c.o) $(KLIBC_ASFILES:.S=.S.o) $(KLIBC_NASMFILES:.asm=.asm.o))
-override KERNEL_OBJ := $(addprefix obj/,$(KERNEL_CFILES:.c=.c.o) $(KERNEL_ASFILES:.S=.S.o) $(KERNEL_NASMFILES:.asm=.asm.o))
+override OBJ := $(addprefix obj/,$(CFILES:.c=.c.o) $(ASFILES:.s=.s.o) $(NASMFILES:.asm=.asm.o) $(GCCASFILES:.S=.S.o))
+override KLIBC_OBJ := $(addprefix obj/,$(KLIBC_CFILES:.c=.c.o) $(KLIBC_ASFILES:.s=.s.o) $(KLIBC_NASMFILES:.asm=.asm.o) $(KLIBC_GCCASFILES:.S=.S.o))
+override KERNEL_OBJ := $(addprefix obj/,$(KERNEL_CFILES:.c=.c.o) $(KERNEL_ASFILES:.s=.s.o) $(KERNEL_NASMFILES:.asm=.asm.o) $(KERNEL_GCCASFILES:.S=.S.o))
 
-override HEADER_DEPS := $(addprefix obj/,$(CFILES:.c=.c.d) $(ASFILES:.S=.S.d))
+override HEADER_DEPS := $(addprefix obj/,$(CFILES:.c=.c.d) $(GCCASFILES:.S=.S.d))
 override KERNEL_SUPDEF_CONFIG := include/config.sd
 override CONFIG_DEPS := $(shell find -L include/config.d/ -type f)
 
@@ -46,6 +50,9 @@ $(eval $(call PRINTVAR_RULE,KERNEL_CFILES))
 $(eval $(call PRINTVAR_RULE,ASFILES))
 $(eval $(call PRINTVAR_RULE,KLIBC_ASFILES))
 $(eval $(call PRINTVAR_RULE,KERNEL_ASFILES))
+$(eval $(call PRINTVAR_RULE,GCCASFILES))
+$(eval $(call PRINTVAR_RULE,KLIBC_GCCASFILES))
+$(eval $(call PRINTVAR_RULE,KERNEL_GCCASFILES))
 $(eval $(call PRINTVAR_RULE,NASMFILES))
 $(eval $(call PRINTVAR_RULE,KLIBC_NASMFILES))
 $(eval $(call PRINTVAR_RULE,KERNEL_NASMFILES))
@@ -113,6 +120,14 @@ obj/%.c.o: src/%.c $(COMMON_DEPS)
 obj/boot/%.c.o: src/boot/%.c $(COMMON_DEPS)
 	mkdir -p "$$(dirname $@)"
 	$(KCC) $(BOOT_KCFLAGS) $(KCPPFLAGS) -c $< -o $@
+
+# Compilation rules for *.s files.
+obj/%.s.o: src/%.s $(COMMON_DEPS)
+	mkdir -p "$$(dirname $@)"
+	$(KAS) $(KASFLAGS) $< -o $@
+obj/boot/%.s.o: src/boot/%.s $(COMMON_DEPS)
+	mkdir -p "$$(dirname $@)"
+	$(KAS) $(BOOT_KASFLAGS) $< -o $@
 
 # Compilation rules for *.S files.
 obj/%.S.o: src/%.S $(COMMON_DEPS)

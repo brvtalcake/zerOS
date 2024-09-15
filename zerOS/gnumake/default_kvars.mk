@@ -48,12 +48,14 @@ $(eval $(call DEFAULT_VAR,KPP,$(DEFAULT_KPP)))
 
 override DEFAULT_KCFLAGS := -g -O3 -pipe -mno-80387 -fgraphite -fgraphite-identity
 $(eval $(call DEFAULT_VAR,KCFLAGS,$(DEFAULT_KCFLAGS)))
-override DEFAULT_KCPPFLAGS :=
+override DEFAULT_KCPPFLAGS := -DCHAOS_PP_VARIADICS=1
 $(eval $(call DEFAULT_VAR,KCPPFLAGS,$(DEFAULT_KCPPFLAGS)))
 override DEFAULT_KNASMFLAGS := -F dwarf -g
 $(eval $(call DEFAULT_VAR,KNASMFLAGS,$(DEFAULT_KNASMFLAGS)))
 override DEFAULT_KLDFLAGS :=
 $(eval $(call DEFAULT_VAR,KLDFLAGS,$(DEFAULT_KLDFLAGS)))
+override DEFAULT_KASFLAGS := # TODO
+$(eval $(call DEFAULT_VAR,KASFLAGS,$(DEFAULT_KASFLAGS)))
 
 LIMINE := $(KTOOLCHAIN_DIR)/bin/limine
 LIMINE_CFG := limine.cfg

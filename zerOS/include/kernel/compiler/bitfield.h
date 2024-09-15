@@ -79,6 +79,10 @@
     )(CHAOS_PP_FAILURE())
 
 #undef  BITFIELD_VALUE
-#define BITFIELD_VALUE(name, size) CHAOS_PP_CLEAN(__BITFIELD_VALUE_CHOOSE_TYPE(size)) name : size
+#ifndef __INTELLISENSE__
+    #define BITFIELD_VALUE(name, size) CHAOS_PP_CLEAN(__BITFIELD_VALUE_CHOOSE_TYPE(size)) name : size
+#else
+    #define BITFIELD_VALUE(name, size) uint128_t name : size
+#endif
 
 #endif

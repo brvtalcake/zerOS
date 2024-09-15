@@ -9,10 +9,12 @@
 
 #include <misc/sections.h>
 #include <misc/symbol.h>
+#include <misc/array.h>
 
 #include <kernel/cpu/io.h>
 #include <kernel/cpu/misc.h>
 #include <kernel/memory/gdt.h>
+#include <kernel/memory/paging.h>
 
 #ifdef LIMINE_REQUESTED_REVISION
     #error "LIMINE_REQUESTED_REVISION shall not be defined before this point"
@@ -69,30 +71,13 @@ static inline void* boot_memcpy(void* restrict dest, const void* restrict src, s
     return dest;
 }
 
-#if 0
-SYMBOL_ALIGNED(16)
-static union zerOS_gdt_entry new_gdt_space[zerOS_GDT_ENTRY_INDEX_MAX] = {
-    [zerOS_GDT_ENTRY_INDEX_NULL] = zerOS_GDT_ENTRY_NULL,
-    [zerOS_GDT_ENTRY_INDEX_KERNEL32_CS] = zerOS_GDT_ENTRY_KERNEL32_CS,
-    [zerOS_GDT_ENTRY_INDEX_KERNEL64_CS] = zerOS_GDT_ENTRY_KERNEL64_CS,
-    [zerOS_GDT_ENTRY_INDEX_KERNEL_DS] = zerOS_GDT_ENTRY_KERNEL_DS,
-    [zerOS_GDT_ENTRY_INDEX_USER32_CS] = zerOS_GDT_ENTRY_USER32_CS,
-    [zerOS_GDT_ENTRY_INDEX_USER64_CS] = zerOS_GDT_ENTRY_USER64_CS,
-    [zerOS_GDT_ENTRY_INDEX_USER_DS] = zerOS_GDT_ENTRY_USER_DS,
-    [zerOS_GDT_ENTRY_INDEX_TSS] = zerOS_GDT_ENTRY_TSS,
-    [zerOS_GDT_ENTRY_INDEX_KERNEL_TLS] = zerOS_GDT_ENTRY_KERNEL_TLS,
-    [zerOS_GDT_ENTRY_INDEX_USER_TLS] = zerOS_GDT_ENTRY_USER_TLS
-};
-#else
-SYMBOL_ALIGNED(16) SYMBOL_USED
-static unsigned char new_gdt_space[zerOS_GDT_ENTRY_INDEX_MAX * sizeof(struct zerOS_gdt_normal_segment_descriptor)] =
-{ 0 };
-#endif
+SYMBOL_ALIGNED_TO(zerOS_PAGE_SIZE) SYMBOL_USED
+static unsigned char new_gdt_space[zerOS_GDT_ENTRY_INDEX_MAX * sizeof(struct zerOS_gdt_normal_segment_descriptor)];
 
 BOOT_FUNC
 static inline struct zerOS_gdt_descriptor* get_gdt_desc(void)
 {
-    SYMBOL_ALIGNED(16)
+    SYMBOL_ALIGNED_TO(16)
     static struct zerOS_gdt_descriptor gdt_desc;
     asm volatile(
         "sgdt %0"
@@ -102,11 +87,41 @@ static inline struct zerOS_gdt_descriptor* get_gdt_desc(void)
 }
 
 BOOT_FUNC
-static inline void copy_limine_gdt(void)
+static bool fill_unassigned_gdtent(void)
 {
-    // Copy Limine's GDT into our GDT space
-    struct zerOS_gdt_descriptor* limine_gdt = gdt_addr();
-    boot_memcpy(new_gdt_space, (void*)limine_gdt->offset, limine_gdt->size);
+    const unsigned int unassigned[] = zerOS_GDT_ENTRY_UNASSIGNED_INDEX;
+    SYMBOL_ALIGNED_TO(16)
+    const struct zerOS_gdt_normal_segment_descriptor unassigned_desc = zerOS_GDT_ENTRY_NULL;
+    for (size_t i = 0; i < ARRAY_LEN(unassigned); i++)
+    {
+        const unsigned int idx = unassigned[i];
+        const unsigned int real_idx = idx & (~1U);
+        if (idx == real_idx)
+        {
+            const size_t offset = real_idx * sizeof(struct zerOS_gdt_normal_segment_descriptor);
+            union zerOS_gdt_entry* entry = (union zerOS_gdt_entry*)(new_gdt_space + offset);
+            struct zerOS_gdt_normal_segment_descriptor* desc = &(entry->norm[0]);
+            boot_memcpy(desc, &unassigned_desc, sizeof(struct zerOS_gdt_normal_segment_descriptor));
+        }
+        else
+        {
+            const size_t offset = real_idx * sizeof(struct zerOS_gdt_normal_segment_descriptor);
+            union zerOS_gdt_entry* entry = (union zerOS_gdt_entry*)(new_gdt_space + offset);
+            struct zerOS_gdt_normal_segment_descriptor* desc = &(entry->norm[1]);
+            boot_memcpy(desc, &unassigned_desc, sizeof(struct zerOS_gdt_normal_segment_descriptor));
+        }
+    }
+
+    return true;
+}
+
+BOOT_FUNC
+static bool fill_null_gdtent(void)
+{
+    SYMBOL_ALIGNED_TO(16)
+    const struct zerOS_gdt_normal_segment_descriptor null_desc = zerOS_GDT_ENTRY_NULL;
+    boot_memcpy(new_gdt_space, &null_desc, sizeof(struct zerOS_gdt_normal_segment_descriptor));
+    return fill_unassigned_gdtent();
 }
 
 BOOT_FUNC
@@ -124,7 +139,7 @@ static bool setup_normsegs(void)
         zerOS_GDT_ENTRY_INDEX_USER_DS
     };
 
-    SYMBOL_ALIGNED(16)
+    SYMBOL_ALIGNED_TO(16)
     const struct zerOS_gdt_normal_segment_descriptor normsegs_desc[] = {
         zerOS_GDT_ENTRY_NULL,
 
@@ -137,22 +152,22 @@ static bool setup_normsegs(void)
         zerOS_GDT_ENTRY_USER_DS
     };
 
-    for (size_t i = 0; i < sizeof(normsegs) / sizeof(normsegs[0]); i++)
+    for (size_t i = 0; i < ARRAY_LEN(normsegs); i++)
     {
         const unsigned int idx = normsegs[i];
         const unsigned int real_idx = idx & (~1U);
         if (idx == real_idx)
         {
             const size_t offset = real_idx * sizeof(struct zerOS_gdt_normal_segment_descriptor);
-            struct gdt_entry* entry = (struct gdt_entry*)(new_gdt_space + offset);
-            struct gdt_normal_segment_descriptor* desc = &(entry->norm[0]);
+            union zerOS_gdt_entry* entry = (union zerOS_gdt_entry*)(new_gdt_space + offset);
+            struct zerOS_gdt_normal_segment_descriptor* desc = &(entry->norm[0]);
             boot_memcpy(desc, &normsegs_desc[i], sizeof(struct zerOS_gdt_normal_segment_descriptor));
         }
         else
         {
             const size_t offset = real_idx * sizeof(struct zerOS_gdt_normal_segment_descriptor);
-            struct gdt_entry* entry = (struct gdt_entry*)(new_gdt_space + offset);
-            struct gdt_normal_segment_descriptor* desc = &(entry->norm[1]);
+            union zerOS_gdt_entry* entry = (union zerOS_gdt_entry*)(new_gdt_space + offset);
+            struct zerOS_gdt_normal_segment_descriptor* desc = &(entry->norm[1]);
             boot_memcpy(desc, &normsegs_desc[i], sizeof(struct zerOS_gdt_normal_segment_descriptor));
         }
     }
@@ -167,20 +182,20 @@ static bool setup_syssegs(void)
         zerOS_GDT_ENTRY_INDEX_TSS
     };
 
-    SYMBOL_ALIGNED(16)
+    SYMBOL_ALIGNED_TO(16)
     const struct zerOS_gdt_system_segment_descriptor syssegs_desc[] = {
         zerOS_GDT_ENTRY_TSS
     };
 
-    for (size_t i = 0; i < sizeof(syssegs) / sizeof(syssegs[0]); i++)
+    for (size_t i = 0; i < ARRAY_LEN(syssegs); i++)
     {
         const unsigned int idx = syssegs[i];
         const unsigned int real_idx = idx & (~1U);
         if (real_idx != idx)
             return false;
         const size_t offset = real_idx * sizeof(struct zerOS_gdt_normal_segment_descriptor);
-        struct gdt_entry* entry = (struct gdt_entry*)(new_gdt_space + offset);
-        struct gdt_system_segment_descriptor* desc = &(entry->sys);
+        union zerOS_gdt_entry* entry = (union zerOS_gdt_entry*)(new_gdt_space + offset);
+        struct zerOS_gdt_system_segment_descriptor* desc = &(entry->sys);
         boot_memcpy(desc, &syssegs_desc[i], sizeof(struct zerOS_gdt_system_segment_descriptor));
     }
 
@@ -195,34 +210,51 @@ static bool setup_tlssegs(void)
         zerOS_GDT_ENTRY_INDEX_USER_TLS
     };
 
-    SYMBOL_ALIGNED(16)
+    SYMBOL_ALIGNED_TO(16)
     const struct zerOS_gdt_normal_segment_descriptor tlssegs_desc[] = {
         zerOS_GDT_ENTRY_KERNEL_TLS,
         zerOS_GDT_ENTRY_USER_TLS
     };
 
-    for (size_t i = 0; i < sizeof(tlssegs) / sizeof(tlssegs[0]); i++)
+    for (size_t i = 0; i < ARRAY_LEN(tlssegs); i++)
     {
         const unsigned int idx = tlssegs[i];
         const unsigned int real_idx = idx & (~1U);
         if (idx == real_idx)
         {
             const size_t offset = real_idx * sizeof(struct zerOS_gdt_normal_segment_descriptor);
-            struct gdt_entry* entry = (struct gdt_entry*)(new_gdt_space + offset);
-            struct gdt_normal_segment_descriptor* desc = &(entry->norm[0]);
+            union zerOS_gdt_entry* entry = (union zerOS_gdt_entry*)(new_gdt_space + offset);
+            struct zerOS_gdt_normal_segment_descriptor* desc = &(entry->norm[0]);
             boot_memcpy(desc, &tlssegs_desc[i], sizeof(struct zerOS_gdt_normal_segment_descriptor));
         }
         else
         {
             const size_t offset = real_idx * sizeof(struct zerOS_gdt_normal_segment_descriptor);
-            struct gdt_entry* entry = (struct gdt_entry*)(new_gdt_space + offset);
-            struct gdt_normal_segment_descriptor* desc = &(entry->norm[1]);
+            union zerOS_gdt_entry* entry = (union zerOS_gdt_entry*)(new_gdt_space + offset);
+            struct zerOS_gdt_normal_segment_descriptor* desc = &(entry->norm[1]);
             boot_memcpy(desc, &tlssegs_desc[i], sizeof(struct zerOS_gdt_normal_segment_descriptor));
         }
     }
 
     return true;
 }
+
+BOOT_FUNC
+extern void __post_limine_boot_setup_reload_segment_registers(void);
+
+asm(
+    ".global __post_limine_boot_setup_reload_segment_registers\n"
+    "__post_limine_boot_setup_reload_segment_registers:\n"
+    "mov $0x10, %ax\n"
+    "mov %ax, %ds\n"
+    "mov %ax, %es\n"
+    "mov %ax, %fs\n"
+    "mov %ax, %gs\n"
+    "mov %ax, %ss\n"
+    "ljmp $0x8, $1f\n"
+    "1:\n"
+    "ret\n"
+);
 
 BOOT_FUNC
 static bool load_new_gdt(void)
@@ -235,6 +267,7 @@ static bool load_new_gdt(void)
         :
         : "m"(*gdt_desc)
     );
+    reload_segments_registers();
     return true;
 }
 
@@ -247,6 +280,7 @@ static bool setup_gdt(void)
     ret &= setup_normsegs();
     ret &= setup_syssegs();
     ret &= setup_tlssegs();
+    ret &= fill_null_gdtent();
     ret &= load_new_gdt();
     return ret;
 }
@@ -261,9 +295,6 @@ static bool setup_paging(void)
         return false;
 
     if (lvl5_paging_request.response->max_mode != LIMINE_PAGING_MODE_X86_64_5LVL)
-        return false;
-
-    if (lvl5_paging_request.response->min_mode != LIMINE_PAGING_MODE_X86_64_4LVL)
         return false;
 
     return true;

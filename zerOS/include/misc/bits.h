@@ -14,4 +14,20 @@
  */
 #define GET_BITS_AT(value, start, end) (((value) >> (start)) & (((typeof_unqual(value))1 << ((end) - (start) + 1)) - 1))
 
+#undef  EVEN
+/**
+ * @def EVEN
+ * @brief Check if a number is even.
+ * @param n The number to check.
+ */
+#define EVEN(n) ((n) % 2 == 0)
+
+#undef  ODD
+/**
+ * @def ODD
+ * @brief Check if a number is odd.
+ * @param n The number to check.
+ */
+#define ODD(n) ((n) % 2 != 0)
+
 #endif
