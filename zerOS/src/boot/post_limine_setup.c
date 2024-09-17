@@ -74,17 +74,17 @@ static inline void* boot_memcpy(void* restrict dest, const void* restrict src, s
 SYMBOL_ALIGNED_TO(zerOS_PAGE_SIZE) SYMBOL_USED
 static unsigned char new_gdt_space[zerOS_GDT_ENTRY_INDEX_MAX * sizeof(struct zerOS_gdt_normal_segment_descriptor)];
 
-BOOT_FUNC
-static inline struct zerOS_gdt_descriptor* get_gdt_desc(void)
-{
-    SYMBOL_ALIGNED_TO(16)
-    static struct zerOS_gdt_descriptor gdt_desc;
-    asm volatile(
-        "sgdt %0"
-        : "=m"(gdt_desc)
-    );
-    return &gdt_desc;
-}
+//BOOT_FUNC
+//static inline struct zerOS_gdt_descriptor* get_gdt_desc(void)
+//{
+//    SYMBOL_ALIGNED_TO(16)
+//    static struct zerOS_gdt_descriptor gdt_desc;
+//    asm volatile(
+//        "sgdt %0"
+//        : "=m"(gdt_desc)
+//    );
+//    return &gdt_desc;
+//}
 
 BOOT_FUNC
 static bool fill_unassigned_gdtent(void)
@@ -240,41 +240,56 @@ static bool setup_tlssegs(void)
 }
 
 BOOT_FUNC
-extern void __post_limine_boot_setup_reload_segment_registers(void);
-
-asm(
-    ".global __post_limine_boot_setup_reload_segment_registers\n"
-    "__post_limine_boot_setup_reload_segment_registers:\n"
-    "mov $0x10, %ax\n"
-    "mov %ax, %ds\n"
-    "mov %ax, %es\n"
-    "mov %ax, %fs\n"
-    "mov %ax, %gs\n"
-    "mov %ax, %ss\n"
-    "ljmp $0x8, $1f\n"
-    "1:\n"
-    "ret\n"
-);
-
-BOOT_FUNC
 static bool load_new_gdt(void)
 {
-    struct zerOS_gdt_descriptor* gdt_desc = get_gdt_desc();
-    gdt_desc->size = sizeof(new_gdt_space) - 1;
-    gdt_desc->offset = (uint64_t)new_gdt_space;
-    asm volatile(
-        "lgdt %0"
-        :
-        : "m"(*gdt_desc)
-    );
-    reload_segments_registers();
+    SYMBOL_ALIGNED_TO(16)
+    struct zerOS_gdt_descriptor gdt_desc;
+    SYMBOL_ALIGNED_TO(16)
+    struct zerOS_gdt_segment_registers gdt_regs;
+
+    gdt_desc.offset = (uint64_t)(void*)new_gdt_space;
+    gdt_desc.size   = (zerOS_GDT_ENTRY_INDEX_MAX * sizeof(struct zerOS_gdt_normal_segment_descriptor)) - 1;
+
+    gdt_regs.cs = (struct zerOS_gdt_selector){
+        .index = zerOS_GDT_ENTRY_INDEX_KERNEL64_CS,
+        .rpl = 0,
+        .table = 0
+    };
+    gdt_regs.ds = (struct zerOS_gdt_selector){
+        .index = zerOS_GDT_ENTRY_INDEX_KERNEL_DS,
+        .rpl = 0,
+        .table = 0
+    };
+    gdt_regs.es = (struct zerOS_gdt_selector){
+        .index = zerOS_GDT_ENTRY_INDEX_KERNEL_DS,
+        .rpl = 0,
+        .table = 0
+    };
+    gdt_regs.fs = (struct zerOS_gdt_selector){
+        .index = zerOS_GDT_ENTRY_INDEX_KERNEL_DS,
+        .rpl = 0,
+        .table = 0
+    };
+    gdt_regs.gs = (struct zerOS_gdt_selector){
+        .index = zerOS_GDT_ENTRY_INDEX_KERNEL_DS,
+        .rpl = 0,
+        .table = 0
+    };
+    gdt_regs.ss = (struct zerOS_gdt_selector){
+        .index = zerOS_GDT_ENTRY_INDEX_KERNEL_DS,
+        .rpl = 0,
+        .table = 0
+    };
+
+    zerOS_gdt_set(gdt_desc, gdt_regs);
+
     return true;
 }
 
 BOOT_FUNC
 static bool setup_gdt(void)
 {
-    // Already done by Limine
+    // Already set up by Limine
     // But replace it with our own GDT
     bool ret = true;
     ret &= setup_normsegs();

@@ -46,3 +46,11 @@ endif
 ifeq ($(call CC_SUPPORTS_OPTION,-fno-omit-frame-pointer),$(true))
 	override BOOT_KCFLAGS += -fno-omit-frame-pointer
 endif
+
+ifeq ($(call CC_SUPPORTS_OPTION,-fgraphite),$(true))
+	override KCFLAGS += -fgraphite
+endif
+
+ifeq ($(call CC_SUPPORTS_OPTION,-fgraphite-identity),$(true))
+	override KCFLAGS += -fgraphite-identity
+endif

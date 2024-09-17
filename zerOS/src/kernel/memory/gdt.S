@@ -56,11 +56,11 @@ zerOS_gdt_set:
     push64 %rax
 
     xor %rax, %rax
-    leaq RIP_RELATIVE(.L__zerOS_gdt_on_new_cs), %rax
+    leaq RIP_RELATIVE(.L__zerOS_on_new_cs), %rax
     push64 %rax
     lretq
 
-.L__zerOS_gdt_on_new_cs:
+.L__zerOS_on_new_cs:
     # Data segment registers
     mov16 ACCESS_PTR(,%rsi,,,2),  %ds
     mov16 ACCESS_PTR(,%rsi,,,4),  %es

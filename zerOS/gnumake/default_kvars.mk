@@ -46,7 +46,7 @@ $(eval $(call DEFAULT_VAR,KSIZE,$(DEFAULT_KSIZE)))
 override DEFAULT_KPP := $(KTOOLCHAIN_DIR)/bin/$(KARCH)-elf-cpp
 $(eval $(call DEFAULT_VAR,KPP,$(DEFAULT_KPP)))
 
-override DEFAULT_KCFLAGS := -g -O3 -pipe -mno-80387 -fgraphite -fgraphite-identity
+override DEFAULT_KCFLAGS := -g -O3 -pipe -mno-80387
 $(eval $(call DEFAULT_VAR,KCFLAGS,$(DEFAULT_KCFLAGS)))
 override DEFAULT_KCPPFLAGS := -DCHAOS_PP_VARIADICS=1
 $(eval $(call DEFAULT_VAR,KCPPFLAGS,$(DEFAULT_KCPPFLAGS)))
