@@ -217,7 +217,7 @@ typedef union zerOS_gdt_entry* zerOS_gdt_t;
  * @def zerOS_GDT_ENTRY_UNASSIGNED_INDEX
  * @brief Indexes of unassigned GDT entries.
  */
-#define zerOS_GDT_ENTRY_UNASSIGNED_INDEX ((constexpr unsigned int[]){ 7, 12, 13, 14, 15 })
+#define zerOS_GDT_ENTRY_UNASSIGNED_INDEX { 7, 12, 13, 14, 15 }
 
 #undef  zerOS_GDT_ENTRY_INIT
 /**
@@ -251,7 +251,7 @@ typedef union zerOS_gdt_entry* zerOS_gdt_t;
 #undef  __GDT_MK_ENTRY_system
 
 #define __GDT_MK_ENTRY_null(...) \
-    ((struct zerOS_gdt_normal_segment_descriptor) { 0, 0, { 0, 0, 0, 0, 0, 0, 0 }, 0, 0, 0, 0, 0, 0, 0 })
+    ((struct zerOS_gdt_normal_segment_descriptor) { 0 })
 #define __GDT_MK_ENTRY_normal(base, limit, access, flags)       \
     ((struct zerOS_gdt_normal_segment_descriptor) {             \
         .limit_low = __GDT_NORMAL_ENTRY_LIMIT_LOW(limit),       \

@@ -41,6 +41,8 @@ endif
 ifeq ($(call CC_SUPPORTS_OPTION,-mcmodel=kernel),$(true))
 	override KCFLAGS += -mcmodel=kernel
 	override BOOT_KCFLAGS += -mcmodel=kernel
+else
+	$(error Compiler does not support -mcmodel=kernel)
 endif
 
 ifeq ($(call CC_SUPPORTS_OPTION,-fno-omit-frame-pointer),$(true))

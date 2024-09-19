@@ -45,10 +45,12 @@ override DEFAULT_KSIZE := $(KTOOLCHAIN_DIR)/bin/$(KARCH)-elf-size
 $(eval $(call DEFAULT_VAR,KSIZE,$(DEFAULT_KSIZE)))
 override DEFAULT_KPP := $(KTOOLCHAIN_DIR)/bin/$(KARCH)-elf-cpp
 $(eval $(call DEFAULT_VAR,KPP,$(DEFAULT_KPP)))
+override DEFAULT_KQEMU := $(KTOOLCHAIN_DIR)/bin/qemu-system-$(KARCH)
+$(eval $(call DEFAULT_VAR,KQEMU,$(DEFAULT_KQEMU)))
 
-override DEFAULT_KCFLAGS := -g -O3 -pipe -mno-80387
+override DEFAULT_KCFLAGS := -g -O3 -pipe -mno-80387 -ftrack-macro-expansion=0
 $(eval $(call DEFAULT_VAR,KCFLAGS,$(DEFAULT_KCFLAGS)))
-override DEFAULT_KCPPFLAGS := -DCHAOS_PP_VARIADICS=1
+override DEFAULT_KCPPFLAGS := -DCHAOS_PP_VARIADICS=1 -ftrack-macro-expansion=0
 $(eval $(call DEFAULT_VAR,KCPPFLAGS,$(DEFAULT_KCPPFLAGS)))
 override DEFAULT_KNASMFLAGS := -F dwarf -g
 $(eval $(call DEFAULT_VAR,KNASMFLAGS,$(DEFAULT_KNASMFLAGS)))
@@ -57,8 +59,14 @@ $(eval $(call DEFAULT_VAR,KLDFLAGS,$(DEFAULT_KLDFLAGS)))
 override DEFAULT_KASFLAGS := # TODO
 $(eval $(call DEFAULT_VAR,KASFLAGS,$(DEFAULT_KASFLAGS)))
 
+# Use host CPU as QEMU target by default.
+# Use iso format by default.
+# Enable KVM by default.
+override DEFAULT_KQEMU_RUNFLAGS := -cpu host -enable-kvm -cdrom
+$(eval $(call DEFAULT_VAR,KQEMU_RUNFLAGS,$(DEFAULT_KQEMU_RUNFLAGS)))
+
 LIMINE := $(KTOOLCHAIN_DIR)/bin/limine
-LIMINE_CFG := limine.cfg
+LIMINE_CFG := limine.conf
 LIMINE_DATADIR := $(shell $(LIMINE) --print-datadir)
 
 XORRISO := $(shell which xorriso)

@@ -32,3 +32,4 @@ extern void zerOS_set_ia32_misc(bool value, uint8_t bit)
     zerOS_write_msr(0x1A0, reg);
 }
 
+

@@ -30,7 +30,7 @@
 #     struct zerOS_gdt_selector ss;
 # } __attribute__((packed));
 
-.include <asm/common.inc>
+.include "asm/common.inc"
 
 #include <asm/common.h>
 #include <asm/syntax.h>

@@ -1,5 +1,4 @@
 #include <klibc/string.h>
-#include <klibc/detail/mem.h>
 #include <stdint.h>
 
 static inline int memcmp_naive(const void* p1, const void* p2, size_t n);

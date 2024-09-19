@@ -1,3 +1,5 @@
+#include <config.h>
+
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
@@ -281,7 +283,7 @@ static bool load_new_gdt(void)
         .table = 0
     };
 
-    zerOS_gdt_set(gdt_desc, gdt_regs);
+    zerOS_gdt_set(&gdt_desc, &gdt_regs);
 
     return true;
 }
@@ -291,13 +293,26 @@ static bool setup_gdt(void)
 {
     // Already set up by Limine
     // But replace it with our own GDT
+
     bool ret = true;
-    ret &= setup_normsegs();
-    ret &= setup_syssegs();
-    ret &= setup_tlssegs();
-    ret &= fill_null_gdtent();
-    ret &= load_new_gdt();
+    ret = ret && setup_normsegs();
+    ret = ret && setup_syssegs();
+    ret = ret && setup_tlssegs();
+    ret = ret && fill_null_gdtent();
+    ret = ret && load_new_gdt();
     return ret;
+}
+
+BOOT_FUNC
+static bool setup_paging_5lvl(void)
+{
+    return true;
+}
+
+BOOT_FUNC
+static bool setup_paging_4lvl(void)
+{
+    return true;
 }
 
 BOOT_FUNC
@@ -306,25 +321,30 @@ static bool setup_paging(void)
     if (lvl5_paging_request.response == nullptr)
         return false;
 
-    if (lvl5_paging_request.response->mode != LIMINE_PAGING_MODE_X86_64_5LVL)
+    if (
+        lvl5_paging_request.response->mode != LIMINE_PAGING_MODE_X86_64_5LVL &&
+        lvl5_paging_request.response->mode != LIMINE_PAGING_MODE_X86_64_4LVL
+    )
         return false;
 
-    if (lvl5_paging_request.response->max_mode != LIMINE_PAGING_MODE_X86_64_5LVL)
-        return false;
-
-    return true;
+    return (
+        lvl5_paging_request.response->mode == LIMINE_PAGING_MODE_X86_64_5LVL ? setup_paging_5lvl() : setup_paging_4lvl()
+    );
 }
 
 BOOT_FUNC
 static bool setup_idt(void)
 {
-
+    return true;
 }
 
+/**
+ * @brief Setup ISA extensions (such as SSE, AVX, etc.) that GCC might use.
+ */
 BOOT_FUNC
 static bool setup_isa_exts(void)
 {
-    
+    return zerOS_CONFIG_CPU##_setup_isa_exts();
 }
 
 BOOT_FUNC
@@ -335,11 +355,11 @@ extern void zerOS_boot_setup(void)
 
     if (!setup_paging())
         zerOS_hcf();
-
-    if (!setup_idt())
+    
+    if (!setup_isa_exts())
         zerOS_hcf();
 
-    if (!setup_isa_exts())
+    if (!setup_idt())
         zerOS_hcf();
 
     if (LIMINE_BASE_REVISION_SUPPORTED == false)

@@ -105,7 +105,7 @@ bin/$(KERNEL).iso: bin/$(KERNEL) $(COMMON_DEPS) $(LIMINE_CFG)
         iso_root -o $@
 	$(LIMINE) bios-install $@
 
-bin/$(KERNEL): $(COMMON_DEPS) $(OBJ) $(KERNEL_MAP)
+bin/$(KERNEL): $(COMMON_DEPS) $(OBJ)
 	mkdir -p "$$(dirname $@)"
 	$(KLD) $(KLDFLAGS) $(OBJ) -o $@
 #printf '\003' | dd of=$@ bs=1 count=1 seek=16 conv=notrunc 2>/dev/null
@@ -163,9 +163,11 @@ mkdir -p "$$(dirname include/kernel/generated/sections.h)"
 $(KERNEL_SECTIONS)
 endef
 
+.SECONDARY: $(KERNEL_MAP)
 $(KERNEL_MAP): GNUmakefile $(KERNEL_MAP).template ../scripts/gensectioninfo.py
 	$(GENSECINFO)
 
+.SECONDARY: include/kernel/generated/sections.h
 include/kernel/generated/sections.h: GNUmakefile $(KERNEL_MAP).template ../scripts/gensectioninfo.py
 	mkdir -p "$$(dirname $@)"
 	$(GENSECINFO)
@@ -190,9 +192,6 @@ override define GENCONFIG =
 @echo "#undef  zerOS_CONFIG_CPU_FEATURES" >> $@
 @echo "#define zerOS_CONFIG_CPU_FEATURES $(KCPU_FEATURES)" >> $@
 @echo "" >> $@
-@echo "#undef  zerOS_CONFIG_UNDER_QEMU" >> $@
-@echo "#define zerOS_CONFIG_UNDER_QEMU $(if $(KQEMU),1,0)" >> $@
-@echo "" >> $@
 @cat  $(KERNEL_SUPDEF_CONFIG) >> $@
 @echo "" >> $@
 @echo "#endif" >> $@
@@ -202,17 +201,15 @@ override define SUPDEF =
 ../scripts/supdef.py $< -o $@ -Iinclude/config.d/
 endef
 
+.SECONDARY: include/config.h
 include/config.h: include/config.h.in GNUmakefile
 	mkdir -p "$$(dirname $@)"
 	$(SUPDEF)
 
+.SECONDARY: include/config.h.in
 include/config.h.in: GNUmakefile $(CONFIG_DEPS)  $(KERNEL_SUPDEF_CONFIG)
 	mkdir -p "$$(dirname $@)"
 	$(GENCONFIG)
-
-include/limine.h: $(KTOOLCHAIN_DIR)/include/limine.h
-	mkdir -p "$$(dirname $@)"
-	cp $< $@
 
 .PHONY: run
 run: bin/$(KERNEL).iso
