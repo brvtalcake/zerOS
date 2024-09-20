@@ -1,6 +1,8 @@
+#if 0
 #define STBI_NO_STDIO
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
+#endif
 
 #define INCBIN_PREFIX zerOS_
 #define INCBIN_STYLE INCBIN_STYLE_SNAKE
@@ -10,8 +12,9 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-INCBIN(logo_white_transparent_svg, "assets/zeros-high-resolution-logo-white-transparent.svg");
+INCBIN(logo_white_transparent_svg, "src/kernel/assets/logo/zeros-high-resolution-logo-white-transparent.svg");
 
+#if 0
 void zerOS_get_logo(uint8_t** data, size_t* width, size_t* height, size_t* channels)
 {
     int w, h, c;
@@ -29,4 +32,5 @@ void zerOS_get_logo(uint8_t** data, size_t* width, size_t* height, size_t* chann
 
     return;
 }
+#endif
 

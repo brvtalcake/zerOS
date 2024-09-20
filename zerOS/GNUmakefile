@@ -1,6 +1,8 @@
 # Nuke built-in rules and variables.
 override MAKEFLAGS += -rR
 
+SHELL := /bin/bash
+
 override CURRENT_MAKEFILE_PATH := $(abspath $(lastword $(MAKEFILE_LIST)))
 override CURRENT_MAKEFILE_DIR  := $(dir $(CURRENT_MAKEFILE_PATH))
 
@@ -155,7 +157,7 @@ obj/boot/%.asm.o: src/boot/%.asm $(COMMON_DEPS)
 	$(KNASM) $(KNASMFLAGS) $< -o $@
 
 override define MK_LIBGRAPHEME_CONFIG :=
-@echo '/* Automatically generated. Do not edit. */' > glue/libgrapheme/config.mk
+@echo '## Automatically generated. Do not edit. ##' > glue/libgrapheme/config.mk
 @echo 'PREFIX    = $(abspath .)'                    >> glue/libgrapheme/config.mk
 @echo 'INCPREFIX = $(abspath ./include)'            >> glue/libgrapheme/config.mk
 @echo 'LIBPREFIX = $(abspath ./lib)'                >> glue/libgrapheme/config.mk
@@ -188,7 +190,7 @@ lib/libgrapheme.a:
 	$(SHELL) -c 'GLUEFILES=$$(find glue/libgrapheme -type f);	\
 		for f in $$GLUEFILES; do 								\
 			TOREPLACE=$$(echo $$f | sed -Ee 					\
-				"s/glue\//third_party\/libgrapheme\//g");		\
+				"s/glue\//third_party\//g");		\
 			cp -T $$f $$TOREPLACE;								\
 		done'
 	$(MAKE) -C third_party/libgrapheme libgrapheme.a
