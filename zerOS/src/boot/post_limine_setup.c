@@ -18,6 +18,10 @@
 #include <kernel/memory/gdt.h>
 #include <kernel/memory/paging.h>
 
+#include <machine/setup.h>
+
+#include <chaos/preprocessor/cat.h>
+
 #ifdef LIMINE_REQUESTED_REVISION
     #error "LIMINE_REQUESTED_REVISION shall not be defined before this point"
 #endif
@@ -76,17 +80,8 @@ static inline void* boot_memcpy(void* restrict dest, const void* restrict src, s
 SYMBOL_ALIGNED_TO(zerOS_PAGE_SIZE) SYMBOL_USED
 static unsigned char new_gdt_space[zerOS_GDT_ENTRY_INDEX_MAX * sizeof(struct zerOS_gdt_normal_segment_descriptor)];
 
-//BOOT_FUNC
-//static inline struct zerOS_gdt_descriptor* get_gdt_desc(void)
-//{
-//    SYMBOL_ALIGNED_TO(16)
-//    static struct zerOS_gdt_descriptor gdt_desc;
-//    asm volatile(
-//        "sgdt %0"
-//        : "=m"(gdt_desc)
-//    );
-//    return &gdt_desc;
-//}
+SYMBOL_ALIGNED_TO(zerOS_PAGE_SIZE) SYMBOL_USED
+static unsigned char new_idt_space[0x1000];
 
 BOOT_FUNC
 static bool fill_unassigned_gdtent(void)
@@ -304,18 +299,6 @@ static bool setup_gdt(void)
 }
 
 BOOT_FUNC
-static bool setup_paging_5lvl(void)
-{
-    return true;
-}
-
-BOOT_FUNC
-static bool setup_paging_4lvl(void)
-{
-    return true;
-}
-
-BOOT_FUNC
 static bool setup_paging(void)
 {
     if (lvl5_paging_request.response == nullptr)
@@ -327,9 +310,7 @@ static bool setup_paging(void)
     )
         return false;
 
-    return (
-        lvl5_paging_request.response->mode == LIMINE_PAGING_MODE_X86_64_5LVL ? setup_paging_5lvl() : setup_paging_4lvl()
-    );
+    return true;
 }
 
 BOOT_FUNC
@@ -344,12 +325,15 @@ static bool setup_idt(void)
 BOOT_FUNC
 static bool setup_isa_exts(void)
 {
-    return zerOS_CONFIG_CPU##_setup_isa_exts();
+    return CHAOS_PP_CAT(zerOS_CONFIG_CPU, _setup_isa_exts) ();
 }
 
 BOOT_FUNC
 extern void zerOS_boot_setup(void)
 {
+    if (LIMINE_BASE_REVISION_SUPPORTED == false)
+        zerOS_hcf();
+
     if (!setup_gdt())
         zerOS_hcf();
 
@@ -360,9 +344,6 @@ extern void zerOS_boot_setup(void)
         zerOS_hcf();
 
     if (!setup_idt())
-        zerOS_hcf();
-
-    if (LIMINE_BASE_REVISION_SUPPORTED == false)
         zerOS_hcf();
 
     if (framebuffer_request.response == nullptr

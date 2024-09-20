@@ -81,7 +81,6 @@ extern bool alderlake_setup_isa_exts(void)
 {
     uint64_t cr0  = read_cr0();
     uint64_t cr4  = read_cr4();
-    uint64_t xcr0 = read_xcr0();
 
     // Set CR4.OSFXSR[bit 9] = 1
     cr4 |= (1ULL << 9);
@@ -94,13 +93,16 @@ extern bool alderlake_setup_isa_exts(void)
     // Set CR4.OSXSAVE[bit 18] = 1
     cr4 |= (1ULL << 18);
     
+    write_cr0(cr0);
+    write_cr4(cr4);
+
+    uint64_t xcr0 = read_xcr0();
+
     // Set XCR0[bit 0] = 1 (X87)
     // Set XCR0[bit 1] = 1 (SSE)
     // Set XCR0[bit 2] = 1 (AVX)
     xcr0 |= 1ULL | (1ULL << 1) | (1ULL << 2);
 
-    write_cr0(cr0);
-    write_cr4(cr4);
     write_xcr0(xcr0);
 
     return true;

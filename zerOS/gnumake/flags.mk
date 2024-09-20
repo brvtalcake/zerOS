@@ -13,10 +13,14 @@ override KCFLAGS += -Wall -Wextra -std=gnu23	\
 	-nostdlib -nostartfiles	-fno-lto			\
 	-m128bit-long-double
 
-override KCPPFLAGS := 		\
-	-Iinclude 		  		\
-	-Ithird_party	  		\
-	-Ithird_party/chaos-pp	\
+override KCPPFLAGS := 			\
+	-DCHAOS_PP_VARIADICS=1		\
+	-Iinclude 		  			\
+	-Ithird_party	  			\
+	-Ithird_party/chaos-pp		\
+	-Ithird_party/incbin		\
+	-Ithird_party/stb			\
+	-ftrack-macro-expansion=0	\
 	$(KCPPFLAGS)
 
 # Internal linker flags that should not be changed by the user.

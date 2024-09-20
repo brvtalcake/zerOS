@@ -62,7 +62,8 @@ $(eval $(call DEFAULT_VAR,KASFLAGS,$(DEFAULT_KASFLAGS)))
 # Use host CPU as QEMU target by default.
 # Use iso format by default.
 # Enable KVM by default.
-override DEFAULT_KQEMU_RUNFLAGS := -cpu host -enable-kvm -cdrom
+# Enable UEFI by default.
+override DEFAULT_KQEMU_RUNFLAGS := -cpu host -enable-kvm -smbios type=0,uefi=on -cdrom
 $(eval $(call DEFAULT_VAR,KQEMU_RUNFLAGS,$(DEFAULT_KQEMU_RUNFLAGS)))
 
 LIMINE := $(KTOOLCHAIN_DIR)/bin/limine

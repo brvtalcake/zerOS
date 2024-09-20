@@ -154,6 +154,47 @@ obj/boot/%.asm.o: src/boot/%.asm $(COMMON_DEPS)
 	mkdir -p "$$(dirname $@)"
 	$(KNASM) $(KNASMFLAGS) $< -o $@
 
+override define MK_LIBGRAPHEME_CONFIG :=
+@echo '/* Automatically generated. Do not edit. */' > glue/libgrapheme/config.mk
+@echo 'PREFIX    = $(abspath .)'                    >> glue/libgrapheme/config.mk
+@echo 'INCPREFIX = $(abspath ./include)'            >> glue/libgrapheme/config.mk
+@echo 'LIBPREFIX = $(abspath ./lib)'                >> glue/libgrapheme/config.mk
+@echo 'MANPREFIX = /tmp/share/man'                  >> glue/libgrapheme/config.mk
+@echo ''											>> glue/libgrapheme/config.mk
+@echo 'ANAME     = libgrapheme.a'                   >> glue/libgrapheme/config.mk
+@echo ''											>> glue/libgrapheme/config.mk
+@echo 'BUILD_CPPFLAGS = -D_ISOC99_SOURCE'		    >> glue/libgrapheme/config.mk
+@echo 'BUILD_CFLAGS   = -std=c99 -Os -Wall	\
+	-Wextra -Wpedantic -Wno-overlength-strings'     >> glue/libgrapheme/config.mk
+@echo 'BUILD_LDFLAGS  = -s'						    >> glue/libgrapheme/config.mk
+@echo ''											>> glue/libgrapheme/config.mk
+@echo 'CPPFLAGS = -D_ISOC99_SOURCE $(KCPPFLAGS)'	>> glue/libgrapheme/config.mk
+@echo 'CFLAGS   = -Wall	-Wextra -Wpedantic	\
+	-Wno-overlength-strings $(KCFLAGS)'				>> glue/libgrapheme/config.mk
+@echo ''											>> glue/libgrapheme/config.mk
+@echo 'CC	    = $(KCC)'							>> glue/libgrapheme/config.mk
+@echo 'AR	    = $(KAR)'							>> glue/libgrapheme/config.mk
+@echo 'RANLIB   = $(KRANLIB)'						>> glue/libgrapheme/config.mk
+@echo 'BUILD_CC = cc'								>> glue/libgrapheme/config.mk
+@echo 'SH	    = sh'								>> glue/libgrapheme/config.mk
+@echo ''											>> glue/libgrapheme/config.mk
+endef
+
+lib/libgrapheme.a:
+	mkdir -p "$$(dirname $@)"
+	mkdir -p glue/libgrapheme
+	cat third_party/libgrapheme/src/character.c | sed -Ee 's/#include <stdio.h>//g' > glue/libgrapheme/src/character.c
+	$(MK_LIBGRAPHEME_CONFIG)
+	$(SHELL) -c 'GLUEFILES=$$(find glue/libgrapheme -type f);	\
+		for f in $$GLUEFILES; do 								\
+			TOREPLACE=$$(echo $$f | sed -Ee 					\
+				"s/glue\//third_party\/libgrapheme\//g");		\
+			cp -T $$f $$TOREPLACE;								\
+		done'
+	$(MAKE) -C third_party/libgrapheme libgrapheme.a
+	cp third_party/libgrapheme/libgrapheme.a $$(dirname $@)
+	cp third_party/libgrapheme/grapheme.h include/
+
 override define GENSECINFO =
 mkdir -p "$$(dirname include/kernel/generated/sections.h)"
 ../scripts/gensectioninfo.py 						\
