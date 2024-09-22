@@ -1,0 +1,8 @@
+#ifndef zerOS_KERNEL_MULTITASKING_ATOMICS_H_INCLUDED
+#define zerOS_KERNEL_MULTITASKING_ATOMICS_H_INCLUDED
+
+#include <stdint.h>
+
+
+
+#endif

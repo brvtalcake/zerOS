@@ -259,7 +259,7 @@ include/limine.h: $(KTOOLCHAIN_DIR)/include/limine.h
 
 .PHONY: run
 run: bin/$(KERNEL).iso
-	$(KQEMU) $(KQEMU_RUNFLAGS) $<
+	$(KQEMU) $(KQEMU_RUNFLAGS) $< $(if $(DEBUG_KERNEL),-s,)
 
 # Remove object files and the final executable.
 .PHONY: clean

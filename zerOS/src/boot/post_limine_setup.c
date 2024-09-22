@@ -53,6 +53,42 @@ static struct limine_framebuffer_request framebuffer_request = {
     .response = nullptr
 };
 
+IN_SECTION(".requests") SYMBOL_USED
+static struct limine_firmware_type_request firmware_type_request = {
+    .id = LIMINE_FIRMWARE_TYPE_REQUEST,
+    .revision = LIMINE_REQUESTED_REVISION,
+    .response = nullptr
+};
+
+IN_SECTION(".requests") SYMBOL_USED
+static struct limine_hhdm_request hhdm_request = {
+    .id = LIMINE_HHDM_REQUEST,
+    .revision = LIMINE_REQUESTED_REVISION,
+    .response = nullptr
+};
+
+IN_SECTION(".requests") SYMBOL_USED
+static struct limine_memmap_request memmap_request = {
+    .id = LIMINE_MEMMAP_REQUEST,
+    .revision = LIMINE_REQUESTED_REVISION,
+    .response = nullptr
+};
+
+IN_SECTION(".requests") SYMBOL_USED
+static struct limine_efi_memmap_request efi_memmap_request = {
+    .id = LIMINE_EFI_MEMMAP_REQUEST,
+    .revision = LIMINE_REQUESTED_REVISION,
+    .response = nullptr
+};
+
+IN_SECTION(".requests") SYMBOL_USED
+static struct limine_efi_system_table_request efi_system_table_request = {
+    .id = LIMINE_EFI_SYSTEM_TABLE_REQUEST,
+    .revision = LIMINE_REQUESTED_REVISION,
+    .response = nullptr
+};
+
+
 // Finally, define the start and end markers for the Limine requests.
 // These can also be moved anywhere, to any .c file, as seen fit.
 
@@ -80,8 +116,14 @@ static inline void* boot_memcpy(void* restrict dest, const void* restrict src, s
 SYMBOL_ALIGNED_TO(zerOS_PAGE_SIZE) SYMBOL_USED
 static unsigned char new_gdt_space[zerOS_GDT_ENTRY_INDEX_MAX * sizeof(struct zerOS_gdt_normal_segment_descriptor)];
 
-SYMBOL_ALIGNED_TO(zerOS_PAGE_SIZE) SYMBOL_USED
-static unsigned char new_idt_space[0x1000];
+BOOT_FUNC
+static bool assert_uefi_x86_64(void)
+{
+    struct limine_firmware_type_response* response = firmware_type_request.response;
+    if (!response)
+        return false;
+    return response->firmware_type == LIMINE_FIRMWARE_TYPE_UEFI64;
+}
 
 BOOT_FUNC
 static bool fill_unassigned_gdtent(void)
@@ -332,6 +374,9 @@ BOOT_FUNC
 extern void zerOS_boot_setup(void)
 {
     if (LIMINE_BASE_REVISION_SUPPORTED == false)
+        zerOS_hcf();
+
+    if (!assert_uefi_x86_64())
         zerOS_hcf();
 
     if (!setup_gdt())

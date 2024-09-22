@@ -18,7 +18,7 @@ enum zerOS_page_privilege_level
     zerOS_PAGE_DRIVER1_PRIVILEGE,
     zerOS_PAGE_DRIVER2_PRIVILEGE,
     zerOS_PAGE_USER_PRIVILEGE,
-    zerOS_PAGE_CONTAINERS_PRIVILEGE
+    zerOS_PAGE_CONTAINERS_PRIVILEGE // Only when 5-level paging is enabled
 };
 
 struct TYPE_PACKED zerOS_pml4_entry

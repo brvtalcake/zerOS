@@ -40,7 +40,7 @@
 
 .global zerOS_gdt_set
 .type zerOS_gdt_set, @function
-.align 16
+.balign 16
 zerOS_gdt_set:
     # Disable interrupts
     cli

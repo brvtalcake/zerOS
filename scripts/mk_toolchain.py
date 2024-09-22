@@ -986,11 +986,11 @@ def build_limine(src: str) -> None:
     pinfo("Installed Limine")
     os.chdir(currdir)
     return None
-        
+
 
 def download_qemu(destdir: str, destarchive: str) -> None:
-    QEMU_LINK = "https://download.qemu.org/qemu-9.0.1.tar.xz"
-    QEMU_SIG  = "https://download.qemu.org/qemu-9.0.1.tar.xz.sig"
+    QEMU_LINK = "https://download.qemu.org/qemu-9.1.0.tar.xz"
+    QEMU_SIG  = "https://download.qemu.org/qemu-9.1.0.tar.xz.sig"
     destination: str = joinpaths(destdir, destarchive)
     pinfo(f"Downloading {QEMU_LINK} to {destination}")
     tarbytes = download.from_http(QEMU_LINK)
@@ -1333,7 +1333,7 @@ def main() -> int:
         ENV_VARS["TARGET"] = cmdline_args.target_architecture
         pinfo(f"Target architecture: {ENV_VARS['TARGET']}")
         #ENV_VARS["PREFIX"] = joinpaths(get_toolchain_installdir(), ENV_VARS["TARGET"])
-        
+
         pdebug("GCC version: " + GCC_VERSION)
         for defered in buildproc:
             if is_function_passed(defered.func):

@@ -63,7 +63,7 @@ $(eval $(call DEFAULT_VAR,KASFLAGS,$(DEFAULT_KASFLAGS)))
 # Use iso format by default.
 # Enable KVM by default.
 # Enable UEFI by default.
-override DEFAULT_KQEMU_RUNFLAGS := -cpu host -enable-kvm -smbios type=0,uefi=on -cdrom
+override DEFAULT_KQEMU_RUNFLAGS := -cpu host -enable-kvm -smbios type=0,uefi=on -monitor stdio -S -bios vendor/OVMF.fd -cdrom
 $(eval $(call DEFAULT_VAR,KQEMU_RUNFLAGS,$(DEFAULT_KQEMU_RUNFLAGS)))
 
 LIMINE := $(KTOOLCHAIN_DIR)/bin/limine
