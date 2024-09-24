@@ -655,7 +655,7 @@ class FileContent(object):
                     while j < len(lines):
                         if re.match(PRAGMA_RUNNABLE_END_REGEX, lines[j]):
                             break
-                        runnable_content += lines[j]
+                        runnable_content += lines[j] + '\n'
                         j += 1
                     popts = [x.strip() for x in matchrunnable.group(1).split(' ')]
                     pname = matchrunnable.groups()[-1].strip()
@@ -833,6 +833,12 @@ def parse_cmdline():
         required=False
     )
     parser.add_argument(
+        '-t', '--trace',
+        action='store_true',
+        help='enable tracing (for debugging purposes)',
+        required=False
+    )
+    parser.add_argument(
         'input',
         metavar='input',
         type=str,
@@ -849,7 +855,7 @@ def main() -> int:
     if args.debug:
         set_debug_mode(True)
 
-    if get_debug_mode() or ALWAYS_PROFILE:
+    if args.trace or ALWAYS_PROFILE:
         pr.enable()
 
     if args.include is not None:
@@ -898,7 +904,7 @@ def main() -> int:
         pdebug(traceback.format_exc())
         return 1
     finally:
-        if get_debug_mode() or ALWAYS_PROFILE:
+        if args.trace or ALWAYS_PROFILE:
             pr.disable()
             ps = pstats.Stats(pr)
             ps.print_stats()
