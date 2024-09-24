@@ -5,7 +5,9 @@
 
 extern void zerOS_halt(void)
 {
-    asm volatile("hlt");
+    asm volatile(
+        "hlt" : : : "memory"
+    );
 }
 
 extern void zerOS_reboot(void)
@@ -16,7 +18,9 @@ extern void zerOS_reboot(void)
 
 extern void zerOS_cli(void)
 {
-    asm volatile("cli");
+    asm volatile(
+        "cli" : : : "memory"
+    );
 }
 
 extern void zerOS_hcf(void)

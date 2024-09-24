@@ -117,17 +117,20 @@ def _preprocess_backslashes(text: str) -> str:
                     if i + 1 < textlen:
                         if text[i + 1] != '\n':
                             raise ValueError("Backslash outside of string or character literal must be at the end of the line")
+                        newtext += ' '
                         i += 2
                     else:
-                        i += 1
-            case "\"":
+                        i += 1 # TODO: Add a warning
+            case '"':
                 if not in_char_lit:
                     in_string_lit = not in_string_lit
-                    newtext += text[i]
+                newtext += text[i]
+                i += 1
             case "'":
                 if not in_string_lit:
                     in_char_lit = not in_char_lit
-                    newtext += text[i]
+                newtext += text[i]
+                i += 1
             case _:
                 newtext += text[i]
                 i += 1

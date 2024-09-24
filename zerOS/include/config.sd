@@ -1,6 +1,7 @@
 
 #pragma supdef import <ctypesize.sd>
 #pragma supdef import <define.sd>
+#pragma supdef import <variadics.sd>
 
 DEFINE_ZEROS_CONFIG(
     HAVE_128BITS_LONGLONG,
@@ -10,4 +11,9 @@ DEFINE_ZEROS_CONFIG(
 DEFINE_ZEROS_CONFIG(
     HAVE_128BITS_LONGDOUBLE,
     CTYPE_SIZE_IS_XBITS(long double, 128)
+)
+
+DEFINE_ZEROS_CONFIG(
+    HAVE_VA_OPT,
+    HAVE_VA_OPT_IMPL()
 )
