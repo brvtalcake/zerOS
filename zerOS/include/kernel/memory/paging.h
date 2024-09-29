@@ -21,20 +21,6 @@ enum zerOS_page_privilege_level
     zerOS_PAGE_CONTAINERS_PRIVILEGE // Only when 5-level paging is enabled
 };
 
-struct TYPE_PACKED zerOS_pml4_entry
-{
-    BITFIELD_VALUE(present, 1);
-    BITFIELD_VALUE(rw, 1);
-    BITFIELD_VALUE(us, 1);
-    BITFIELD_VALUE(pwt, 1);
-    BITFIELD_VALUE(pcd, 1);
-    BITFIELD_VALUE(a, 1);
-    BITFIELD_VALUE(_ignored, 1);
-    BITFIELD_VALUE(_reserved1, 2);
-    BITFIELD_VALUE(base, 40);
-    BITFIELD_VALUE(_reserved2, 12);
-};
-
-
+#include <kernel/memory/paging_structures.h>
 
 #endif

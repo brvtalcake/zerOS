@@ -379,10 +379,10 @@ extern void zerOS_boot_setup(void)
     if (!assert_uefi_x86_64())
         zerOS_hcf();
 
-    if (!setup_gdt())
+    if (!setup_paging())
         zerOS_hcf();
 
-    if (!setup_paging())
+    if (!setup_gdt())
         zerOS_hcf();
     
     if (!setup_isa_exts())
