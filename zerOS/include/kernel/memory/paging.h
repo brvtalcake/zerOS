@@ -6,6 +6,8 @@
 #include <stdbool.h>
 
 #include <misc/type.h>
+#include <misc/statement.h>
+#include <misc/unique_ident.h>
 
 #include <kernel/compiler/bitfield.h>
 
@@ -90,24 +92,98 @@ enum zerOS_page_table_bits
 #define zerOS_PAGE_FLAG_CUSTOM(val) __PGFLAG_AVL_MK(val)
 
 #undef  __PGFLAG_PKE_MK
-#define __PGFLAG_PKE_MK(v) ((uint64_t)v & UINT64_C(0b1111))
+#undef  __PGFLAG_PKE_GET
+#undef  __PGFLAG_PKE_SHIFT
+#define __PGFLAG_PKE_MK(v) ((uint64_t)v  & UINT64_C(0b1111))
+#define __PGFLAG_PKE_GET(v) (((v) >> 10) & UINT64_C(0b1111))
+#define __PGFLAG_PKE_SHIFT 59
 
 #undef  __PGFLAG_AVL_MK
-#define __PGFLAG_AVL_MK(v) ((uint64_t)v & UINT64_C(0x3ff))
+#undef  __PGFLAG_AVL_GET1
+#undef  __PGFLAG_AVL_GET2
+#undef  __PGFLAG_AVL_SHIFT1
+#undef  __PGFLAG_AVL_SHIFT2
+#define __PGFLAG_AVL_MK(v) ((uint64_t)v  & UINT64_C(0x3ff))
+#define __PGFLAG_AVL_GET1(v) ( (v)       & UINT64_C(0b111))
+#define __PGFLAG_AVL_GET2(v) (((v) >> 3) & UINT64_C(0x7f ))
+#define __PGFLAG_AVL_SHIFT1 9
+#define __PGFLAG_AVL_SHIFT2 52
 
 #undef  zerOS_mk_page_struct
 /**
- * @def zerOS_mk_page_struct()
- * @todo Document (and finish) this
+ * @def zerOS_mk_page_struct(addr, tabletype, transsize, classicflags, customflags, pat)
+ * @brief Fills a page structure (i.e. a table) accordingly.
+ * @returns An `uint64_t` containing the new page table.
+ * @note None of the flags in `classicflags` is checked.
+ * @warning The provided address `addr` is not checked. If some bits "must-be-zero", then you'll need to do it yourself!
  */
-#define zerOS_mk_page_struct(           \
-    buf, memcpyfunc, translationsize,   \
-    addr, pagetype, classicflags,       \
-    customflags, pat                    \
-)                                       \
-({                                      \
-    /* TODO: Finish this */             \
-})
+#define zerOS_mk_page_struct(                                       \
+    addr, tabletype, transsize, classicflags, customflags, pat      \
+)                                                                   \
+    ({                                                              \
+        uint64_t UNIQUE(tbl) = 0;                                   \
+        if ((classicflags) & zerOS_PAGE_FLAG_PRESENT)               \
+            UNIQUE(tbl) |= zerOS_PAGE_PRESENT_BIT;                  \
+        if ((classicflags) & zerOS_PAGE_FLAG_RW)                    \
+            UNIQUE(tbl) |= zerOS_PAGE_RW_BIT;                       \
+        if ((classicflags) & zerOS_PAGE_FLAG_US)                    \
+            UNIQUE(tbl) |= zerOS_PAGE_US_BIT;                       \
+        if ((classicflags) & zerOS_PAGE_FLAG_PWT)                   \
+            UNIQUE(tbl) |= zerOS_PAGE_PWT_BIT;                      \
+        if ((classicflags) & zerOS_PAGE_FLAG_PCD)                   \
+            UNIQUE(tbl) |= zerOS_PAGE_PCD_BIT;                      \
+        if ((classicflags) & zerOS_PAGE_FLAG_ACCESSED)              \
+            UNIQUE(tbl) |= zerOS_PAGE_ACCESSED_BIT;                 \
+        if ((classicflags) & zerOS_PAGE_FLAG_DIRTY)                 \
+            UNIQUE(tbl) |= zerOS_PAGE_DIRTY_BIT;                    \
+        if ((classicflags) & zerOS_PAGE_FLAG_PS)                    \
+            UNIQUE(tbl) |= zerOS_PAGE_PS_BIT;                       \
+        if ((classicflags) & zerOS_PAGE_FLAG_GLOBAL)                \
+            UNIQUE(tbl) |= zerOS_PAGE_GLOBAL_BIT;                   \
+        if ((classicflags) & zerOS_PAGE_FLAG_NX)                    \
+            UNIQUE(tbl) |= zerOS_PAGE_NX_BIT;                       \
+        if ((classicflags) & zerOS_PAGE_FLAG_PKE(0b1111))           \
+            UNIQUE(tbl) |= __PGFLAG_PKE_GET((classicflags))         \
+                        << __PGFLAG_PKE_SHIFT;                      \
+                                                                    \
+        if ((tabletype) == zerOS_PAGE_TABLE_PT)                     \
+            UNIQUE(tbl) |= (pat) ? zerOS_PAGE_PAT_PS0_BIT : 0;      \
+        else if ((tabletype) == zerOS_PAGE_TABLE_PD)                \
+            UNIQUE(tbl) |= (pat) ? zerOS_PAGE_PAT_PS1_BIT : 0;      \
+        else if ((tabletype) == zerOS_PAGE_TABLE_PDP)               \
+            UNIQUE(tbl) |= (pat) ? zerOS_PAGE_PAT_PS1_BIT : 0;      \
+                                                                    \
+        if ((customflags))                                          \
+        {                                                           \
+            UNIQUE(tbl) |= __PGFLAG_AVL_GET1((customflags))         \
+                        << __PGFLAG_AVL_SHIFT1;                     \
+            UNIQUE(tbl) |= __PGFLAG_AVL_GET2((customflags))         \
+                        << __PGFLAG_AVL_SHIFT2;                     \
+        }                                                           \
+                                                                    \
+        bool UNIQUE(lowest) = false;                                \
+        if ((tabletype) == zerOS_PAGE_TABLE_PT)                     \
+            UNIQUE(lowest) = true;                                  \
+        else if ((tabletype) == zerOS_PAGE_TABLE_PD &&              \
+                 (transsize) == zerOS_PAGE_TRANSLATION_2M)          \
+            UNIQUE(lowest) = true;                                  \
+        else if ((tabletype) == zerOS_PAGE_TABLE_PDP &&             \
+                 (transsize) == zerOS_PAGE_TRANSLATION_1G)          \
+            UNIQUE(lowest) = true;                                  \
+                                                                    \
+        if (!UNIQUE(lowest))                                        \
+            UNIQUE(tbl) |= (addr)                                   \
+                        &  zerOS_pagetable_phyaddr_mask[0];         \
+        else                                                        \
+            UNIQUE(tbl) |= (addr)                                   \
+                        &  zerOS_pagetable_phyaddr_mask[            \
+                            (transsize)                             \
+                        ];                                          \
+                                                                    \
+        UNIQUE(tbl);                                                \
+    })
 
+extern size_t zerOS_maxphyaddr;
+extern uint64_t zerOS_pagetable_phyaddr_mask[3];
 
 #endif

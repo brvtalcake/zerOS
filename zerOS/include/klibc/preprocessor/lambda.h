@@ -78,4 +78,8 @@
         )                                       \
     )
 
+#undef  KLIBC_PP_LAMBDA_COMPOSE
+#undef  __KLIBC_PP_LAMBDA_COMPOSE2
+/* TODO */
+
 #endif

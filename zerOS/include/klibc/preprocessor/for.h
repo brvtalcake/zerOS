@@ -44,8 +44,7 @@
                 to,                             \
                 CHAOS_PP_INC_(                  \
                     CHAOS_PP_ARG(3)             \
-                ),                              \
-                CHAOS_PP_ARG(4)                 \
+                )                               \
             ),                                  \
             /* macro */                         \
             __KLIBC_PP_FOR_MAYBE_INVOKE(        \
@@ -71,8 +70,7 @@
                 to,                                     \
                 CHAOS_PP_ARBITRARY_INC_(                \
                     CHAOS_PP_ARG(3)                     \
-                ),                                      \
-                CHAOS_PP_ARG(4)                         \
+                )                                       \
             ),                                          \
             /* macro */                                 \
             __KLIBC_PP_FOR_MAYBE_INVOKE(                \
