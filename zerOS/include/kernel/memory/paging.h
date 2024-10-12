@@ -186,4 +186,7 @@ enum zerOS_page_table_bits
 extern size_t zerOS_maxphyaddr;
 extern uint64_t zerOS_pagetable_phyaddr_mask[3];
 
+BOOT_FUNC
+extern void zerOS_init_paging_values(void);
+
 #endif

@@ -12,6 +12,7 @@
 #include <chaos/preprocessor/comparison/greater.h>
 #include <chaos/preprocessor/detection/is_nullary.h>
 #include <chaos/preprocessor/recursion/expr.h>
+#include <chaos/preprocessor/repetition/repeat.h>
 #include <chaos/preprocessor/repetition/repeat_from_to.h>
 #include <chaos/preprocessor/control/if.h>
 #include <chaos/preprocessor/control/variadic_if.h>
@@ -131,42 +132,40 @@
 #define KLIBC_PP_BINARY_DIGITS(binary) __KLIBC_PP_BINARY_DIGITS(KLIBC_PP_BINARY_CLEAN(binary))
 
 #undef  KLIBC_PP_BINARY_OR
-#define KLIBC_PP_BINARY_OR(first, second)       \
-    __KLIBC_PP_BINARY_OR_IMPL(                  \
-        KLIBC_PP_EXPAND(                        \
-            __KLIBC_PP_BINARY_PREPARE(          \
-                KLIBC_PP_BINARY_CLEAN(first),   \
-                KLIBC_PP_BINARY_CLEAN(second)   \
-            )                                   \
-        )                                       \
-    )
-
-#undef  __KLIBC_PP_BINARY_OR_IMPL
-#define __KLIBC_PP_BINARY_OR_IMPL(...)              \
-    KLIBC_PP_FOR(                                   \
-        0,                                          \
-        __KLIBC_PP_BINARY_DIGITS(                   \
-            CHAOS_PP_VARIADIC_ELEM(0, __VA_ARGS__)  \
-        ),                                          \
-        CHAOS_PP_LAMBDA(                            \
-            (                                       \
-                CHAOS_PP_OR_(                       \
-                    CHAOS_PP_SEQ_ELEM_(             \
-                        CHAOS_PP_ARG(3),            \
-                        CHAOS_PP_VARIADIC_ELEM(     \
-                            0, __VA_ARGS__          \
-                        )                           \
-                    )                               \
-                )(                                  \
-                    CHAOS_PP_SEQ_ELEM_(             \
-                        CHAOS_PP_ARG(3),            \
-                        CHAOS_PP_VARIADIC_ELEM(     \
-                            1, __VA_ARGS__          \
-                        )                           \
-                    )                               \
+#define KLIBC_PP_BINARY_OR(first, second)           \
+    CHAOS_PP_EXPR(                                  \
+        __KLIBC_PP_BINARY_OR_IMPL(                  \
+            KLIBC_PP_EXPAND(                        \
+                __KLIBC_PP_BINARY_PREPARE(          \
+                    KLIBC_PP_BINARY_CLEAN(first),   \
+                    KLIBC_PP_BINARY_CLEAN(second)   \
                 )                                   \
             )                                       \
         )                                           \
+    )
+
+#undef  __KLIBC_PP_BINARY_OR_IMPL
+#define __KLIBC_PP_BINARY_OR_IMPL(...) __KLIBC_PP_BINARY_OR_IMPL_EXPANDED(__VA_ARGS__)
+
+#undef  __KLIBC_PP_BINARY_OR_IMPL_EXPANDED_MACOP
+#define __KLIBC_PP_BINARY_OR_IMPL_EXPANDED_MACOP(_, n, first, second)   \
+    (                                                                   \
+        CHAOS_PP_OR(                                                    \
+            CHAOS_PP_SEQ_ELEM(n, first)                                 \
+        )(                                                              \
+            CHAOS_PP_SEQ_ELEM(n, second)                                \
+        )                                                               \
+    )
+
+#undef  __KLIBC_PP_BINARY_OR_IMPL_EXPANDED
+#define __KLIBC_PP_BINARY_OR_IMPL_EXPANDED(first, second)       \
+    CHAOS_PP_REPEAT(                                            \
+        __KLIBC_PP_BINARY_DIGITS(                               \
+            first                                               \
+        ),                                                      \
+        __KLIBC_PP_BINARY_OR_IMPL_EXPANDED_MACOP,               \
+        first,                                                  \
+        second                                                  \
     )
 
 #undef  KLIBC_PP_BINARY_CLEAN
@@ -188,6 +187,17 @@
             shift,                              \
             (0)                                 \
         )                                       \
+    )
+
+#undef  __KLIBC_PP_BINARY_BITS_FAST
+#define __KLIBC_PP_BINARY_BITS_FAST(state, from, to)    \
+    CHAOS_PP_REPEAT_FROM_TO_S(                          \
+        state, from, CHAOS_PP_INC(to),                  \
+        (1)                                             \
+    )                                                   \
+    CHAOS_PP_REPEAT_FROM_TO_S(                          \
+        state, 0, from,                                 \
+        (0)                                             \
     )
 
 #undef  KLIBC_PP_BINARY_BITS
@@ -213,67 +223,66 @@
                 /* pred */                      \
                 CHAOS_PP_NOT_(                  \
                     CHAOS_PP_LAMBDA(ISEMPTY)(   \
-                        CHAOS_PP_REM_           \
+                        CHAOS_PP_REM_CTOR_(     \
                             CHAOS_PP_ARG(2)     \
+                        )                       \
                     )                           \
-                ),                          \
-                /* op */                    \
-                __KLIBC_PP_BINARY_OP,       \
-                /* result */                \
-                (0),                        \
-                /* args */                  \
-                (__VA_ARGS__)               \
-            )                               \
-        )                                   \
+                ),                              \
+                /* op */                        \
+                __KLIBC_PP_BINARY_OP,           \
+                /* result */                    \
+                (0),                            \
+                /* args */                      \
+                (__VA_ARGS__)                   \
+            )                                   \
+        )                                       \
     )
-                
+
 #undef  __KLIBC_PP_BINARY_OP
-#define __KLIBC_PP_BINARY_OP(_, current_res, args)  \
-    __KLIBC_PP_BINARY_OP_MK_NEW_RES(                \
-        current_res,                                \
-        CHAOS_PP_TUPLE_HEAD(args)                   \
-    ),                                              \
-    CHAOS_PP_IF(                                    \
-        ISEMPTY(CHAOS_PP_TUPLE_TAIL(args))          \
-    )(                                              \
-        (),                                         \
-        CHAOS_PP_TUPLE_TAIL(args)                   \
+#define __KLIBC_PP_BINARY_OP(_, current_res, args)      \
+    __KLIBC_PP_BINARY_OP_MK_NEW_RES(                    \
+        _,                                              \
+        current_res,                                    \
+        CHAOS_PP_TUPLE_HEAD(args)                       \
+    ),                                                  \
+    CHAOS_PP_IF(                                        \
+        ISEMPTY(CHAOS_PP_TUPLE_TAIL(args))              \
+    )(                                                  \
+        (),                                             \
+        CHAOS_PP_TUPLE_TAIL(args)                       \
     )
 
 #undef  __KLIBC_PP_BINARY_OP_MK_NEW_RES
 #define __KLIBC_PP_BINARY_OP_MK_NEW_RES(                \
-    current_res, current_arg                            \
+    state, current_res, current_arg                     \
 )                                                       \
-    KLIBC_PP_BINARY_OR(                                 \
-        current_res,                                    \
-        KLIBC_PP_BINARY_SHIFTL(                         \
-            KLIBC_PP_BINARY_BITS(                       \
-                CHAOS_PP_TUPLE_ELEM(                    \
-                    0xunused, 0, current_arg            \
-                ),                                      \
-                0,                                      \
-                CHAOS_PP_SUB(                           \
-                    CHAOS_PP_TUPLE_ELEM(                \
-                        0xunused, 1,                    \
-                        CHAOS_PP_TUPLE_ELEM(            \
-                            0xunused, 1, current_arg    \
-                        )                               \
-                    ),                                  \
-                    CHAOS_PP_TUPLE_ELEM(                \
-                        0xunused, 0,                    \
-                        CHAOS_PP_TUPLE_ELEM(            \
-                            0xunused, 1, current_arg    \
-                        )                               \
-                    )                                   \
-                )                                       \
-            ),                                          \
+    CHAOS_PP_VARIADIC_IF(                               \
+        CHAOS_PP_BOOL(                                  \
             CHAOS_PP_TUPLE_ELEM(                        \
-                0xunused, 0,                            \
+                0xunused, 0, current_arg                \
+            )                                           \
+        )                                               \
+    )(                                                  \
+        KLIBC_PP_BINARY_OR(                             \
+            current_res,                                \
+            __KLIBC_PP_BINARY_BITS_FAST(                \
+                state,                                  \
                 CHAOS_PP_TUPLE_ELEM(                    \
-                    0xunused, 1, current_arg            \
+                    0xunused, 0,                        \
+                    CHAOS_PP_TUPLE_ELEM(                \
+                        0xunused, 1, current_arg        \
+                    )                                   \
+                ),                                      \
+                CHAOS_PP_TUPLE_ELEM(                    \
+                    0xunused, 1,                        \
+                    CHAOS_PP_TUPLE_ELEM(                \
+                        0xunused, 1, current_arg        \
+                    )                                   \
                 )                                       \
             )                                           \
         )                                               \
+    )(                                                  \
+        current_res                                     \
     )
 
 #undef  __KLIBC_PP_BINARY_EXTRACT_RESULT
@@ -298,3 +307,4 @@
     )
 
 #endif
+

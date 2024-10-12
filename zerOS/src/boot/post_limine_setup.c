@@ -13,14 +13,28 @@
 #include <misc/symbol.h>
 #include <misc/array.h>
 
+#include <kernel/printk.h>
 #include <kernel/cpu/io.h>
 #include <kernel/cpu/misc.h>
 #include <kernel/memory/gdt.h>
 #include <kernel/memory/paging.h>
+#include <kernel/serial/ports.h>
 
 #include <machine/setup.h>
 
 #include <chaos/preprocessor/cat.h>
+
+#undef  calloca
+#define calloca(size)                               \
+    ({                                              \
+        char* UNIQUE(ptr) = __builtin_alloca(size)  \
+        for (                                       \
+            size_t UNIQUE(i) = 0;                   \
+            UNIQUE(i) < size;                       \
+            UNIQUE(i)++                             \
+        ) UNIQUE(ptr)[UNIQUE(i)] = 0;               \
+        UNIQUE(ptr);                                \
+    })
 
 #ifdef LIMINE_REQUESTED_REVISION
     #error "LIMINE_REQUESTED_REVISION shall not be defined before this point"
@@ -115,6 +129,33 @@ static inline void* boot_memcpy(void* restrict dest, const void* restrict src, s
 
 SYMBOL_ALIGNED_TO(zerOS_PAGE_SIZE) SYMBOL_USED
 static unsigned char new_gdt_space[zerOS_GDT_ENTRY_INDEX_MAX * sizeof(struct zerOS_gdt_normal_segment_descriptor)];
+
+BOOT_FUNC
+static bool setup_kern_modules(void)
+{ return true; }
+
+BOOT_FUNC
+static size_t get_needed_mem_entries(struct limine_memmap_entry* entry_buf)
+{
+    struct limine_memmap_response* response = memmap_request.response;
+    if (!response)
+        return 0;
+    size_t count = 0;
+    for (size_t i = 0; i < response->entry_count; i++)
+    {
+        struct limine_memmap_entry* entry = response->entries[i];
+        switch (entry->type)
+        {
+            case LIMINE_MEMMAP_USABLE:
+                CASE_FALLTHROUGH;
+            case LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE:
+                boot_memcpy(&entry_buf[count++], entry, sizeof(struct limine_memmap_entry));
+                break;
+            default: continue;
+        }
+    }
+    return count;
+}
 
 BOOT_FUNC
 static bool assert_uefi_x86_64(void)
@@ -332,10 +373,12 @@ static bool setup_gdt(void)
     // But replace it with our own GDT
 
     bool ret = true;
+    zerOS_early_printk("zerOS: filling up new GDT\n");
     ret = ret && setup_normsegs();
     ret = ret && setup_syssegs();
     ret = ret && setup_tlssegs();
     ret = ret && fill_null_gdtent();
+    zerOS_early_printk("zerOS: loading new GDT\n");
     ret = ret && load_new_gdt();
     return ret;
 }
@@ -343,6 +386,8 @@ static bool setup_gdt(void)
 BOOT_FUNC
 static bool setup_paging(void)
 {
+    zerOS_init_paging_values();
+
     if (lvl5_paging_request.response == nullptr)
         return false;
 
@@ -350,6 +395,18 @@ static bool setup_paging(void)
         lvl5_paging_request.response->mode != LIMINE_PAGING_MODE_X86_64_5LVL &&
         lvl5_paging_request.response->mode != LIMINE_PAGING_MODE_X86_64_4LVL
     )
+        return false;
+
+    struct limine_memmap_entry* entry_buf = calloca(sizeof(struct limine_memmap_entry) * memmap_request.response->entry_count);
+    const size_t entry_count = get_needed_mem_entries(entry_buf);
+
+    if (entry_count == 0)
+        return false;
+
+    if (!zerOS_init_pmm(entry_buf, entry_count))
+        return false;
+
+    if (!zerOS_init_vmm())
         return false;
 
     return true;
@@ -362,7 +419,8 @@ static bool setup_idt(void)
 }
 
 /**
- * @brief Setup ISA extensions (such as SSE, AVX, etc.) that GCC might use.
+ * @brief Setup ISA extensions (such as SSE, AVX, etc.) that GCC might use
+ * when generating code.
  */
 BOOT_FUNC
 static bool setup_isa_exts(void)
@@ -371,23 +429,46 @@ static bool setup_isa_exts(void)
 }
 
 BOOT_FUNC
+static bool setup_early_debug(void)
+{
+    if (!zerOS_serial_early_init())
+        return false;
+
+    return true;
+}
+
+BOOT_FUNC
 extern void zerOS_boot_setup(void)
 {
+    /* if (!zerOS_stage_set(zerOS_STAGE_BOOT_SETUP))
+        zerOS_hcf(); */
+
     if (LIMINE_BASE_REVISION_SUPPORTED == false)
         zerOS_hcf();
 
     if (!assert_uefi_x86_64())
         zerOS_hcf();
 
+    if (!setup_early_debug())
+        zerOS_hcf();
+
+    zerOS_early_printk("zerOS: loading and setting up eventual kernel modules\n");
+    if (!setup_kern_modules())
+        zerOS_hcf();
+
+    zerOS_early_printk("zerOS: setting up GDT\n");
+    if (!setup_gdt())
+        zerOS_hcf();
+
+    zerOS_early_printk("zerOS: setting up paging\n");
     if (!setup_paging())
         zerOS_hcf();
 
-    if (!setup_gdt())
-        zerOS_hcf();
-    
+    zerOS_early_printk("zerOS: setting up ISA extensions\n");
     if (!setup_isa_exts())
         zerOS_hcf();
 
+    zerOS_early_printk("zerOS: setting up IDT\n");
     if (!setup_idt())
         zerOS_hcf();
 
@@ -396,6 +477,7 @@ extern void zerOS_boot_setup(void)
         zerOS_hcf();
     }
 
-    void zerOS_kmain(void);
+    zerOS_early_printk("zerOS: jumping to kernel main\n");
+    extern void zerOS_kmain(void);
     zerOS_kmain();
 }

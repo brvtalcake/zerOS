@@ -30,13 +30,13 @@
 #     struct zerOS_gdt_selector ss;
 # } __attribute__((packed));
 
+#undef  ASM_SYNTAX
+#define ASM_SYNTAX ASM_SYNTAX_ATT
+
 .include "asm/common.inc"
 
 #include <asm/common.h>
 #include <asm/syntax.h>
-
-#undef  ASM_SYNTAX
-#define ASM_SYNTAX ASM_SYNTAX_ATT
 
 .global zerOS_gdt_set
 .type zerOS_gdt_set, @function

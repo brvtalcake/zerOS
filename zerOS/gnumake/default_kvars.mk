@@ -47,6 +47,8 @@ override DEFAULT_KPP := $(KTOOLCHAIN_DIR)/bin/$(KARCH)-elf-cpp
 $(eval $(call DEFAULT_VAR,KPP,$(DEFAULT_KPP)))
 override DEFAULT_KQEMU := $(KTOOLCHAIN_DIR)/bin/qemu-system-$(KARCH)
 $(eval $(call DEFAULT_VAR,KQEMU,$(DEFAULT_KQEMU)))
+override DEFAULT_KGDB := $(KTOOLCHAIN_DIR)/bin/$(KARCH)-elf-gdb
+$(eval $(call DEFAULT_VAR,KGDB,$(DEFAULT_KGDB)))
 
 override DEFAULT_KCFLAGS := -g -O3 -pipe -mno-80387 -ftrack-macro-expansion=0
 $(eval $(call DEFAULT_VAR,KCFLAGS,$(DEFAULT_KCFLAGS)))
@@ -63,8 +65,12 @@ $(eval $(call DEFAULT_VAR,KASFLAGS,$(DEFAULT_KASFLAGS)))
 # Use iso format by default.
 # Enable KVM by default.
 # Enable UEFI by default.
-override DEFAULT_KQEMU_RUNFLAGS := -cpu host -enable-kvm -smbios type=0,uefi=on -monitor stdio -S -bios vendor/OVMF.fd -cdrom
+override DEFAULT_KQEMU_RUNFLAGS := -cpu host -enable-kvm -smbios type=0,uefi=on -debugcon file:debugcon.log -serial stdio -S -bios vendor/OVMF.fd -cdrom
 $(eval $(call DEFAULT_VAR,KQEMU_RUNFLAGS,$(DEFAULT_KQEMU_RUNFLAGS)))
+
+# TODO: Add support for automatic connection to qemu
+override DEFAULT_KGDBFLAGS :=
+$(eval $(call DEFAULT_VAR,KGDBFLAGS,$(DEFAULT_KGDBFLAGS)))
 
 LIMINE := $(KTOOLCHAIN_DIR)/bin/limine
 LIMINE_CFG := limine.conf
