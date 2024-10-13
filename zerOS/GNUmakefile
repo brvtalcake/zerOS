@@ -52,6 +52,11 @@ override KERNEL_MAP := linker-$(KARCH).ld
 
 include gnumake/printvar.mk
 
+# Default target: build the kernel.
+.PHONY: all sectioninfo iso config
+
+.DEFAULT_GOAL := all
+
 $(eval $(call PRINTVAR_RULE,CURRENT_MAKEFILE_PATH))
 $(eval $(call PRINTVAR_RULE,CURRENT_MAKEFILE_DIR))
 $(eval $(call PRINTVAR_RULE,KERNEL))
@@ -78,10 +83,6 @@ $(eval $(call PRINTVAR_RULE,KCFLAGS))
 $(eval $(call PRINTVAR_RULE,KCPPFLAGS))
 $(eval $(call PRINTVAR_RULE,KLDFLAGS))
 
-# Default target: build the kernel.
-
-.PHONY: all sectioninfo iso config
-
 config: include/config.h
 
 sectioninfo: GNUmakefile $(KERNEL_MAP) include/kernel/generated/sections.h
@@ -91,72 +92,77 @@ all: bin/$(KERNEL)
 iso: bin/$(KERNEL).iso
 
 bin/$(KERNEL).iso: bin/$(KERNEL) $(COMMON_DEPS) $(LIMINE_CFG)
-	mkdir -p "$$(dirname $@)"
-	mkdir -p iso_root/boot/limine
-	cp bin/$(KERNEL) iso_root/boot/
-	cp $(LIMINE_CFG) iso_root/boot/limine/
-	cp $(LIMINE_DATADIR)/*.sys iso_root/boot/limine/
-	cp $(LIMINE_DATADIR)/*.bin iso_root/boot/limine/
-	mkdir -p iso_root/EFI/BOOT
-	cp $(LIMINE_DATADIR)/BOOTX64.EFI iso_root/EFI/BOOT/
-	cp $(LIMINE_DATADIR)/BOOTIA32.EFI iso_root/EFI/BOOT/
-	$(XORRISO) -as mkisofs -b boot/limine/limine-bios-cd.bin 		\
-        -no-emul-boot -boot-load-size 4 -boot-info-table 			\
-        --efi-boot boot/limine/limine-uefi-cd.bin 					\
-        -efi-boot-part --efi-boot-image --protective-msdos-label 	\
-        iso_root -o $@
-	$(LIMINE) bios-install $@
+	$(call CMD,2,mkdir -p "$$(dirname $@)",MKDIR,$$(dirname $@))
+	$(call CMD,1,mkdir -p iso_root/boot/limine,MKDIR,iso_root/boot/limine)
+	$(call CMD,1,cp bin/$(KERNEL) iso_root/boot/,COPY,iso_root/boot/$(KERNEL))
+	$(call CMD,1,cp $(LIMINE_CFG) iso_root/boot/limine/,COPY,iso_root/boot/limine/$(LIMINE_CFG))
+	$(call CMD,1,cp $(LIMINE_DATADIR)/*.sys iso_root/boot/limine/,GLOBCOPY,$(LIMINE_DATADIR)/*.sys --> iso_root/boot/limine/)
+	$(call CMD,1,cp $(LIMINE_DATADIR)/*.bin iso_root/boot/limine/,GLOBCOPY,$(LIMINE_DATADIR)/*.bin --> iso_root/boot/limine/)
+	$(call CMD,1,mkdir -p iso_root/EFI/BOOT,MKDIR,iso_root/EFI/BOOT)
+	$(call CMD,1,cp $(LIMINE_DATADIR)/BOOTX64.EFI iso_root/EFI/BOOT/,COPY,iso_root/EFI/BOOT/BOOTX64.EFI)
+	$(call CMD,1,cp $(LIMINE_DATADIR)/BOOTIA32.EFI iso_root/EFI/BOOT/,COPY,iso_root/EFI/BOOT/BOOTIA32.EFI)
+	$(call CMD,1, 														\
+		$(XORRISO) -as mkisofs -b boot/limine/limine-bios-cd.bin 		\
+			-no-emul-boot -boot-load-size 4 -boot-info-table 			\
+			--efi-boot boot/limine/limine-uefi-cd.bin 					\
+			-efi-boot-part --efi-boot-image --protective-msdos-label 	\
+			iso_root -o $@,XORRISO,$@									\
+	)
+	$(call CMD,1,$(LIMINE) bios-install $@,LIMINE,$@)
 
 bin/$(KERNEL): $(COMMON_DEPS) $(OBJ) $(KERNEL_MAP)
-	mkdir -p "$$(dirname $@)"
-	$(KLD) $(KLDFLAGS) $(OBJ) -o $@
+	$(call CMD,2,mkdir -p "$$(dirname $@)",MKDIR,$$(dirname $@))
+	$(call CMD,1,$(KLD) $(KLDFLAGS) $(OBJ) -o $@,LD,$@)
 #printf '\003' | dd of=$@ bs=1 count=1 seek=16 conv=notrunc 2>/dev/null
-	$(if $(call not,$(DEBUG_KERNEL)), $(KSTRIP) --strip-debug $@)
+	$(if $(call not,$(DEBUG_KERNEL)), \
+		$(call CMD,1,$(KSTRIP) --strip-debug $@,STRIP,$@) \
+	)
 
 # Include header dependencies.
 -include $(HEADER_DEPS)
 
 # Generate header dependencies.
 obj/%.c.d: src/%.c GNUmakefile
-	mkdir -p "$$(dirname $@)"
-	$(KPP) $(KCFLAGS) $(KCPPFLAGS) -M -MG -MP -MT $(@:.d=.o) $< -MF $@ > /dev/null
+	$(call CMD,2,mkdir -p "$$(dirname $@)",MKDIR,$$(dirname $@))
+	$(call CMD,1,$(KPP) $(KCFLAGS) $(KCPPFLAGS) -M -MG -MP -MT $(@:.d=.o) $< -MF $@ > /dev/null,MKDEP,$<)
 obj/boot/%.c.d: src/boot/%.c GNUmakefile
-	mkdir -p "$$(dirname $@)"
-	$(KPP) $(BOOT_KCFLAGS) $(KCPPFLAGS) -M -MG -MP -MT $(@:.d=.o) $< -MF $@ > /dev/null
+	$(call CMD,2,mkdir -p "$$(dirname $@)",MKDIR,$$(dirname $@))
+	$(call CMD,1,$(KPP) $(BOOT_KCFLAGS) $(KCPPFLAGS) -M -MG -MP -MT $(@:.d=.o) $< -MF $@ > /dev/null,MKDEP,$<)
 
 # Compilation rules for *.c files.
 obj/%.c.o: src/%.c $(COMMON_DEPS)
-	mkdir -p "$$(dirname $@)"
-	$(KCC) $(KCFLAGS) $(KCPPFLAGS) -c $< -o $@
+	$(call CMD,2,mkdir -p "$$(dirname $@)",MKDIR,$$(dirname $@))
+	$(call CMD,1,$(KCC) $(KCFLAGS) $(KCPPFLAGS) -c $< -o $@,GCC,$<)
 obj/boot/%.c.o: src/boot/%.c $(COMMON_DEPS)
-	mkdir -p "$$(dirname $@)"
-	$(KCC) $(BOOT_KCFLAGS) $(KCPPFLAGS) -c $< -o $@
+	$(call CMD,2,mkdir -p "$$(dirname $@)",MKDIR,$$(dirname $@))
+	$(call CMD,1,$(KCC) $(BOOT_KCFLAGS) $(KCPPFLAGS) -c $< -o $@,GCC,$<)
 
 # Compilation rules for *.s files.
 obj/%.s.o: src/%.s $(COMMON_DEPS)
-	mkdir -p "$$(dirname $@)"
-	$(KAS) $(KASFLAGS) $< -o $@
+	$(call CMD,2,mkdir -p "$$(dirname $@)",MKDIR,$$(dirname $@))
+	$(call CMD,1,$(KAS) $(KASFLAGS) $< -o $@,GAS,$<)
 obj/boot/%.s.o: src/boot/%.s $(COMMON_DEPS)
-	mkdir -p "$$(dirname $@)"
-	$(KAS) $(BOOT_KASFLAGS) $< -o $@
+	$(call CMD,2,mkdir -p "$$(dirname $@)",MKDIR,$$(dirname $@))
+	$(call CMD,1,$(KAS) $(BOOT_KASFLAGS) $< -o $@,GAS,$<)
 
 # Compilation rules for *.S files.
 obj/%.S.o: src/%.S $(COMMON_DEPS)
-	mkdir -p "$$(dirname $@)"
-	$(KCC) $(KCFLAGS) $(KCPPFLAGS) -c $< -o $@
+	$(call CMD,2,mkdir -p "$$(dirname $@)",MKDIR,$$(dirname $@))
+	$(call CMD,1,$(KCC) $(KCFLAGS) $(KCPPFLAGS) -c $< -o $@,GCC,$<)
 obj/boot/%.S.o: src/boot/%.S $(COMMON_DEPS)
-	mkdir -p "$$(dirname $@)"
-	$(KCC) $(BOOT_KCFLAGS) $(KCPPFLAGS) -c $< -o $@
+	$(call CMD,2,mkdir -p "$$(dirname $@)",MKDIR,$$(dirname $@))
+	$(call CMD,1,$(KCC) $(BOOT_KCFLAGS) $(KCPPFLAGS) -c $< -o $@,GCC,$<)
 
 # Compilation rules for *.asm (nasm) files.
 obj/%.asm.o: src/%.asm $(COMMON_DEPS)
-	mkdir -p "$$(dirname $@)"
-	$(KNASM) $(KNASMFLAGS) $< -o $@
+	$(call CMD,2,mkdir -p "$$(dirname $@)",MKDIR,$$(dirname $@))
+	$(call CMD,1,$(KNASM) $(KNASMFLAGS) $< -o $@,NASM,$<)
 obj/boot/%.asm.o: src/boot/%.asm $(COMMON_DEPS)
-	mkdir -p "$$(dirname $@)"
-	$(KNASM) $(KNASMFLAGS) $< -o $@
+	$(call CMD,2,mkdir -p "$$(dirname $@)",MKDIR,$$(dirname $@))
+	$(call CMD,1,$(KNASM) $(KNASMFLAGS) $< -o $@,NASM,$<)
 
 override define MK_LIBGRAPHEME_CONFIG :=
+$(call CMD,10,/usr/bin/true,FIX,glue/libgrapheme/config.mk)
 @echo '## Automatically generated. Do not edit. ##' > glue/libgrapheme/config.mk
 @echo 'PREFIX    = $(abspath .)'                    >> glue/libgrapheme/config.mk
 @echo 'INCPREFIX = $(abspath ./include)'            >> glue/libgrapheme/config.mk
@@ -183,22 +189,26 @@ override define MK_LIBGRAPHEME_CONFIG :=
 endef
 
 lib/libgrapheme.a:
-	mkdir -p "$$(dirname $@)"
-	mkdir -p glue/libgrapheme
-	cat third_party/libgrapheme/src/character.c | sed -Ee 's/#include <stdio.h>//g' > glue/libgrapheme/src/character.c
+	$(call CMD,2,mkdir -p "$$(dirname $@)",MKDIR,$$(dirname $@))
+	$(call CMD,2,mkdir -p glue/libgrapheme, MKDIR,glue/libgrapheme)
+	$(call CMD,1,cat third_party/libgrapheme/src/character.c | sed -Ee 's/#include <stdio.h>//g' > glue/libgrapheme/src/character.c,FIX,glue/libgrapheme/src/character.c)
 	$(MK_LIBGRAPHEME_CONFIG)
 	$(SHELL) -c 'GLUEFILES=$$(find glue/libgrapheme -type f);	\
 		for f in $$GLUEFILES; do 								\
 			TOREPLACE=$$(echo $$f | sed -Ee 					\
-				"s/glue\//third_party\//g");		\
+				"s/glue\//third_party\//g");					\
 			cp -T $$f $$TOREPLACE;								\
 		done'
-	$(MAKE) -C third_party/libgrapheme libgrapheme.a
-	cp third_party/libgrapheme/libgrapheme.a $$(dirname $@)
-	cp third_party/libgrapheme/grapheme.h include/
+	$(call CMD,1,$(MAKE) -C third_party/libgrapheme libgrapheme.a,BUILD,libgrapheme.a)
+	$(call CMD,1,cp third_party/libgrapheme/libgrapheme.a $$(dirname $@),COPY,$@)
+	$(call CMD,1,cp third_party/libgrapheme/grapheme.h include/,COPY,include/grapheme.h)
 
 override define GENSECINFO =
-mkdir -p "$$(dirname include/kernel/generated/sections.h)"
+$(call CMD,2,mkdir -p "$$(dirname include/kernel/generated/sections.h)",MKDIR,$$(dirname include/kernel/generated/sections.h))
+$(call CMD,1,$(__GENSECINFO_IMPL),GENSEC,)
+endef
+
+override define __GENSECINFO_IMPL =
 ../scripts/gensectioninfo.py 						\
 --output-cfile include/kernel/generated/sections.h 	\
 --output-linkerfile $(KERNEL_MAP) 					\
@@ -210,13 +220,13 @@ $(KERNEL_MAP): GNUmakefile $(KERNEL_MAP).template ../scripts/gensectioninfo.py
 	$(GENSECINFO)
 
 include/kernel/generated/sections.h: GNUmakefile $(KERNEL_MAP).template ../scripts/gensectioninfo.py
-	mkdir -p "$$(dirname $@)"
 	$(GENSECINFO)
 
 override KCPU_FEATURES := $(shell cpuid_tool --flags | grep --invert-match -e '-')
 $(eval $(call PRINTVAR_RULE,KCPU_FEATURES))
 
 override define GENCONFIG =
+$(call CMD,10,/usr/bin/true,GENCONFIG,$@)
 @echo "/* Automatically generated. Do not edit. */" > $@
 @echo "#ifndef zerOS_CONFIG_H_INCLUDED" >> $@
 @echo "#define zerOS_CONFIG_H_INCLUDED" >> $@
@@ -246,23 +256,33 @@ override define SUPDEF =
 endef
 
 include/config.h: include/config.h.in GNUmakefile
-	mkdir -p "$$(dirname $@)"
-	$(SUPDEF)
+	$(call CMD,2,mkdir -p "$$(dirname $@)",MKDIR,$$(dirname $@))
+	$(call CMD,1,$(SUPDEF),SUPDEF,$<)
 
 include/config.h.in: GNUmakefile $(CONFIG_DEPS)  $(KERNEL_SUPDEF_CONFIG)
-	mkdir -p "$$(dirname $@)"
+	$(call CMD,2,mkdir -p "$$(dirname $@)",MKDIR,$$(dirname $@))
 	$(GENCONFIG)
 
 include/limine.h: $(KTOOLCHAIN_DIR)/include/limine.h
-	mkdir -p "$$(dirname $@)"
-	cp $< $@
+	$(call CMD,2,mkdir -p "$$(dirname $@)",MKDIR,$$(dirname $@))
+	$(call CMD,1,cp $< $@,COPY,$@)
 
 .PHONY: run
-run: bin/$(KERNEL).iso
-	$(KQEMU) $(KQEMU_RUNFLAGS) $< $(if $(DEBUG_KERNEL),-s &,) \
-		$(if $(DEBUG_KERNEL),$(KGDB))
+run: $(if $(DEBUG_KERNEL),run_debug,run_normal)
+
+.PHONY: run_normal
+run_normal: bin/$(KERNEL).iso
+	$(call CMD,1,$(KQEMU) $(KQEMU_RUNFLAGS) $<,QEMU,$<)
+
+.PHONY: run_debug
+run_debug: bin/$(KERNEL).iso
+	$(call START_DBG_SESSION,$<)
 
 # Remove object files and the final executable.
 .PHONY: clean
 clean:
-	rm -rf bin obj include/kernel/generated/sections.h iso_root $(KERNEL_MAP)
+	$(call CMD,1,rm -rf bin,RM,bin)
+	$(call CMD,1,rm -rf obj,RM,obj)
+	$(call CMD,1,rm -f include/kernel/generated/sections.h,RM,include/kernel/generated/sections.h)
+	$(call CMD,1,rm -rf iso_root,RM,iso_root)
+	$(call CMD,1,rm -f $(KERNEL_MAP),RM,$(KERNEL_MAP))

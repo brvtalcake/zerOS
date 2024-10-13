@@ -1,7 +1,14 @@
 #ifndef zerOS_KERNEL_SERIAL_PORTS_H_INCLUDED
 #define zerOS_KERNEL_SERIAL_PORTS_H_INCLUDED
 
+#include <stdint.h>
+#include <stdbool.h>
+#include <stddef.h>
+
 #include <kernel/compiler/enum.h>
+#include <kernel/cpu/io.h>
+
+#include <misc/sections.h>
 
 enum zerOS_serial_port
     UNDERLYING_TYPE(uint16_t)
