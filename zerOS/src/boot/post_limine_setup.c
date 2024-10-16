@@ -27,13 +27,13 @@
 #undef  calloca
 #define calloca(size)                               \
     ({                                              \
-        char* UNIQUE(ptr) = __builtin_alloca(size)  \
+        char* UNIQUE(ptr) = __builtin_alloca(size); \
         for (                                       \
             size_t UNIQUE(i) = 0;                   \
             UNIQUE(i) < size;                       \
             UNIQUE(i)++                             \
         ) UNIQUE(ptr)[UNIQUE(i)] = 0;               \
-        UNIQUE(ptr);                                \
+        (void*)UNIQUE(ptr);                         \
     })
 
 #ifdef LIMINE_REQUESTED_REVISION
@@ -384,8 +384,56 @@ static bool setup_gdt(void)
 }
 
 BOOT_FUNC
+static size_t get_available_physical_memory(void)
+{
+    return 0;
+}
+
+BOOT_FUNC
+static char* limine_entry_type_string(uint64_t type)
+{
+    static char strings[8][32] = {
+        [LIMINE_MEMMAP_USABLE]                 = "USABLE\0",
+        [LIMINE_MEMMAP_RESERVED]               = "RESERVED\0",
+        [LIMINE_MEMMAP_ACPI_RECLAIMABLE]       = "ACPI_RECLAIMABLE\0",
+        [LIMINE_MEMMAP_ACPI_NVS]               = "ACPI_NVS\0",
+        [LIMINE_MEMMAP_BAD_MEMORY]             = "BAD_MEMORY\0",
+        [LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE] = "BOOTLOADER_RECLAIMABLE\0",
+        [LIMINE_MEMMAP_KERNEL_AND_MODULES]     = "KERNEL_AND_MODULES\0",
+        [LIMINE_MEMMAP_FRAMEBUFFER]            = "FRAMEBUFFER\0"
+    };
+    static char unknown[32] = "UNKNOWN\0";
+    switch (type)
+    {
+        case LIMINE_MEMMAP_USABLE: CASE_FALLTHROUGH;
+        case LIMINE_MEMMAP_RESERVED: CASE_FALLTHROUGH;
+        case LIMINE_MEMMAP_ACPI_RECLAIMABLE: CASE_FALLTHROUGH;
+        case LIMINE_MEMMAP_ACPI_NVS: CASE_FALLTHROUGH;
+        case LIMINE_MEMMAP_BAD_MEMORY: CASE_FALLTHROUGH;
+        case LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE: CASE_FALLTHROUGH;
+        case LIMINE_MEMMAP_KERNEL_AND_MODULES: CASE_FALLTHROUGH;
+        case LIMINE_MEMMAP_FRAMEBUFFER: return strings[type];
+        default: return unknown;
+    }
+};
+
+BOOT_FUNC
+static void print_entries(struct limine_memmap_entry** entries, size_t entry_count)
+{
+    for (size_t i = 0; i < entry_count; i++)
+    {
+        struct limine_memmap_entry* entry = entries[i];
+        zerOS_early_printk("zerOS: entry %u: base = 0x%x, length = 0x%x, type = %s\n",
+            i, entry->base, entry->length, limine_entry_type_string(entry->type));
+    }
+};
+
+BOOT_FUNC
 static bool setup_paging(void)
 {
+    print_entries(memmap_request.response->entries, memmap_request.response->entry_count);
+    zerOS_hcf();
+
     zerOS_init_paging_values();
 
     if (lvl5_paging_request.response == nullptr)
@@ -403,11 +451,11 @@ static bool setup_paging(void)
     if (entry_count == 0)
         return false;
 
-    if (!zerOS_init_pmm(entry_buf, entry_count))
-        return false;
+    //if (!zerOS_init_pmm(entry_buf, entry_count))
+    //    return false;
 
-    if (!zerOS_init_vmm())
-        return false;
+    //if (!zerOS_init_vmm())
+    //    return false;
 
     return true;
 }
@@ -440,8 +488,8 @@ static bool setup_early_debug(void)
 BOOT_FUNC
 extern void zerOS_boot_setup(void)
 {
-    /* if (!zerOS_stage_set(zerOS_STAGE_BOOT_SETUP))
-        zerOS_hcf(); */
+    //if (!zerOS_stage_set(zerOS_STAGE_BOOT_SETUP))
+    //    zerOS_hcf();
 
     if (LIMINE_BASE_REVISION_SUPPORTED == false)
         zerOS_hcf();
@@ -452,20 +500,20 @@ extern void zerOS_boot_setup(void)
     if (!setup_early_debug())
         zerOS_hcf();
 
-    zerOS_early_printk("zerOS: loading and setting up eventual kernel modules\n");
-    if (!setup_kern_modules())
+    zerOS_early_printk("zerOS: setting up ISA extensions\n");
+    if (!setup_isa_exts())
         zerOS_hcf();
 
-    zerOS_early_printk("zerOS: setting up GDT\n");
-    if (!setup_gdt())
+    zerOS_early_printk("zerOS: loading and setting up eventual kernel modules\n");
+    if (!setup_kern_modules())
         zerOS_hcf();
 
     zerOS_early_printk("zerOS: setting up paging\n");
     if (!setup_paging())
         zerOS_hcf();
-
-    zerOS_early_printk("zerOS: setting up ISA extensions\n");
-    if (!setup_isa_exts())
+    
+    zerOS_early_printk("zerOS: setting up GDT\n");
+    if (!setup_gdt())
         zerOS_hcf();
 
     zerOS_early_printk("zerOS: setting up IDT\n");

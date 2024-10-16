@@ -4,8 +4,9 @@
 #include <stdarg.h>
 
 #include <misc/sections.h>
+#include <misc/printf.h>
 
-BOOT_FUNC
+BOOT_FUNC PRINTF_LIKE(1, 2)
 extern int zerOS_early_printk(const char* str, ...);
 
 #endif

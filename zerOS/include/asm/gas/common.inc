@@ -23,4 +23,10 @@
 .macro mov64 from, to
     movq \from, \to
 .endm
-    
+
+.macro EXTERN_FUNC name
+    .global \name
+    .type \name, @function
+    .balign 16
+\name:
+.endm

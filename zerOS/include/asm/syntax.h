@@ -1,6 +1,8 @@
 #ifndef zerOS_ASM_SYNTAX_H_INCLUDED
 #define zerOS_ASM_SYNTAX_H_INCLUDED
 
+#ifdef __ASSEMBLER__
+
 #include <chaos/preprocessor/extended/variadic_cat.h>
 
 #include <pp_empty/pp_is_empty.h>
@@ -16,5 +18,7 @@
 
 #undef  ASM_SYNTAX_UNDEFINED
 #define ASM_SYNTAX_UNDEFINED ISEMPTY(CHAOS_PP_VARIADIC_CAT(__, ASM_SYNTAX, _UNDEFINED_IMPL))
+
+#endif
 
 #endif

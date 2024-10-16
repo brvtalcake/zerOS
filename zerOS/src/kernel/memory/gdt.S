@@ -33,15 +33,16 @@
 #undef  ASM_SYNTAX
 #define ASM_SYNTAX ASM_SYNTAX_ATT
 
-.include "asm/common.inc"
+.include "asm/gas/common.inc"
 
 #include <asm/common.h>
 #include <asm/syntax.h>
 
-.global zerOS_gdt_set
-.type zerOS_gdt_set, @function
-.balign 16
-zerOS_gdt_set:
+#.global zerOS_gdt_set
+#.type zerOS_gdt_set, @function
+#.balign 16
+#zerOS_gdt_set:
+EXTERN_FUNC(zerOS_gdt_set)
     # Disable interrupts
     cli
 

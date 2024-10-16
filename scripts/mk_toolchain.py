@@ -1136,18 +1136,19 @@ def build_qemu(src: str) -> None:
         qemu_config_flags: list[str] = [
             # Prefer Makefiles over Ninja
             # TODO: "-Dsomething=Makefiles",
-            "--extra-cflags=-march=%s -mtune=%s" % (_get_qemu_cpu(), _get_qemu_cpu()),
-            "--extra-cxxflags=-march=%s -mtune=%s" % (_get_qemu_cpu(), _get_qemu_cpu()),
+            #"--extra-cflags=-march=%s -mtune=%s" % (_get_qemu_cpu(), _get_qemu_cpu()),
+            #"--extra-cxxflags=-march=%s -mtune=%s" % (_get_qemu_cpu(), _get_qemu_cpu()),
             "--prefix=" + ENV_VARS["PREFIX"],
             f"--target-list={target_list}",
             #"--static",
             "--python=/usr/bin/python3",
             #f"--cpu={_get_qemu_cpu()}",
-            f"--gdb={ENV_VARS['TARGET']}-gdb",
+            f"--gdb={joinpaths(get_toolchain_installdir(), 'bin', ENV_VARS['TARGET'])}-gdb",
             "--enable-lto",
             "--enable-strip",
             #"--enable-system",
             "--enable-virtfs",
+            "--enable-plugins",
             #"--disable-xkbcommon"
         ]
         params: list[str] = [

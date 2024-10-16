@@ -76,8 +76,11 @@ else
 endif
 
 override __DBGSESSION_QEMU_CMD = $(KQEMU) $(KQEMU_RUNFLAGS) $1 -s
+#override define START_DBG_SESSION =
+#$(call OPEN_TWO_TERMINALS,(zerOS) QEMU,$(call __DBGSESSION_QEMU_CMD,$1),(zerOS) GDB,$(KGDB) $(basename $1))
+#endef
 override define START_DBG_SESSION =
-	$(call OPEN_TWO_TERMINALS,(zerOS) QEMU,$(call __DBGSESSION_QEMU_CMD,$1),(zerOS) GDB,$(KGDB) $(basename $1))
+$(call __DBGSESSION_QEMU_CMD,$1)
 endef
 
 comma :=,

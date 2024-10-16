@@ -1,6 +1,8 @@
 #ifndef zerOS_ASM_COMMON_H_INCLUDED
 #define zerOS_ASM_COMMON_H_INCLUDED
 
+#ifdef __ASSEMBLER__
+
 #include <asm/syntax.h>
 
 #include <pp_empty/pp_is_empty.h>
@@ -129,5 +131,7 @@
             )                                       \
         )(symbol(%rip))                             \
     )
+
+#endif
 
 #endif

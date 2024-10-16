@@ -1,4 +1,4 @@
-override BOOT_KCFLAGS := $(KCFLAGS) -Wall -Wextra 	\
+override BOOT_KCFLAGS = $(KCFLAGS) -Wall -Wextra 	\
 	-std=gnu23 -ffreestanding -fno-stack-protector 	\
     -fno-stack-check -m64 -mno-mmx					\
 	$(call CC_TUNE_FOR,x86-64)	-mno-sse -mno-sse2 	\
@@ -13,15 +13,14 @@ override KCFLAGS += -Wall -Wextra -std=gnu23	\
 	-nostdlib -nostartfiles	-fno-lto			\
 	-m128bit-long-double
 
-override KCPPFLAGS := 			\
+override KCPPFLAGS += 			\
 	-DCHAOS_PP_VARIADICS=1		\
 	-Iinclude 		  			\
 	-Ithird_party	  			\
 	-Ithird_party/chaos-pp		\
 	-Ithird_party/incbin		\
 	-Ithird_party/stb			\
-	-ftrack-macro-expansion=0	\
-	$(KCPPFLAGS)
+	-ftrack-macro-expansion=0
 
 # Internal linker flags that should not be changed by the user.
 override KLDFLAGS += -m elf_x86_64 -nostdlib -z text	\

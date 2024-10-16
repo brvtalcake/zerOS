@@ -272,10 +272,12 @@ run: $(if $(DEBUG_KERNEL),run_debug,run_normal)
 
 .PHONY: run_normal
 run_normal: bin/$(KERNEL).iso
+	$(call CMD,1,find -name debugcon.log -print -delete,DEL,debugcon.log)
 	$(call CMD,1,$(KQEMU) $(KQEMU_RUNFLAGS) $<,QEMU,$<)
 
 .PHONY: run_debug
 run_debug: bin/$(KERNEL).iso
+	$(call CMD,1,find -name debugcon.log -print -delete,DEL,debugcon.log)
 	$(call START_DBG_SESSION,$<)
 
 # Remove object files and the final executable.
