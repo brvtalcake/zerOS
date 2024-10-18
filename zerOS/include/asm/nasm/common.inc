@@ -1,6 +1,6 @@
 
-%macro EXTERN_FUNC 1
-    global %1
+%macro extern_func 1
     align 16
+    global %1
 %1:
 %endmacro

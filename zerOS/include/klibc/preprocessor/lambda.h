@@ -78,6 +78,9 @@
         )                                       \
     )
 
+#undef  KLIBC_PP_MAKE_LAMBDA
+#define KLIBC_PP_MAKE_LAMBDA(...) /* TODO */
+
 #undef  KLIBC_PP_LAMBDA_COMPOSE
 #undef  __KLIBC_PP_LAMBDA_COMPOSE2
 /* TODO */

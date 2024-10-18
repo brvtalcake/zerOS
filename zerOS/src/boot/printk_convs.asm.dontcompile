@@ -1,0 +1,88 @@
+; All functions here are following SysV ABI calling convention
+
+%include "asm/nasm/common.inc"
+
+%define __digit_chars_lower "0123456789abcdefghijklmnopqrstuvwxyz"
+%define __digit_chars_upper "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+%define __digit_chars_len 36
+
+; __enum_from_to(from, to) : Enumerate numbers from 'from' to 'to'
+; Example: __enum_from_to(0, 9) => 0, 1, 2, 3, 4, 5, 6, 7, 8, 9
+;%macro __enum_from_to 2
+;    %assign __enum_from_to_i %1
+;    %rep %2 - %1 + 1
+;        %if __enum_from_to_i
+;            , __enum_from_to_i
+;        %else
+;            __enum_from_to_i
+;        %endif
+;        %assign __enum_from_to_i __enum_from_to_i + 1
+;    %endrep
+;%endmacro
+
+; arg1: current digit
+;%macro __mk_row_lower 0-1 0
+;    %if (%1 < __digit_chars_len) && (%1 >= 0)
+;        %strcat(%map(__mk_substr_lower))
+;    %else
+;        %error "Invalid call to macro __mk_row_lower"
+;    %endif
+;%endmacro
+
+%define __commaifnotzero(n) %sel(%eval((n == 0) ? 1 : 2), {}, {,})
+
+%define __mk_row_lower(a, b)                    \
+    %sel(                                       \
+        %eval(                                  \
+            (b >= 0 && b < __digit_chars_len) ? \
+                                            1 : \
+                                            2   \
+        ),                                      \
+        {                                       \
+            __commaifnotzero(b)                 \
+            %strcat(                            \
+                %substr(                        \
+                    __digit_chars_lower,        \
+                    a,                          \
+                    1                           \
+                ),                              \
+                %substr(                        \
+                    __digit_chars_lower,        \
+                    b,                          \
+                    1                           \
+                )                               \
+            ) __mk_row_lower(%eval(a), %eval(b + 1))          \
+        },                                      \
+        { }                                     \
+    )
+
+; We want it to generate the following code, recursively :
+; db "0102030405060708090a0b0c0d0e0f...0y0z"
+; db "101112131415161718191a1b1c1d1e1f...1y1z"
+; ...
+%macro __digits_lower_build 0
+    %assign __digits_lower_build_i 0
+    %rep __digit_chars_len
+        db __mk_row_lower(__digits_lower_build_i, 0)
+        %assign __digits_lower_build_i __digits_lower_build_i + 1
+    %endrep
+%endmacro
+
+%macro __digits_upper_build 0
+    %assign __digits_upper_build_i 0
+    %rep __digit_chars_len
+        db __mk_row_upper(__digits_upper_build_i, 0)
+        %assign __digits_upper_build_i __digits_upper_build_i + 1
+    %endrep
+%endmacro
+
+section .rodata
+__digits_lower __digits_lower_build
+    
+
+section .bootcode progbits alloc exec nowrite align=16
+
+;void __early_printk_u64_to_string(uint64_t x, char *buf)
+extern_func __early_printk_u64_to_string
+; TODO: Implement this function
+

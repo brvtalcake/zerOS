@@ -287,4 +287,5 @@ clean:
 	$(call CMD,1,rm -rf obj,RM,obj)
 	$(call CMD,1,rm -f include/kernel/generated/sections.h,RM,include/kernel/generated/sections.h)
 	$(call CMD,1,rm -rf iso_root,RM,iso_root)
+	$(call CMD,1,rm -f debugcon.log,RM,debugcon.log)
 	$(call CMD,1,rm -f $(KERNEL_MAP),RM,$(KERNEL_MAP))
