@@ -79,7 +79,15 @@
     )
 
 #undef  KLIBC_PP_MAKE_LAMBDA
-#define KLIBC_PP_MAKE_LAMBDA(...) /* TODO */
+#define KLIBC_PP_MAKE_LAMBDA(...)   \
+    CHAOS_PP_VARIADIC_IF(           \
+        KLIBC_PP_IS_LAMBDA(         \
+            __VA_ARGS__             \
+        )                           \
+    )(                              \
+        __VA_ARGS__                 \
+    )(CHAOS_PP_LAMBDA(__VA_ARGS__))
+
 
 #undef  KLIBC_PP_LAMBDA_COMPOSE
 #undef  __KLIBC_PP_LAMBDA_COMPOSE2

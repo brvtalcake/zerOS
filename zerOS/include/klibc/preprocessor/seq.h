@@ -23,7 +23,10 @@
 #include <chaos/preprocessor/control/while.h>
 #include <chaos/preprocessor/control/variadic_if.h>
 #include <chaos/preprocessor/comparison/equal.h>
+#include <chaos/preprocessor/comparison/not_equal.h>
 #include <chaos/preprocessor/comparison/less.h>
+#include <chaos/preprocessor/comparison/greater.h>
+#include <chaos/preprocessor/comparison/greater_equal.h>
 #include <chaos/preprocessor/debug/assert.h>
 #include <chaos/preprocessor/arithmetic/inc.h>
 
@@ -130,6 +133,7 @@
         )                           \
     )(seq1)
 
+#if 1
 #undef  __KLIBC_PP_SEQ_MAP_IMPL_ID
 #define __KLIBC_PP_SEQ_MAP_IMPL_ID() __KLIBC_PP_SEQ_MAP_IMPL
 
@@ -137,30 +141,36 @@
 #define __KLIBC_PP_SEQ_MAP_IMPL_END CHAOS_PP_EAT
 
 #undef  __KLIBC_PP_SEQ_MAP_IMPL
-#define __KLIBC_PP_SEQ_MAP_IMPL(sep, macro, variadic_seq, invoc_num)    \
-    CHAOS_PP_EXPR(                                                      \
-        CHAOS_PP_VARIADIC_IF(                                           \
-            CHAOS_PP_LESS(                                              \
-                invoc_num,                                              \
-                CHAOS_PP_SEQ_SIZE_ALT(variadic_seq)                     \
-            )                                                           \
-        )(                                                              \
-            KLIBC_PP_SEP_IF(invoc_num)(KLIBC_PP_LAMBDA(sep)())          \
-            CHAOS_PP_CALL(macro)()(                                     \
-                CHAOS_PP_STATE(), macro,                                \
-                CHAOS_PP_SEQ_ELEM(                                      \
-                    invoc_num,                                          \
-                    variadic_seq                                        \
-                )                                                       \
-            ) CHAOS_PP_OBSTRUCT(                                        \
-                __KLIBC_PP_SEQ_MAP_IMPL_ID                              \
-            )()                                                         \
-        )(                                                              \
-            __KLIBC_PP_SEQ_MAP_IMPL_END                                 \
-        )(                                                              \
-            sep, macro, variadic_seq, CHAOS_PP_INC(invoc_num)           \
-        )                                                               \
-    )
+#define __KLIBC_PP_SEQ_MAP_IMPL(sep, macro, variadic_seq, seqsize, invoc_num)   \
+        CHAOS_PP_WHEN(                                                          \
+            CHAOS_PP_LESS(                                                      \
+                invoc_num,                                                      \
+                seqsize                                                         \
+            )                                                                   \
+        )(                                                                      \
+            KLIBC_PP_SEP_IF(invoc_num)(sep())                                   \
+            CHAOS_PP_CALL(macro)()(                                             \
+                CHAOS_PP_STATE(), macro,                                        \
+                CHAOS_PP_SEQ_ELEM(                                              \
+                    invoc_num,                                                  \
+                    variadic_seq                                                \
+                )                                                               \
+            )                                                                   \
+        )                                                                       \
+        CHAOS_PP_IF(                                                            \
+            CHAOS_PP_GREATER_EQUAL(                                             \
+                invoc_num,                                                      \
+                seqsize                                                         \
+            )                                                                   \
+        )(                                                                      \
+            __KLIBC_PP_SEQ_MAP_IMPL_END,                                        \
+            CHAOS_PP_OBSTRUCT(__KLIBC_PP_SEQ_MAP_IMPL_ID)()                     \
+        )(                                                                      \
+            sep, macro, variadic_seq, seqsize, CHAOS_PP_INC(invoc_num)          \
+        )
+
+/* #undef  __KLIBC_PP_SEQ_MAP_IMPL_II
+#define __KLIBC_PP_SEQ_MAP_IMPL_II(_, s, sep, macrocall, macro, variadic_seq,) */
 
 #undef  KLIBC_PP_SEQ_MAP
 /**
@@ -172,9 +182,49 @@
  * @param ...   Other sequences.
  * @return      The mapped sequence.
  */
-#define KLIBC_PP_SEQ_MAP(sep, macro, seq, ...)      \
-    __KLIBC_PP_SEQ_MAP_IMPL(                        \
-        macro, KLIBC_PP_SEQ_ZIP(seq, __VA_ARGS__)   \
+#define KLIBC_PP_SEQ_MAP(sep, macro, seq, ...)  \
+    KLIBC_PP_EXPAND(                            \
+        __KLIBC_PP_SEQ_MAP_IMPL(                \
+            sep, macro,                         \
+            KLIBC_PP_SEQ_ZIP(seq, __VA_ARGS__), \
+            CHAOS_PP_SEQ_SIZE_ALT(seq), 0       \
+        )                                       \
     )
+
+#else
+
+#undef  KLIBC_PP_SEQ_MAP
+/**
+ * @def KLIBC_PP_SEQ_MAP(sep, macro, seq)
+ * @brief Maps a macro over a sequence.
+ * @param sep   The separator.
+ * @param macro The macro to map.
+ * @param seq   The sequence.
+ * @param ...   Other sequences.
+ * @return      The mapped sequence.
+ */
+#define KLIBC_PP_SEQ_MAP(sep, macro, seq, ...)  \
+    KLIBC_PP_EXPAND(                            \
+        __KLIBC_PP_SEQ_MAP_IMPL(                \
+            sep, macro,                         \
+            KLIBC_PP_SEQ_ZIP(seq, __VA_ARGS__)  \
+        )                                       \
+    )
+
+#endif // 0
+
+#undef  __KLIBC_PP_SEQ_ENUM_IMPL
+#define __KLIBC_PP_SEQ_ENUM_IMPL(sep, seq) /* TODO: Implement this. */
+
+#undef  KLIBC_PP_SEQ_ENUM
+/**
+ * @def KLIBC_PP_SEQ_ENUM(sep, seq)
+ * @brief Enumerates a sequence.
+ * @param sep The separator.
+ * @param seq The sequence.
+ * @return    The enumerated sequence.
+ */
+#define KLIBC_PP_SEQ_ENUM(sep, seq) __KLIBC_PP_SEQ_ENUM_IMPL(sep, seq)
+    
 
 #endif
