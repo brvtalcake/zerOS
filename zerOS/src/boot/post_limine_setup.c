@@ -12,8 +12,10 @@
 #include <misc/sections.h>
 #include <misc/symbol.h>
 #include <misc/array.h>
+#include <misc/func.h>
 
 #include <kernel/printk.h>
+#include <kernel/limine_data.h>
 #include <kernel/cpu/io.h>
 #include <kernel/cpu/misc.h>
 #include <kernel/memory/gdt.h>
@@ -36,87 +38,6 @@
         (void*)UNIQUE(ptr);                         \
     })
 
-#ifdef LIMINE_REQUESTED_REVISION
-    #error "LIMINE_REQUESTED_REVISION shall not be defined before this point"
-#endif
-#define LIMINE_REQUESTED_REVISION (UINT64_C(2))
-
-IN_SECTION(".requests") SYMBOL_USED
-static LIMINE_BASE_REVISION(LIMINE_REQUESTED_REVISION);
-
-// The Limine requests can be placed anywhere, but it is important that
-// the compiler does not optimise them away, so, usually, they should
-// be made volatile or equivalent, _and_ they should be accessed at least
-// once or marked as used with the "used" attribute as done here.
-
-// Ask Limine for 5LVL paging
-IN_SECTION(".requests") SYMBOL_USED
-static struct limine_paging_mode_request lvl5_paging_request = {
-    .id = LIMINE_PAGING_MODE_REQUEST,
-    .revision = LIMINE_REQUESTED_REVISION,
-    .response = nullptr,
-    .mode = LIMINE_PAGING_MODE_X86_64_5LVL,
-    .max_mode = LIMINE_PAGING_MODE_X86_64_5LVL,
-    .min_mode = LIMINE_PAGING_MODE_X86_64_4LVL
-};
-
-IN_SECTION(".requests") SYMBOL_USED
-static struct limine_framebuffer_request framebuffer_request = {
-    .id = LIMINE_FRAMEBUFFER_REQUEST,
-    .revision = LIMINE_REQUESTED_REVISION,
-    .response = nullptr
-};
-
-IN_SECTION(".requests") SYMBOL_USED
-static struct limine_firmware_type_request firmware_type_request = {
-    .id = LIMINE_FIRMWARE_TYPE_REQUEST,
-    .revision = LIMINE_REQUESTED_REVISION,
-    .response = nullptr
-};
-
-IN_SECTION(".requests") SYMBOL_USED
-static struct limine_hhdm_request hhdm_request = {
-    .id = LIMINE_HHDM_REQUEST,
-    .revision = LIMINE_REQUESTED_REVISION,
-    .response = nullptr
-};
-
-IN_SECTION(".requests") SYMBOL_USED
-static struct limine_memmap_request memmap_request = {
-    .id = LIMINE_MEMMAP_REQUEST,
-    .revision = LIMINE_REQUESTED_REVISION,
-    .response = nullptr
-};
-
-IN_SECTION(".requests") SYMBOL_USED
-static struct limine_efi_memmap_request efi_memmap_request = {
-    .id = LIMINE_EFI_MEMMAP_REQUEST,
-    .revision = LIMINE_REQUESTED_REVISION,
-    .response = nullptr
-};
-
-IN_SECTION(".requests") SYMBOL_USED
-static struct limine_efi_system_table_request efi_system_table_request = {
-    .id = LIMINE_EFI_SYSTEM_TABLE_REQUEST,
-    .revision = LIMINE_REQUESTED_REVISION,
-    .response = nullptr
-};
-
-
-// Finally, define the start and end markers for the Limine requests.
-// These can also be moved anywhere, to any .c file, as seen fit.
-
-IN_SECTION(".requests_start_marker") SYMBOL_USED
-static LIMINE_REQUESTS_START_MARKER;
-
-IN_SECTION(".requests_end_marker") SYMBOL_USED
-static LIMINE_REQUESTS_END_MARKER;
-
-extern struct limine_framebuffer_response* zerOS_get_limine_framebuffers(void)
-{
-    return framebuffer_request.response;
-}
-
 BOOT_FUNC
 static inline void* boot_memcpy(void* restrict dest, const void* restrict src, size_t n)
 {
@@ -137,13 +58,13 @@ static bool setup_kern_modules(void)
 BOOT_FUNC
 static size_t get_needed_mem_entries(struct limine_memmap_entry* entry_buf)
 {
-    struct limine_memmap_response* response = memmap_request.response;
+    struct limine_memmap_response* response = (struct limine_memmap_response*)zerOS_get_limine_data(zerOS_LIMINE_MEMMAP_RESPONSE);
     if (!response)
         return 0;
     size_t count = 0;
     for (size_t i = 0; i < response->entry_count; i++)
     {
-        struct limine_memmap_entry* entry = response->entries[i];
+        struct limine_memmap_entry* entry = (struct limine_memmap_entry*)zerOS_get_limine_data(zerOS_LIMINE_MEMMAP_ENTRY, i);
         switch (entry->type)
         {
             case LIMINE_MEMMAP_USABLE:
@@ -160,9 +81,7 @@ static size_t get_needed_mem_entries(struct limine_memmap_entry* entry_buf)
 BOOT_FUNC
 static bool assert_uefi_x86_64(void)
 {
-    struct limine_firmware_type_response* response = firmware_type_request.response;
-    if (!response)
-        return false;
+    struct limine_firmware_type_response* response = (struct limine_firmware_type_response*)zerOS_get_limine_data(zerOS_LIMINE_FIRMWARE_TYPE_RESPONSE);
     return response->firmware_type == LIMINE_FIRMWARE_TYPE_UEFI64;
 }
 
@@ -418,38 +337,55 @@ static char* limine_entry_type_string(uint64_t type)
 };
 
 BOOT_FUNC
-static void print_entries(struct limine_memmap_entry** entries, size_t entry_count)
+static void print_entries(struct limine_memmap_entry* entries, size_t entry_count)
 {
-    for (size_t i = 0; i < entry_count; i++)
+    if (entries)
     {
-        struct limine_memmap_entry* entry = entries[i];
-        zerOS_early_printk("zerOS: entry %u: base = 0x%x, length = 0x%x, type = %s\n",
-            i, entry->base, entry->length, limine_entry_type_string(entry->type));
+        for (size_t i = 0; i < entry_count; i++)
+        {
+            struct limine_memmap_entry entry = entries[i];
+            zerOS_early_printk("zerOS: entry %u: base = 0x%x, length = 0x%x, type = %s\n",
+                (unsigned int)i, entry.base, entry.length, limine_entry_type_string(entry.type));
+        }
+    }
+    else
+    {
+        struct limine_memmap_response* response = (struct limine_memmap_response*)zerOS_get_limine_data(zerOS_LIMINE_MEMMAP_RESPONSE);
+        for (size_t i = 0; i < response->entry_count; i++)
+        {
+            struct limine_memmap_entry* entry = zerOS_get_limine_data(zerOS_LIMINE_MEMMAP_ENTRY, i);
+            zerOS_early_printk("zerOS: entry %u: base = 0x%x, length = 0x%x, type = %s\n",
+                (unsigned int)i, entry->base, entry->length, limine_entry_type_string(entry->type));
+        }
     }
 };
 
 BOOT_FUNC
 static bool setup_paging(void)
 {
-    print_entries(memmap_request.response->entries, memmap_request.response->entry_count);
-    zerOS_hcf();
+    print_entries(nullptr, 0);
 
     zerOS_init_paging_values();
 
-    if (lvl5_paging_request.response == nullptr)
-        return false;
+    struct limine_paging_mode_response* response = zerOS_get_limine_data(zerOS_LIMINE_PAGING_RESPONSE);
 
     if (
-        lvl5_paging_request.response->mode != LIMINE_PAGING_MODE_X86_64_5LVL &&
-        lvl5_paging_request.response->mode != LIMINE_PAGING_MODE_X86_64_4LVL
+        response->mode != LIMINE_PAGING_MODE_X86_64_5LVL &&
+        response->mode != LIMINE_PAGING_MODE_X86_64_4LVL
     )
         return false;
 
-    struct limine_memmap_entry* entry_buf = calloca(sizeof(struct limine_memmap_entry) * memmap_request.response->entry_count);
+    struct limine_memmap_entry* entry_buf = calloca(
+        sizeof(struct limine_memmap_entry) * ((struct limine_memmap_response*)zerOS_get_limine_data(zerOS_LIMINE_MEMMAP_RESPONSE))->entry_count
+    );
     const size_t entry_count = get_needed_mem_entries(entry_buf);
 
     if (entry_count == 0)
         return false;
+
+    print_entries(entry_buf, entry_count);
+
+    zerOS_early_printk("zerOS: kernel HHDM = 0x%x\n", (unsigned int) ((struct limine_hhdm_response*) zerOS_get_limine_data(zerOS_LIMINE_HHDM_RESPONSE))->offset);
 
     //if (!zerOS_init_pmm(entry_buf, entry_count))
     //    return false;
@@ -485,47 +421,61 @@ static bool setup_early_debug(void)
     return true;
 }
 
-BOOT_FUNC
+BOOT_FUNC FUNC_NORETURN
 extern void zerOS_boot_setup(void)
 {
     //if (!zerOS_stage_set(zerOS_STAGE_BOOT_SETUP))
     //    zerOS_hcf();
 
-    if (LIMINE_BASE_REVISION_SUPPORTED == false)
-        zerOS_hcf();
-
-    if (!assert_uefi_x86_64())
-        zerOS_hcf();
-
     if (!setup_early_debug())
         zerOS_hcf();
-
+    
     zerOS_early_printk("zerOS: setting up ISA extensions\n");
     if (!setup_isa_exts())
+    {
+        zerOS_early_printk("zerOS: failed to setup ISA extensions\n");
         zerOS_hcf();
+    }
 
-    zerOS_early_printk("zerOS: loading and setting up eventual kernel modules\n");
-    if (!setup_kern_modules())
+    zerOS_copy_limine_requests();
+    
+    if (!assert_uefi_x86_64())
+    {
+        zerOS_early_printk("zerOS: not running on UEFI x86_64\n");
         zerOS_hcf();
+    }
 
     zerOS_early_printk("zerOS: setting up paging\n");
     if (!setup_paging())
+    {
+        zerOS_early_printk("zerOS: failed to setup paging\n");
         zerOS_hcf();
-    
+    }
+
+    zerOS_early_printk("zerOS: loading and setting up eventual kernel modules\n");
+    if (!setup_kern_modules())
+    {
+        zerOS_early_printk("zerOS: failed to load and setup kernel modules\n");
+        zerOS_hcf();
+    }
+
     zerOS_early_printk("zerOS: setting up GDT\n");
     if (!setup_gdt())
+    {
+        zerOS_early_printk("zerOS: failed to setup GDT\n");
         zerOS_hcf();
+    }
 
     zerOS_early_printk("zerOS: setting up IDT\n");
     if (!setup_idt())
-        zerOS_hcf();
-
-    if (framebuffer_request.response == nullptr
-     || framebuffer_request.response->framebuffer_count < 1) {
+    {
+        zerOS_early_printk("zerOS: failed to setup IDT\n");
         zerOS_hcf();
     }
 
     zerOS_early_printk("zerOS: jumping to kernel main\n");
     extern void zerOS_kmain(void);
     zerOS_kmain();
+
+    zerOS_hcf();
 }
