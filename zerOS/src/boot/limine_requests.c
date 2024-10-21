@@ -11,6 +11,7 @@
 #include <kernel/cpu/io.h>
 
 #include <misc/sections.h>
+#include <misc/statement.h>
 #include <misc/symbol.h>
 
 #ifdef LIMINE_REQUESTED_REVISION
@@ -44,6 +45,58 @@ static struct limine_memmap_entry    memmap_entry_buf[__MAX_MEMMAP_ENTRY_COUNT];
 static struct limine_efi_memmap_response efi_memmap_response;
 
 static struct limine_efi_system_table_response efi_system_table_response;
+
+BOOT_FUNC
+static char* limine_entry_type_string(uint64_t type)
+{
+    static char strings[8][32] = {
+        [LIMINE_MEMMAP_USABLE]                 = "USABLE\0",
+        [LIMINE_MEMMAP_RESERVED]               = "RESERVED\0",
+        [LIMINE_MEMMAP_ACPI_RECLAIMABLE]       = "ACPI_RECLAIMABLE\0",
+        [LIMINE_MEMMAP_ACPI_NVS]               = "ACPI_NVS\0",
+        [LIMINE_MEMMAP_BAD_MEMORY]             = "BAD_MEMORY\0",
+        [LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE] = "BOOTLOADER_RECLAIMABLE\0",
+        [LIMINE_MEMMAP_KERNEL_AND_MODULES]     = "KERNEL_AND_MODULES\0",
+        [LIMINE_MEMMAP_FRAMEBUFFER]            = "FRAMEBUFFER\0"
+    };
+    static char unknown[32] = "UNKNOWN\0";
+    switch (type)
+    {
+        case LIMINE_MEMMAP_USABLE: CASE_FALLTHROUGH;
+        case LIMINE_MEMMAP_RESERVED: CASE_FALLTHROUGH;
+        case LIMINE_MEMMAP_ACPI_RECLAIMABLE: CASE_FALLTHROUGH;
+        case LIMINE_MEMMAP_ACPI_NVS: CASE_FALLTHROUGH;
+        case LIMINE_MEMMAP_BAD_MEMORY: CASE_FALLTHROUGH;
+        case LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE: CASE_FALLTHROUGH;
+        case LIMINE_MEMMAP_KERNEL_AND_MODULES: CASE_FALLTHROUGH;
+        case LIMINE_MEMMAP_FRAMEBUFFER: return strings[type];
+        default: return unknown;
+    }
+};
+
+BOOT_FUNC
+static void print_entries(struct limine_memmap_entry* entries, size_t entry_count)
+{
+    if (entries && entry_count)
+    {
+        for (size_t i = 0; i < entry_count; i++)
+        {
+            struct limine_memmap_entry entry = entries[i];
+            zerOS_early_printk("zerOS: entry %u: base = 0x%x, length = 0x%x, type = %s\n",
+                (unsigned int)i, entry.base, entry.length, limine_entry_type_string(entry.type));
+        }
+    }
+    else
+    {
+        struct limine_memmap_response* response = (struct limine_memmap_response*)zerOS_get_limine_data(zerOS_LIMINE_MEMMAP_RESPONSE);
+        for (size_t i = 0; i < response->entry_count; i++)
+        {
+            struct limine_memmap_entry* entry = zerOS_get_limine_data(zerOS_LIMINE_MEMMAP_ENTRY, i);
+            zerOS_early_printk("zerOS: entry %u: base = 0x%x, length = 0x%x, type = %s\n",
+                (unsigned int)i, entry->base, entry->length, limine_entry_type_string(entry->type));
+        }
+    }
+};
 
 BOOT_FUNC
 extern void* zerOS_get_limine_data(enum zerOS_limine_data_request req, ...)
@@ -185,10 +238,18 @@ extern void zerOS_copy_limine_requests(void)
         zerOS_hcf();
     }
 
-    __assert_good_response(lvl5_paging_request, true);
+    __assert_good_response(
+        lvl5_paging_request,
+        lvl5_paging_request.response->mode == LIMINE_PAGING_MODE_X86_64_5LVL ||
+        lvl5_paging_request.response->mode == LIMINE_PAGING_MODE_X86_64_4LVL
+    );
     boot_memcpy(&paging_response, lvl5_paging_request.response, sizeof(paging_response));
 
-    __assert_good_response(framebuffer_request, true);
+    __assert_good_response(
+        framebuffer_request,
+        framebuffer_request.response->framebuffer_count > 0 &&
+        framebuffer_request.response->framebuffers != nullptr
+    );
     boot_memcpy(&framebuffer_response, framebuffer_request.response, sizeof(framebuffer_response));
     copy_framebuffers();
 
@@ -197,10 +258,12 @@ extern void zerOS_copy_limine_requests(void)
 
     __assert_good_response(hhdm_request, true);
     boot_memcpy(&hhdm_response, hhdm_request.response, sizeof(hhdm_response));
+    zerOS_early_printk("zerOS: kernel HHDM = 0x%x\n", (unsigned int) ((struct limine_hhdm_response*) zerOS_get_limine_data(zerOS_LIMINE_HHDM_RESPONSE))->offset);
 
     __assert_good_response(memmap_request, true);
     boot_memcpy(&memmap_response, memmap_request.response, sizeof(memmap_response));
     copy_memmap_entries();
+    print_entries(nullptr, 0);
 
     __assert_good_response(efi_memmap_request, true);
     boot_memcpy(&efi_memmap_response, efi_memmap_request.response, sizeof(efi_memmap_response));

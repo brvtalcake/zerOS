@@ -1,0 +1,6 @@
+#ifndef zerOS_MACHINE_ALDERLAKE_FAST_DATA_TYPES_H_INCLUDED
+#define zerOS_MACHINE_ALDERLAKE_FAST_DATA_TYPES_H_INCLUDED
+
+#include <machine/common/x86_64.h>
+
+#endif

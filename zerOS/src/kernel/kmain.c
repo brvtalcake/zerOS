@@ -2,14 +2,41 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#include <kernel/printk.h>
 #include <kernel/cpu/io.h>
 #include <kernel/cpu/cpu.h>
 #include <kernel/cpu/misc.h>
 
 #include <kernel/limine_data.h>
 
+
+static bool setup_paging(void) { return true; }
+static bool setup_printk_subsystem(void) { return true; }
+static bool setup_idt(void) { return true; }
+
 void zerOS_kmain(void)
 {
+    zerOS_early_printk("zerOS: setting up paging\n");
+    if (!setup_paging())
+    {
+        zerOS_early_printk("zerOS: failed to setup paging\n");
+        zerOS_hcf();
+    }
+
+    zerOS_early_printk("zerOS: setting up IDT\n");
+    if (!setup_idt())
+    {
+        zerOS_early_printk("zerOS: failed to setup IDT\n");
+        zerOS_hcf();
+    }
+
+    zerOS_early_printk("zerOS: setting up printk subsystem\n");
+    if (!setup_printk_subsystem())
+    {
+        zerOS_early_printk("zerOS: failed to setup printk subsystem\n");
+        zerOS_hcf();
+    }
+
     struct limine_framebuffer* framebuffer = (struct limine_framebuffer*) zerOS_get_limine_data(zerOS_LIMINE_FRAMEBUFFER, (size_t)0);
 
     // Note: we assume the framebuffer model is RGB with 32-bit pixels.

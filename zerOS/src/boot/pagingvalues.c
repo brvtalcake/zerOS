@@ -2,6 +2,7 @@
 #include <stddef.h>
 #include <stdbool.h>
 
+#include <kernel/printk.h>
 #include <kernel/cpu/cpu.h>
 #include <kernel/cpu/misc.h>
 
@@ -53,5 +54,6 @@ BOOT_FUNC
 void zerOS_init_paging_values(void)
 {
     get_maxphyaddr();
+    zerOS_early_printk("zerOS: MAXPHYADDR = %u\n", (unsigned int) zerOS_maxphyaddr);
     set_pagetable_phyaddr_masks();
 }
