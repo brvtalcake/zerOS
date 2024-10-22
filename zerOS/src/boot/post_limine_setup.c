@@ -14,6 +14,7 @@
 #include <misc/array.h>
 #include <misc/func.h>
 
+#include <kernel/qemu.h>
 #include <kernel/printk.h>
 #include <kernel/limine_data.h>
 #include <kernel/cpu/io.h>
@@ -303,6 +304,8 @@ static bool setup_isa_exts(void)
 BOOT_FUNC
 static bool setup_early_debug(void)
 {
+    if (!zerOS_in_qemu() || !zerOS_CONFIG_UNDER_QEMU)
+        return true; // No need to setup serial port, so just skip for now
     if (!zerOS_serial_early_init())
         return false;
 

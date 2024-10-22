@@ -50,7 +50,7 @@ $(eval $(call DEFAULT_VAR,KQEMU,$(DEFAULT_KQEMU)))
 override DEFAULT_KGDB := $(KTOOLCHAIN_DIR)/bin/$(KARCH)-elf-gdb
 $(eval $(call DEFAULT_VAR,KGDB,$(DEFAULT_KGDB)))
 
-override DEFAULT_KCFLAGS := -ggdb3 -O3 -pipe -mno-80387 -ftrack-macro-expansion=0
+override DEFAULT_KCFLAGS = -ggdb3 $(if $(call eq,$(DEBUG_KERNEL),1),-Og,-O3) -pipe -mno-80387 -ftrack-macro-expansion=0
 $(eval $(call DEFAULT_VAR,KCFLAGS,$(DEFAULT_KCFLAGS)))
 override DEFAULT_KCPPFLAGS := -DCHAOS_PP_VARIADICS=1 -ftrack-macro-expansion=0
 $(eval $(call DEFAULT_VAR,KCPPFLAGS,$(DEFAULT_KCPPFLAGS)))

@@ -332,8 +332,8 @@ struct zerOS_cpu_registers
     uint16_t ss;
 };
 
-extern bool zerOS_cpuid_count(uint32_t leaf, uint32_t subleaf, struct zerOS_cpuid_info* info);
-extern bool zerOS_cpuid(uint32_t leaf, struct zerOS_cpuid_info* info);
+extern void zerOS_cpuid_count(uint32_t leaf, uint32_t subleaf, struct zerOS_cpuid_info* info);
+extern void zerOS_cpuid(uint32_t leaf, struct zerOS_cpuid_info* info);
 
 extern void zerOS_set_ia32_misc(bool value, uint8_t bit);
 

@@ -11,14 +11,14 @@
 
 #include <misc/sections.h>
 
-extern bool zerOS_cpuid_count(uint32_t leaf, uint32_t subleaf, struct zerOS_cpuid_info* info)
+extern void zerOS_cpuid_count(uint32_t leaf, uint32_t subleaf, struct zerOS_cpuid_info* info)
 {
-    return (bool)__get_cpuid_count(leaf, subleaf, &info->eax, &info->ebx, &info->ecx, &info->edx);
+    __cpuid_count(leaf, subleaf, info->eax, info->ebx, info->ecx, info->edx);
 }
 
-extern bool zerOS_cpuid(uint32_t leaf, struct zerOS_cpuid_info* info)
+extern void zerOS_cpuid(uint32_t leaf, struct zerOS_cpuid_info* info)
 {
-    return zerOS_cpuid_count(leaf, 0, info);
+    zerOS_cpuid_count(leaf, 0, info);
 }
 
 extern void zerOS_set_ia32_misc(bool value, uint8_t bit)

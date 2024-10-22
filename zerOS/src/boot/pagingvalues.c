@@ -17,8 +17,7 @@ BOOT_FUNC
 static inline void get_maxphyaddr(void)
 {
     struct zerOS_cpuid_info info;
-    if (!zerOS_cpuid(0x80000008, &info))
-        zerOS_hcf();
+    zerOS_cpuid(0x80000008, &info);
     zerOS_maxphyaddr = info.eax & 0xFF;
 }
 

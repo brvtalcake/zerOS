@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <limits.h>
 
+#include <kernel/qemu.h>
 #include <kernel/serial/ports.h>
 #include <kernel/compiler/cast.h>
 
@@ -99,6 +100,9 @@ static bool is_transmit_empty(enum zerOS_serial_port port)
 BOOT_FUNC
 static void write_serial(enum zerOS_serial_port port, char a)
 {
+    if (!zerOS_in_qemu() || !zerOS_CONFIG_UNDER_QEMU)
+        return;
+
     while (is_transmit_empty(port) == 0);
 
     zerOS_outb(port, a);
@@ -107,7 +111,8 @@ static void write_serial(enum zerOS_serial_port port, char a)
 BOOT_FUNC
 static void write_debugcon(char a)
 {
-    zerOS_outb(0xe9, a);
+    if (zerOS_in_qemu() && zerOS_CONFIG_UNDER_QEMU)
+        zerOS_outb(0xe9, a);
 }
 
 BOOT_FUNC
