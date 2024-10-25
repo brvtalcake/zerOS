@@ -67,7 +67,7 @@ __KMEM := $(shell free --giga | awk -e '/Mem:/ {print $$2}')
 # Use iso format by default.
 # Don't enable KVM by default.
 # Enable UEFI by default.
-override DEFAULT_KQEMU_RUNFLAGS = -m $(__KMEM)G -smp $(__KNPROC) -cpu Skylake-Client-v4,$(KCPU_FEATURES) -smbios type=0,uefi=on -debugcon file:debugcon.log -serial stdio -S -bios vendor/OVMF.fd -cdrom
+override DEFAULT_KQEMU_RUNFLAGS = -m 1500M -smp $(__KNPROC) -cpu Skylake-Client-v4,$(KCPU_FEATURES) -smbios type=0,uefi=on -debugcon file:debugcon.log -serial stdio -S -bios vendor/OVMF.fd -cdrom
 $(eval $(call DEFAULT_VAR,KQEMU_RUNFLAGS,$(DEFAULT_KQEMU_RUNFLAGS)))
 
 # TODO: Add support for automatic connection to qemu

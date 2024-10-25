@@ -53,6 +53,6 @@ BOOT_FUNC
 void zerOS_init_paging_values(void)
 {
     get_maxphyaddr();
-    zerOS_early_printk("zerOS: MAXPHYADDR = %u\n", (unsigned int) zerOS_maxphyaddr);
+    zerOS_early_printk("zerOS: MAXPHYADDR = %u\n", EPRI_CAST(u, zerOS_maxphyaddr));
     set_pagetable_phyaddr_masks();
 }

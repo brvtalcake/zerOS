@@ -5,11 +5,13 @@
 #include <stddef.h>
 #include <stdbool.h>
 
+#include <misc/sections.h>
 #include <misc/type.h>
 #include <misc/statement.h>
 #include <misc/unique_ident.h>
 
 #include <kernel/compiler/bitfield.h>
+#include <kernel/compiler/enum.h>
 
 #undef  zerOS_PAGE_SIZE
 #define zerOS_PAGE_SIZE 4096ULL
@@ -188,5 +190,32 @@ extern uint64_t zerOS_pagetable_phyaddr_mask[3];
 
 BOOT_FUNC
 extern void zerOS_init_paging_values(void);
+
+static inline uintptr_t zerOS_virt_to_phys(uintptr_t virt)
+{
+#undef  __GETCR3
+#define __GETCR3()                          \
+    ({                                      \
+        uintptr_t ret;                      \
+        asm volatile(                       \
+            "mov %%cr3, %0" : "=r"(ret)     \
+        );                                  \
+        ret;                                \
+    })
+
+    uint64_t pml4e = ((virt >> 39) & 0x1FF);
+    uint64_t pdpe = ((virt >> 30) & 0x1FF);
+    uint64_t pde = ((virt >> 21) & 0x1FF);
+    uint64_t pte = ((virt >> 12) & 0x1FF);
+
+    uint64_t* pml4 = (uint64_t*) __GETCR3();
+    uint64_t* pdp = (uint64_t*) (pml4[pml4e] & 0xFFFFFFFFFFFFF000);
+    uint64_t* pd = (uint64_t*) (pdp[pdpe] & 0xFFFFFFFFFFFFF000);
+    uint64_t* pt = (uint64_t*) (pd[pde] & 0xFFFFFFFFFFFFF000);
+
+    return (pt[pte] & 0xFFFFFFFFFFFFF000) | (virt & 0xFFF);
+
+#undef  __GETCR3
+}
 
 #endif

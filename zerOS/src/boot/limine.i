@@ -1,3 +1,10 @@
+/*
+ * limine.i
+ * Do not include this file anywhere else than in `zerOS/src/boot/limine_requests.c`.
+ * Do not compile this file directly either.
+ * Limine requests have been placed here for the sake of clarity / lisibility.
+ */
+
 
 IN_SECTION(".requests") SYMBOL_USED
 static LIMINE_BASE_REVISION(LIMINE_REQUESTED_REVISION);
@@ -55,6 +62,13 @@ static volatile struct limine_efi_memmap_request efi_memmap_request = {
 IN_SECTION(".requests") SYMBOL_USED
 static volatile struct limine_efi_system_table_request efi_system_table_request = {
     .id = LIMINE_EFI_SYSTEM_TABLE_REQUEST,
+    .revision = LIMINE_REQUESTED_REVISION,
+    .response = nullptr
+};
+
+IN_SECTION(".requests") SYMBOL_USED
+static volatile struct limine_kernel_address_request kernel_address_request = {
+    .id = LIMINE_KERNEL_ADDRESS_REQUEST,
     .revision = LIMINE_REQUESTED_REVISION,
     .response = nullptr
 };

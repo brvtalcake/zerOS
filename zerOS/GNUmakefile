@@ -246,6 +246,9 @@ $(call CMD,10,/usr/bin/true,GENCONFIG,$@)
 @echo "#undef  zerOS_CONFIG_UNDER_QEMU" >> $@
 @echo "#define zerOS_CONFIG_UNDER_QEMU $(if $(KQEMU),1,0)" >> $@
 @echo "" >> $@
+@echo "#undef  zerOS_CONFIG_MAX_USABLE_MEMORY_REGIONS" >> $@
+@echo "#define zerOS_CONFIG_MAX_USABLE_MEMORY_REGIONS 32" >> $@
+@echo "" >> $@
 @cat  $(KERNEL_SUPDEF_CONFIG) >> $@
 @echo "" >> $@
 @echo "#endif" >> $@

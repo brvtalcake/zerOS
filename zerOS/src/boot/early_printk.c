@@ -150,8 +150,8 @@ extern int zerOS_early_vprintk(const char* str, va_list varargs)
             {
                 case 'd': {
                     static const char basic_lut[] = "0123456789";
-                    int value = va_arg(varargs, int);
-                    char buffer[32];
+                    int64_t value = va_arg(varargs, int64_t);
+                    char buffer[64];
                     int i = 0;
                     if (value < 0)
                     {
@@ -174,8 +174,8 @@ extern int zerOS_early_vprintk(const char* str, va_list varargs)
                 } break;
                 case 'u': {
                     static const char basic_lut[] = "0123456789";
-                    unsigned int value = va_arg(varargs, unsigned int);
-                    char buffer[32];
+                    uint64_t value = va_arg(varargs, uint64_t);
+                    char buffer[64];
                     int i = 0;
                     do
                     {
@@ -191,8 +191,8 @@ extern int zerOS_early_vprintk(const char* str, va_list varargs)
                 } break;                    
                 case 'x': {
                     static const char basic_lut_lower[] = "0123456789abcdef";
-                    unsigned int value = va_arg(varargs, unsigned int);
-                    char buffer[32];
+                    uint64_t value = va_arg(varargs, uint64_t);
+                    char buffer[64];
                     int i = 0;
                     do
                     {
@@ -208,8 +208,8 @@ extern int zerOS_early_vprintk(const char* str, va_list varargs)
                 } break;
                 case 'X': {
                     static const char basic_lut_upper[] = "0123456789ABCDEF";
-                    unsigned int value = va_arg(varargs, unsigned int);
-                    char buffer[32];
+                    uint64_t value = va_arg(varargs, uint64_t);
+                    char buffer[64];
                     int i = 0;
                     do
                     {
@@ -226,7 +226,7 @@ extern int zerOS_early_vprintk(const char* str, va_list varargs)
                 case 'p': {
                     static const char basic_lut_lower[] = "0123456789abcdef";
                     uintptr_t value = va_arg(varargs, uintptr_t);
-                    char buffer[32];
+                    char buffer[64];
                     int i = 0;
                     do
                     {
@@ -242,8 +242,8 @@ extern int zerOS_early_vprintk(const char* str, va_list varargs)
                 } break;
                 case 'b': {
                     static const char basic_lut[] = "01";
-                    unsigned int value = va_arg(varargs, unsigned int);
-                    char buffer[32];
+                    uint64_t value = va_arg(varargs, uint64_t);
+                    char buffer[64];
                     int i = 0;
                     do
                     {
@@ -259,8 +259,8 @@ extern int zerOS_early_vprintk(const char* str, va_list varargs)
                 } break;
                 case 'o': {
                     static const char basic_lut[] = "01234567";
-                    unsigned int value = va_arg(varargs, unsigned int);
-                    char buffer[32];
+                    uint64_t value = va_arg(varargs, uint64_t);
+                    char buffer[64];
                     int i = 0;
                     do
                     {

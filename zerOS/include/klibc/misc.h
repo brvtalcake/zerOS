@@ -14,9 +14,10 @@
 #define KLIBC_TYPES_EQUAL(x, y)         \
     ((bool)(                            \
         !!__builtin_types_compatible_p( \
-            typeof(x),                  \
-            typeof(y)                   \
-        )                               \
+            typeof((x)),                \
+            typeof((y))                 \
+        ) &&                            \
+        !!(sizeof((x)) == sizeof((y)))  \
     ))
 
 #endif

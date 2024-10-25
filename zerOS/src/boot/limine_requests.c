@@ -46,6 +46,8 @@ static struct limine_efi_memmap_response efi_memmap_response;
 
 static struct limine_efi_system_table_response efi_system_table_response;
 
+static struct limine_kernel_address_response kernel_address_response;
+
 BOOT_FUNC
 static char* limine_entry_type_string(uint64_t type)
 {
@@ -82,8 +84,12 @@ static void print_entries(struct limine_memmap_entry* entries, size_t entry_coun
         for (size_t i = 0; i < entry_count; i++)
         {
             struct limine_memmap_entry entry = entries[i];
-            zerOS_early_printk("zerOS: entry %u: base = 0x%x, length = 0x%x, type = %s\n",
-                (unsigned int)i, entry.base, entry.length, limine_entry_type_string(entry.type));
+            zerOS_early_printk("zerOS: entry %u: base = 0x%p, length = 0x%x, type = %s\n",
+                EPRI_CAST(u, i),
+                EPRI_CAST(p, entry.base),
+                EPRI_CAST(x, entry.length),
+                EPRI_CAST(s, limine_entry_type_string(entry.type))
+            );
         }
     }
     else
@@ -92,8 +98,12 @@ static void print_entries(struct limine_memmap_entry* entries, size_t entry_coun
         for (size_t i = 0; i < response->entry_count; i++)
         {
             struct limine_memmap_entry* entry = zerOS_get_limine_data(zerOS_LIMINE_MEMMAP_ENTRY, i);
-            zerOS_early_printk("zerOS: entry %u: base = 0x%x, length = 0x%x, type = %s\n",
-                (unsigned int)i, entry->base, entry->length, limine_entry_type_string(entry->type));
+            zerOS_early_printk("zerOS: entry %u: base = 0x%p, length = 0x%x, type = %s\n",
+                EPRI_CAST(u, i),
+                EPRI_CAST(p, entry->base),
+                EPRI_CAST(x, entry->length),
+                EPRI_CAST(s, limine_entry_type_string(entry->type))
+            );
         }
     }
 };
@@ -123,6 +133,9 @@ extern void* zerOS_get_limine_data(enum zerOS_limine_data_request req, ...)
 
         case zerOS_LIMINE_EFI_SYSTEM_TABLE_RESPONSE:
             return &efi_system_table_response;
+
+        case zerOS_LIMINE_KERNEL_ADDRESS_RESPONSE:
+            return &kernel_address_response;
 
         case zerOS_LIMINE_FRAMEBUFFER: {
             va_list args;
@@ -178,7 +191,7 @@ static inline void* boot_memcpy(void* restrict dest, const void* restrict src, s
     {                                                       \
         zerOS_early_printk(                                 \
             "zerOS: no good response for request `%s`\n",   \
-            #request                                        \
+            EPRI_CAST(s, #request)                          \
         );                                                  \
         zerOS_hcf();                                        \
     }
@@ -190,19 +203,24 @@ static void copy_framebuffers(void)
     {
         zerOS_early_printk(
             "zerOS: framebuffer count is too high (%u)\n",
-            (unsigned int) framebuffer_response.framebuffer_count
+            EPRI_CAST(u, framebuffer_response.framebuffer_count)
         );
         zerOS_hcf();
     }
     for (size_t i = 0; i < framebuffer_response.framebuffer_count; i++)
     {
         boot_memcpy(framebuffers + i, *(framebuffer_response.framebuffers + i), sizeof(struct limine_framebuffer));
+        zerOS_early_printk(
+            "zerOS: framebuffer %u: address = 0x%p\n",
+            EPRI_CAST(u, i),
+            EPRI_CAST(p, framebuffers[i].address)
+        );
         
         if (framebuffers[i].mode_count > __MAX_FB_VIDEO_MODE_COUNT)
         {
             zerOS_early_printk(
                 "zerOS: video mode count is too high (%u)\n",
-                (unsigned int) framebuffers[i].mode_count
+                EPRI_CAST(u, framebuffers[i].mode_count)
             );
             zerOS_hcf();
         }
@@ -219,7 +237,7 @@ static void copy_memmap_entries(void)
     {
         zerOS_early_printk(
             "zerOS: memmap entry count is too high (%u)\n",
-            (unsigned int) memmap_response.entry_count
+            EPRI_CAST(u, memmap_response.entry_count)
         );
         zerOS_hcf();
     }
@@ -258,7 +276,9 @@ extern void zerOS_copy_limine_requests(void)
 
     __assert_good_response(hhdm_request, true);
     boot_memcpy(&hhdm_response, hhdm_request.response, sizeof(hhdm_response));
-    zerOS_early_printk("zerOS: kernel HHDM = 0x%x\n", (unsigned int) ((struct limine_hhdm_response*) zerOS_get_limine_data(zerOS_LIMINE_HHDM_RESPONSE))->offset);
+    zerOS_early_printk("zerOS: kernel HHDM = 0x%x\n",
+        EPRI_CAST(x, ((struct limine_hhdm_response*) zerOS_get_limine_data(zerOS_LIMINE_HHDM_RESPONSE))->offset)
+    );
 
     __assert_good_response(memmap_request, true);
     boot_memcpy(&memmap_response, memmap_request.response, sizeof(memmap_response));
@@ -270,4 +290,11 @@ extern void zerOS_copy_limine_requests(void)
 
     __assert_good_response(efi_system_table_request, true);
     boot_memcpy(&efi_system_table_response, efi_system_table_request.response, sizeof(efi_system_table_response));
+
+    __assert_good_response(kernel_address_request, true);
+    boot_memcpy(&kernel_address_response, kernel_address_request.response, sizeof(kernel_address_response));
+    zerOS_early_printk("zerOS: kernel address base: physical = 0x%p, virtual = 0x%p\n",
+        EPRI_CAST(p, kernel_address_response.physical_base),
+        EPRI_CAST(p, kernel_address_response.virtual_base)
+    );
 }
