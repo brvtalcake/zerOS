@@ -9,6 +9,7 @@ toolchain/** linguist-vendored
 
 *.ld linguist-detectable
 
+scripts/pickled/* -language-detectable
 *.pickle -language-detectable
 *.dill -language-detectable
 *.marshal -language-detectable
