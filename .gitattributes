@@ -1,0 +1,17 @@
+toolchain/** linguist-vendored
+
+*.i linguist-language=c
+
+*.s linguist-language=assembly
+*.S linguist-language=assembly
+*.asm linguist-language=assembly
+*.inc linguist-language=assembly
+
+*.ld linguist-detectable
+
+*.pickle -language-detectable
+*.dill -language-detectable
+*.marshal -language-detectable
+
+zerOS/gnumake/*gmsl* linguist-vendored
+zerOS/gnumake/*gmsl*/** linguist-vendored
