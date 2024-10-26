@@ -2,10 +2,17 @@ toolchain/** linguist-vendored
 
 *.i linguist-language=c
 
-*.s linguist-language=assembly
-*.S linguist-language=assembly
-*.asm linguist-language=assembly
-*.inc linguist-language=assembly
+*.mk linguist-language=makefile
+*.mak linguist-language=makefile
+*.make linguist-language=makefile
+*.mkf linguist-language=makefile
+**/GNUmakefile linguist-language=makefile
+**/GNUMakefile linguist-language=makefile
+
+*.s linguist-language=asm
+*.S linguist-language=asm
+*.asm linguist-language=asm
+*.inc linguist-language=asm
 
 *.ld linguist-detectable
 
