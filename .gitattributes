@@ -9,12 +9,23 @@ toolchain/** linguist-vendored
 **/GNUmakefile linguist-language=makefile
 **/GNUMakefile linguist-language=makefile
 
+#*.conf linguist-language=conf
+#*.cfg linguist-language=conf
+
+# Supdef preprocessor
+*.sd linguist-language=c
+
+*.ld.template linguist-language=linker-script
+
 *.s linguist-language=asm
 *.S linguist-language=asm
 *.asm linguist-language=asm
 *.inc linguist-language=asm
 
 *.ld linguist-detectable
+*.lds linguist-detectable
+*.ldscript linguist-detectable
+*.ld.template linguist-detectable
 
 scripts/pickled/* -language-detectable
 *.pickle -language-detectable
