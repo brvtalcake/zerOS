@@ -48,8 +48,8 @@ extern const size_t zerOS_${section}_size;
     section_ldsyms = Template(
 """
 /* --- SECTIONINFO START: ${section} --- */
-zerOS_${section}_start = ADDR(.${section});
-zerOS_${section}_end = ADDR(.${section}) + SIZEOF(.${section});
+zerOS_${section}_start = ABSOLUTE(ADDR(.${section}));
+zerOS_${section}_end = ABSOLUTE(ADDR(.${section})) + SIZEOF(.${section});
 zerOS_${section}_size = SIZEOF(.${section});
 /* --- SECTIONINFO END: ${section} --- */
 """
