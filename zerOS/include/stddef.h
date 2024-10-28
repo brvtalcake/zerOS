@@ -34,4 +34,18 @@
     #define constexpr
 #endif
 
+#undef  likely
+/**
+ * @def likely
+ * @brief The likely branch prediction hint.
+ */
+#define likely(x) __builtin_expect(!!(x), 1)
+
+#undef  unlikely
+/**
+ * @def unlikely
+ * @brief The unlikely branch prediction hint.
+ */
+#define unlikely(x) __builtin_expect(!!(x), 0)
+
 #endif

@@ -22,6 +22,8 @@ static_assert(
 // Define bitset_t as a pointer to the underlying type
 typedef zerOS_BITSET_UNDERLYING_TYPE* bitset_t;
 
+// TODO (fixme): All bitset operation are dependent on the underlying type being used
+
 static inline void zerOS_bitset_set(bitset_t bitset, size_t bit)
 {
     size_t index  = bit / zerOS_fast_uint_bits;
@@ -46,6 +48,11 @@ static inline bool zerOS_bitset_test(bitset_t bitset, size_t bit)
 static inline void zerOS_bitset_set_all(bitset_t bitset, size_t size)
 {
     zerOS_fast_uint_set_vectorized(bitset, size, (zerOS_BITSET_UNDERLYING_TYPE)-1);
+}
+
+static inline void zerOS_bitset_clear_all(bitset_t bitset, size_t size)
+{
+    zerOS_fast_uint_set_vectorized(bitset, size, (zerOS_BITSET_UNDERLYING_TYPE)0);
 }
 
 #endif

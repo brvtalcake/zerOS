@@ -315,7 +315,7 @@ extern int zerOS_early_vprintk(const char* str, va_list varargs)
     return written;
 }
 
-BOOT_FUNC PRINTF_LIKE(1, 2)
+BOOT_FUNC
 /**
  * @fn int zerOS_early_printk(const char* str, ...)
  * @brief Writes a formatted string to the early consoles.

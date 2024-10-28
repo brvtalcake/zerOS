@@ -36,7 +36,7 @@
 BOOT_FUNC
 extern int zerOS_early_vprintk(const char* str, va_list varargs);
 
-BOOT_FUNC PRINTF_LIKE(1, 2)
+BOOT_FUNC
 extern int zerOS_early_printk(const char* str, ...);
 
 #endif

@@ -15,4 +15,6 @@
  */
 #define SYMBOL_ALIGNED_TO(align) [[__gnu__::__aligned__(align)]]
 
+typedef unsigned char symbol[];
+
 #endif

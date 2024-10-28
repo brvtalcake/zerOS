@@ -1,3 +1,5 @@
+#include <config.h>
+
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -233,6 +235,7 @@ static void copy_framebuffers(void)
 BOOT_FUNC
 static void copy_memmap_entries(void)
 {
+    size_t usable_count = 0;
     if (memmap_response.entry_count > __MAX_MEMMAP_ENTRY_COUNT)
     {
         zerOS_early_printk(
@@ -242,7 +245,25 @@ static void copy_memmap_entries(void)
         zerOS_hcf();
     }
     for (size_t i = 0; i < memmap_response.entry_count; i++)
+    {
         boot_memcpy(memmap_entry_buf + i, *(memmap_response.entries + i), sizeof(struct limine_memmap_entry));
+        if (memmap_entry_buf[i].type == LIMINE_MEMMAP_USABLE ||
+            memmap_entry_buf[i].type == LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE)
+            usable_count++;
+    }
+    if (unlikely(usable_count == 0))
+    {
+        zerOS_early_printk("zerOS: no usable memory regions found\n");
+        zerOS_hcf();
+    }
+    if (unlikely(usable_count >= zerOS_CONFIG_MAX_USABLE_MEMORY_REGIONS))
+    {
+        zerOS_early_printk(
+            "zerOS: too many usable memory regions found (%u)\n",
+            EPRI_CAST(u, usable_count)
+        );
+        zerOS_hcf();
+    }
 }
 
 BOOT_FUNC
