@@ -256,7 +256,7 @@ static void copy_memmap_entries(void)
         zerOS_early_printk("zerOS: no usable memory regions found\n");
         zerOS_hcf();
     }
-    if (unlikely(usable_count >= zerOS_CONFIG_MAX_USABLE_MEMORY_REGIONS))
+    if (unlikely(usable_count > zerOS_CONFIG_MAX_USABLE_MEMORY_REGIONS))
     {
         zerOS_early_printk(
             "zerOS: too many usable memory regions found (%u)\n",

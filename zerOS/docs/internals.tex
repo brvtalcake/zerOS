@@ -1,0 +1,37 @@
+\documentclass{report}
+
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage[skip=10pt, indent=0pt]{parskip}
+
+% Make it bold and a bit smaller
+\newcommand{\FIXME}[1]{\small\textbf{FIXME: #1}\normalsize}
+\newcommand{\TODO}[1]{\small\textbf{TODO: #1}\normalsize}
+
+\hypersetup{
+    breaklinks,
+    colorlinks=false,
+    pdfborder={0 0 0}
+}
+
+\title{zerOS Internals Documentation}
+\author{Axel PASCON}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\tableofcontents
+
+\chapter{Introduction}
+
+\include{internals/introduction.tex}
+
+\chapter{Boot process}
+
+\include{internals/boot.tex}
+
+\end{document}

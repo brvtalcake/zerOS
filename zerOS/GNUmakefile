@@ -48,6 +48,9 @@ override HEADER_DEPS := $(addprefix obj/,$(CFILES:.c=.c.d) $(GCCASFILES:.S=.S.d)
 override KERNEL_SUPDEF_CONFIG := include/config.sd
 override CONFIG_DEPS := $(shell find -L include/config.d/ -type f)
 
+override TEXFILES := $(shell find -L docs -type f -name '*.tex')
+override NOT_TEXFILES := $(shell find -L docs -type f -not -name '*.tex')
+
 override KERNEL_MAP := linker-$(KARCH).ld
 
 include gnumake/printvar.mk
@@ -283,9 +286,16 @@ run_debug: bin/$(KERNEL).iso
 	$(call CMD,1,find -name debugcon.log -print -delete,DEL,debugcon.log)
 	$(call START_DBG_SESSION,$<)
 
+.PHONY: docs
+docs: cleandocs
+	$(call CMD,1,{ cd docs && latex2pdf internals.tex > /dev/null; },LATEX2PDF,docs/internals.tex)
+
 # Remove object files and the final executable.
-.PHONY: clean
-clean:
+.PHONY: clean cleandocs
+cleandocs:
+	$(call CMD,1,rm -f $(NOT_TEXFILES),RM,$(NOT_TEXFILES))
+
+clean: cleandocs
 	$(call CMD,1,rm -rf bin,RM,bin)
 	$(call CMD,1,rm -rf obj,RM,obj)
 	$(call CMD,1,rm -f include/kernel/generated/sections.h,RM,include/kernel/generated/sections.h)

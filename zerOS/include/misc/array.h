@@ -4,12 +4,12 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#undef  ARRAY_LEN
+#undef  ALEN
 /**
- * @def ARRAY_LEN
+ * @def ALEN(array)
  * @brief Get the length of an array.
  * @param array The array to get the length of.
  */
-#define ARRAY_LEN(array) (sizeof(array) / sizeof((array)[0]))
+#define ALEN(array) (sizeof(array) / sizeof((array)[0]))
 
 #endif

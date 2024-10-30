@@ -1,0 +1,31 @@
+\section[Overview]{Boot process overview}
+
+Before the kernel can jump to the "main" code, some setup code is required. For example, since we may want to use some processor-specific instructions (such as SSE extensions, or AVX ones), we need to enable them.
+
+We also need to setup a proper stack, GDT, IDT, etc\dots We also initialize important parts of zerOS, such as its memory manager, and its scheduler.
+
+Hence, this chapter will detail the boot process of zerOS, from the bootloader to the kernel.
+
+\section{Bootloaders}
+
+zerOS will support different bootloaders, wich are detailed in the following sections. At the time of writing, only \hyperref[sec:limine]{Limine} is supported.
+
+\subsection{Multiboot2}
+
+\FIXME{Multiboot2 support is not implemented yet.}
+
+\subsection{Limine}
+
+\label{sec:limine}
+
+Although Limine allows to boot on a lot of different firmware/architecture combinations, only UEFI/x86-64 is supported by zerOS, for now.
+
+\TODO{Provide a list of used Limine bootloader requests, why we need them, and how they are handled by zerOS.}
+
+\subsection{UEFI boot stub}
+
+\FIXME{UEFI boot stub support is not implemented yet.}
+
+\subsection{µloader}
+
+\FIXME{µloader support is not implemented yet.}
