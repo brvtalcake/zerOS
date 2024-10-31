@@ -23,6 +23,8 @@ static_assert(
 typedef zerOS_BITSET_UNDERLYING_TYPE* bitset_t;
 
 // TODO (fixme): All bitset operation are dependent on the underlying type being used
+// TODO: Make `set_all` and `clear_all` functions accept the size of bits instead of the size of zerOS_BITSET_UNDERLYING_TYPE
+//    composing the bitset
 
 static inline void zerOS_bitset_set(bitset_t bitset, size_t bit)
 {

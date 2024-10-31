@@ -27,7 +27,5 @@ extern void zerOS_hcf(void)
 {
     zerOS_cli();
     while (true)
-    {
         zerOS_halt();
-    }
 }

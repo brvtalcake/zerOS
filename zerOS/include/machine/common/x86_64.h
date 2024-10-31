@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
+#include <stdalign.h>
 #include <x86intrin.h>
 
 #include <klibc/misc.h>
@@ -20,6 +21,7 @@ typedef uint_fast32_t zerOS_fast_uint_t;
 
 static constexpr size_t zerOS_fast_uint_size = sizeof(zerOS_fast_uint_t);
 static constexpr size_t zerOS_fast_uint_bits = zerOS_fast_uint_size * 8;
+static constexpr size_t zerOS_fast_uint_align = alignof(zerOS_fast_uint_t);
 
 static constexpr zerOS_fast_uint_t zerOS_fast_uint_max = UINT_FAST32_MAX;
 
