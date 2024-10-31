@@ -21,6 +21,7 @@
 #include <klibc/alloca.h>
 #include <klibc/string.h>
 
+#if 0
 // TODO: Make this struct accept size in number of bits (i.e. number of pages) instead of size in number of zerOS_BITSET_UNDERLYING_TYPE elements
 struct pmm_basic_manager
 {
@@ -31,6 +32,17 @@ struct pmm_basic_manager
     size_t next_free;          ///< The index of the next free page, in the bitmap.
     size_t size;               ///< The size of the bitmap, in bitmap elements (i.e. page_count / zerOS_fast_uint_bits or size_in_bytes / sizeof(zerOS_fast_uint_t)).
 };
+#else
+struct pmm_basic_manager
+{
+    size_t limine_entry_index; ///< The index of the limine entry.
+    size_t base_page_index;    ///< The index of the first page, in physical memory.
+    bitset_t bitmap;           ///< The bitmap.
+    bitset_t bitmap_physaddr;  ///< The physical address of the bitmap.
+    size_t next_free;          ///< The index of the next free page, in the bitmap.
+    size_t size;               ///< The size of the bitmap, in bits (i.e. page_count or size_in_bytes * __CHAR_BIT__).
+};
+#endif
 
 static struct pmm_basic_manager pmm_main_managers[zerOS_CONFIG_MAX_USABLE_MEMORY_REGIONS];
 
@@ -84,7 +96,7 @@ static void init_basic_managers(
         struct pmm_basic_manager* manager = &pmm_main_managers[realind];
         manager->limine_entry_index = manageable[realind];
         manager->base_page_index = entry->base / zerOS_PAGE_SIZE;
-        manager->size = needs[realind] / sizeof(zerOS_fast_uint_t);
+        manager->size = needs[realind] * 8;
         manager->bitmap_physaddr = (bitset_t)current_offset;
         manager->bitmap = (bitset_t)(hhdm_offset + current_offset);
         manager->next_free = 0;
@@ -97,6 +109,12 @@ static void init_basic_managers(
         if (entry == bitmap_entry)
         {
             const size_t max_managed_page_index = (entry->length / zerOS_PAGE_SIZE);
+            if (max_managed_page_index != manager->size)
+            {
+                zerOS_early_printk("zerOS: logic error: assertion failed\n");
+                zerOS_hcf();
+            }
+
             const size_t occupied_pages = (needs_sum / zerOS_PAGE_SIZE) + ((needs_sum % zerOS_PAGE_SIZE) != 0 ? 1 : 0); 
             for (size_t j = 0; j < occupied_pages; j++)
                 zerOS_bitset_set(manager->bitmap, j);

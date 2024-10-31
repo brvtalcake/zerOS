@@ -4,33 +4,41 @@
 #include <machine/common/x86_64.h>
 
 // TODO: Implement the following function with AVX2 instead
-static inline void zerOS_fast_uint_set_vectorized(zerOS_fast_uint_t* array, size_t size, zerOS_fast_uint_t value)
+/**
+ * @brief Set all elements of an array of `length` elements of type `zerOS_fast_uint_t` to a given value, possibly using vectorized instructions.
+ * 
+ * @param array The array to set.
+ * @param length The length of the array.
+ * @param value The value to set the array to.
+ */
+static void zerOS_fast_uint_set_vectorized(zerOS_fast_uint_t* array, size_t length, zerOS_fast_uint_t value)
 {
+    size_t remaining = length;
     if (FAST_UINT_BITS(32))
     {
         const __m128i vector_value = _mm_set1_epi32(value);
-        zerOS_fast_uint_t* array_aligned_up = (zerOS_fast_uint_t*)((uintptr_t)array & ~(16 - 1));
+        zerOS_fast_uint_t* array_aligned_up = (zerOS_fast_uint_t*)((uintptr_t)array & ~((uintptr_t)16U - 1));
 
         // Fill the unaligned part
-        while ((uintptr_t)array < (uintptr_t)array_aligned_up && size)
+        while ((uintptr_t)array < (uintptr_t)array_aligned_up && remaining)
         {
             *array++ = value;
-            size--;
+            remaining--;
         }
 
         // Fill the aligned part
-        while (size >= 4)
+        while (remaining >= 4)
         {
             _mm_store_si128((__m128i*)array, vector_value);
             array += 4;
-            size -= 4;
+            remaining -= 4;
         }
 
         // Fill the unaligned part
-        while (size)
+        while (remaining)
         {
             *array++ = value;
-            size--;
+            remaining--;
         }
 
         return;
@@ -38,28 +46,28 @@ static inline void zerOS_fast_uint_set_vectorized(zerOS_fast_uint_t* array, size
     else if (FAST_UINT_BITS(64))
     {
         const __m128i vector_value = _mm_set1_epi64x(value);
-        zerOS_fast_uint_t* array_aligned_up = (zerOS_fast_uint_t*)((uintptr_t)array & ~(16 - 1));
+        zerOS_fast_uint_t* array_aligned_up = (zerOS_fast_uint_t*)((uintptr_t)array & ~((uintptr_t)16U - 1));
 
         // Fill the unaligned part
-        while ((uintptr_t)array < (uintptr_t)array_aligned_up && size)
+        while ((uintptr_t)array < (uintptr_t)array_aligned_up && remaining)
         {
             *array++ = value;
-            size--;
+            remaining--;
         }
 
         // Fill the aligned part
-        while (size >= 2)
+        while (remaining >= 2)
         {
             _mm_store_si128((__m128i*)array, vector_value);
             array += 2;
-            size -= 2;
+            remaining -= 2;
         }
 
         // Fill the unaligned part
-        while (size)
+        while (remaining)
         {
             *array++ = value;
-            size--;
+            remaining--;
         }
 
         return;
