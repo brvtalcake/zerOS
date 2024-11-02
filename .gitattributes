@@ -27,10 +27,10 @@ toolchain/** linguist-vendored
 *.ldscript linguist-detectable
 *.ld.template linguist-detectable
 
-scripts/pickled/* -language-detectable
-*.pickle -language-detectable
-*.dill -language-detectable
-*.marshal -language-detectable
+scripts/pickled/* -linguist-detectable
+*.pickle -linguist-detectable
+*.dill -linguist-detectable
+*.marshal -linguist-detectable
 
 zerOS/gnumake/*gmsl* linguist-vendored
 zerOS/gnumake/*gmsl*/** linguist-vendored
