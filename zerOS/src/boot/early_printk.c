@@ -1,27 +1,28 @@
+#include <limits.h>
 #include <stdarg.h>
 #include <stdbool.h>
-#include <stdint.h>
 #include <stddef.h>
-#include <limits.h>
+#include <stdint.h>
 
-#include <kernel/qemu.h>
-#include <kernel/serial/ports.h>
-#include <kernel/compiler/cast.h>
-
-#include <misc/sections.h>
-#include <misc/printf.h>
+#include <chaos/preprocessor/cat.h>
+#include <chaos/preprocessor/punctuation.h>
+#include <chaos/preprocessor/recursion/basic.h>
+#include <chaos/preprocessor/recursion/expr.h>
+#include <chaos/preprocessor/seq/for_each.h>
+#include <chaos/preprocessor/seq/for_each_i.h>
+#include <chaos/preprocessor/seq/size.h>
+#include <chaos/preprocessor/stringize.h>
 
 #include <klibc/preprocessor/seq.h>
 
-#include <chaos/preprocessor/recursion/basic.h>
-#include <chaos/preprocessor/recursion/expr.h>
-#include <chaos/preprocessor/punctuation.h>
-#include <chaos/preprocessor/seq/size.h>
-#include <chaos/preprocessor/seq/for_each_i.h>
-#include <chaos/preprocessor/seq/for_each.h>
-#include <chaos/preprocessor/stringize.h>
-#include <chaos/preprocessor/cat.h>
+#include <kernel/compiler/cast.h>
+#include <kernel/qemu.h>
+#include <kernel/serial/ports.h>
 
+#include <misc/printf.h>
+#include <misc/sections.h>
+
+// clang-format off
 #undef  __digit_chars_lower
 #undef  __digit_chars_upper
 #undef  __digit_chars_len
@@ -54,6 +55,8 @@
         )                                       \
     )
 
+// clang-format on
+
 #if 0
 #ifndef __INTELLISENSE__
 static const char lut_lower[] = __digits_tablelookup_build(__digit_chars_lower);
@@ -84,7 +87,7 @@ static const int8_t    mins8   = INT8_MIN;
 BOOT_FUNC
 static inline void* boot_memcpy(void* restrict dest, const void* restrict src, size_t n)
 {
-    unsigned char* d = dest;
+    unsigned char*       d = dest;
     const unsigned char* s = src;
     while (n--)
         *d++ = *s++;
@@ -92,10 +95,7 @@ static inline void* boot_memcpy(void* restrict dest, const void* restrict src, s
 }
 
 BOOT_FUNC
-static bool is_transmit_empty(enum zerOS_serial_port port)
-{
-    return zerOS_inb(port + 5) & 0x20;
-}
+static bool is_transmit_empty(enum zerOS_serial_port port) { return zerOS_inb(port + 5) & 0x20; }
 
 BOOT_FUNC
 static void write_serial(enum zerOS_serial_port port, char a)
@@ -103,7 +103,8 @@ static void write_serial(enum zerOS_serial_port port, char a)
     if (!zerOS_in_qemu() || !zerOS_CONFIG_UNDER_QEMU)
         return;
 
-    while (is_transmit_empty(port) == 0);
+    while (is_transmit_empty(port) == 0)
+        ;
 
     zerOS_outb(port, a);
 }
@@ -150,9 +151,9 @@ extern int zerOS_early_vprintk(const char* str, va_list varargs)
             {
                 case 'd': {
                     static const char basic_lut[] = "0123456789";
-                    int64_t value = va_arg(varargs, int64_t);
-                    char buffer[64];
-                    int i = 0;
+                    int64_t           value       = va_arg(varargs, int64_t);
+                    int               i           = 0;
+                    char              buffer[64];
                     if (value < 0)
                     {
                         write_serial(zerOS_SERIAL_DEBUG, '-');
@@ -163,7 +164,7 @@ extern int zerOS_early_vprintk(const char* str, va_list varargs)
                     do
                     {
                         buffer[i++] = basic_lut[value % 10];
-                        value /= 10;
+                        value      /= 10;
                     } while (value);
                     while (i--)
                     {
@@ -171,16 +172,17 @@ extern int zerOS_early_vprintk(const char* str, va_list varargs)
                         write_debugcon(buffer[i]);
                         written++;
                     }
-                } break;
+                }
+                break;
                 case 'u': {
                     static const char basic_lut[] = "0123456789";
-                    uint64_t value = va_arg(varargs, uint64_t);
-                    char buffer[64];
-                    int i = 0;
+                    uint64_t          value       = va_arg(varargs, uint64_t);
+                    int               i           = 0;
+                    char              buffer[64];
                     do
                     {
                         buffer[i++] = basic_lut[value % 10];
-                        value /= 10;
+                        value      /= 10;
                     } while (value);
                     while (i--)
                     {
@@ -188,16 +190,17 @@ extern int zerOS_early_vprintk(const char* str, va_list varargs)
                         write_debugcon(buffer[i]);
                         written++;
                     }
-                } break;                    
+                }
+                break;
                 case 'x': {
                     static const char basic_lut_lower[] = "0123456789abcdef";
-                    uint64_t value = va_arg(varargs, uint64_t);
-                    char buffer[64];
-                    int i = 0;
+                    uint64_t          value             = va_arg(varargs, uint64_t);
+                    int               i                 = 0;
+                    char              buffer[64];
                     do
                     {
                         buffer[i++] = basic_lut_lower[value % 16];
-                        value /= 16;
+                        value      /= 16;
                     } while (value);
                     while (i--)
                     {
@@ -205,16 +208,17 @@ extern int zerOS_early_vprintk(const char* str, va_list varargs)
                         write_debugcon(buffer[i]);
                         written++;
                     }
-                } break;
+                }
+                break;
                 case 'X': {
                     static const char basic_lut_upper[] = "0123456789ABCDEF";
-                    uint64_t value = va_arg(varargs, uint64_t);
-                    char buffer[64];
-                    int i = 0;
+                    uint64_t          value             = va_arg(varargs, uint64_t);
+                    int               i                 = 0;
+                    char              buffer[64];
                     do
                     {
                         buffer[i++] = basic_lut_upper[value % 16];
-                        value /= 16;
+                        value      /= 16;
                     } while (value);
                     while (i--)
                     {
@@ -222,16 +226,17 @@ extern int zerOS_early_vprintk(const char* str, va_list varargs)
                         write_debugcon(buffer[i]);
                         written++;
                     }
-                } break;
+                }
+                break;
                 case 'p': {
                     static const char basic_lut_lower[] = "0123456789abcdef";
-                    uintptr_t value = va_arg(varargs, uintptr_t);
-                    char buffer[64];
-                    int i = 0;
+                    uintptr_t         value             = va_arg(varargs, uintptr_t);
+                    int               i                 = 0;
+                    char              buffer[64];
                     do
                     {
                         buffer[i++] = basic_lut_lower[value % 16];
-                        value /= 16;
+                        value      /= 16;
                     } while (value);
                     while (i--)
                     {
@@ -239,16 +244,17 @@ extern int zerOS_early_vprintk(const char* str, va_list varargs)
                         write_debugcon(buffer[i]);
                         written++;
                     }
-                } break;
+                }
+                break;
                 case 'b': {
                     static const char basic_lut[] = "01";
-                    uint64_t value = va_arg(varargs, uint64_t);
-                    char buffer[64];
-                    int i = 0;
+                    uint64_t          value       = va_arg(varargs, uint64_t);
+                    int               i           = 0;
+                    char              buffer[64];
                     do
                     {
                         buffer[i++] = basic_lut[value % 2];
-                        value /= 2;
+                        value      /= 2;
                     } while (value);
                     while (i--)
                     {
@@ -256,16 +262,17 @@ extern int zerOS_early_vprintk(const char* str, va_list varargs)
                         write_debugcon(buffer[i]);
                         written++;
                     }
-                } break;
+                }
+                break;
                 case 'o': {
                     static const char basic_lut[] = "01234567";
-                    uint64_t value = va_arg(varargs, uint64_t);
-                    char buffer[64];
-                    int i = 0;
+                    uint64_t          value       = va_arg(varargs, uint64_t);
+                    int               i           = 0;
+                    char              buffer[64];
                     do
                     {
                         buffer[i++] = basic_lut[value % 8];
-                        value /= 8;
+                        value      /= 8;
                     } while (value);
                     while (i--)
                     {
@@ -273,13 +280,15 @@ extern int zerOS_early_vprintk(const char* str, va_list varargs)
                         write_debugcon(buffer[i]);
                         written++;
                     }
-                } break;
+                }
+                break;
                 case 'c': {
                     char value = va_arg(varargs, int);
                     write_serial(zerOS_SERIAL_DEBUG, value);
                     write_debugcon(value);
                     written++;
-                } break;
+                }
+                break;
                 case 's': {
                     const char* value = va_arg(varargs, const char*);
                     while (*value)
@@ -289,19 +298,22 @@ extern int zerOS_early_vprintk(const char* str, va_list varargs)
                         written++;
                         value++;
                     }
-                } break;
+                }
+                break;
                 case 'n': {
-                    BOOT_FUNC PRINTF_LIKE(1, 2)
-                    extern int zerOS_early_printk(const char* str, ...);
+                    BOOT_FUNC PRINTF_LIKE(1, 2) extern int zerOS_early_printk(const char* str, ...);
                     written += zerOS_early_printk("%d", written);
-                } break;
+                }
+                break;
                 case '%': {
                     write_serial(zerOS_SERIAL_DEBUG, '%');
                     write_debugcon('%');
                     written++;
-                } break;
+                }
+                break;
 
-                default: break;
+                default:
+                    break;
             }
         }
         else
@@ -326,7 +338,7 @@ BOOT_FUNC
  */
 extern int zerOS_early_printk(const char* str, ...)
 {
-    int written = 0;
+    int     written = 0;
     va_list args;
 
     va_start(args, str);

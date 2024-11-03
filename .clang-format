@@ -1,0 +1,292 @@
+AccessModifierOffset: 0
+
+AlignAfterOpenBracket: BlockIndent
+
+AlignArrayOfStructures: Right
+
+AlignConsecutiveAssignments:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: false
+  AlignCompound: true
+  PadOperators: false
+
+AlignConsecutiveBitFields: Consecutive
+
+AlignConsecutiveDeclarations:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: false
+  AlignFunctionDeclarations: true
+  AlignFunctionPointers: true
+
+AlignConsecutiveMacros: Consecutive
+
+AlignConsecutiveShortCaseStatements:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: false
+  AlignCaseColons: true
+
+AlignEscapedNewlines: Left
+
+AlignOperands: AlignAfterOperator
+
+AlignTrailingComments:
+  Kind: Always
+  OverEmptyLines: 1
+
+AllowAllArgumentsOnNextLine: true
+
+AllowAllParametersOfDeclarationOnNextLine: true
+
+AllowShortBlocksOnASingleLine: Empty
+
+AllowShortCaseLabelsOnASingleLine: false
+
+AllowShortEnumsOnASingleLine: false
+
+AllowShortFunctionsOnASingleLine: All
+
+AllowShortIfStatementsOnASingleLine: Never
+
+AllowShortLoopsOnASingleLine: false
+
+AlwaysBreakBeforeMultilineStrings: false
+
+AttributeMacros: []
+
+BinPackArguments: true
+
+BinPackParameters: BinPack
+#BinPackParameters: true
+
+BitFieldColonSpacing: Both
+
+BracedInitializerIndentWidth: 2
+
+BraceWrapping:
+  AfterCaseLabel: false
+  AfterClass: true
+  AfterControlStatement: Always #MultiLine
+  AfterEnum: true
+  AfterFunction: true
+  AfterStruct: true
+  AfterUnion: true
+  AfterExternBlock: true
+  BeforeCatch: true
+  BeforeElse: true
+  BeforeWhile: false # ('do while' constructs)
+  IndentBraces: false
+  SplitEmptyFunction: false
+  SplitEmptyRecord: false
+  SplitEmptyNamespace: false
+
+BreakAdjacentStringLiterals: true
+
+BreakAfterAttributes: Leave
+
+BreakAfterReturnType: ExceptShortType
+
+BreakBeforeBinaryOperators: None # or maybe 'All' ?
+
+BreakBeforeBraces: Custom
+
+BreakBeforeInlineASMColon: Always # fixme: 'OnlyMultiLine' not recognised
+
+BreakBeforeTernaryOperators: false # todo: try true
+
+BreakBinaryOperations: RespectPrecedence
+
+BreakFunctionDefinitionParameters: false
+
+BreakStringLiterals: true
+
+ColumnLimit: 100 # todo: try smaller values
+
+CommentPragmas: '^ IWYU pragma:'
+
+ContinuationIndentWidth: 2
+
+DeriveLineEnding: false
+
+DerivePointerAlignment: false
+
+DisableFormat: false
+
+EmptyLineAfterAccessModifier: Never
+
+EmptyLineBeforeAccessModifier: Always
+
+ForEachMacros: [ ]
+
+IfMacros: [ ]
+
+IncludeBlocks: Regroup
+
+IncludeCategories:
+  # Config
+  - Regex: '^<config\.h>$'
+    Priority: -20
+  # External libraries
+  - Regex: '^<limine\.h>$'
+    Priority: -2
+  - Regex: '^<grapheme\.h>$'
+    Priority: -2
+  - Regex: '^<incbin\.h>$'
+    Priority: -2
+  - Regex: '^<stb.+\.h>$'
+    Priority: -2
+  # External preprocessor libraries
+  - Regex: '^<chaos/.+>$'
+    Priority: -1
+  - Regex: '^<pp_empty/.+>$'
+    Priority: -1
+  - Regex: '^<map/map\.h>$'
+    Priority: -1
+  # Klibc
+  - Regex: '^<klibc/.+>$'
+    Priority: 1
+  # Kernel headers
+  - Regex: '^<kernel/.+>$'
+    Priority: 2
+  # Machine-specific headers
+  - Regex: '^<machine/.+>$'
+    Priority: 3
+  # Miscellaneous headers
+  - Regex: '^<misc/.+>$'
+    Priority: 4
+  # Standard C headers
+  - Regex: '^<.+>$'
+    Priority: -10
+  # Local headers
+  - Regex: '^".+"$'
+    Priority: 10
+
+IncludeIsMainRegex: '([Mm]ain|[Tt]est)'
+
+IndentAccessModifiers: false
+
+IndentCaseBlocks: false
+
+IndentCaseLabels: true
+
+IndentExternBlock: Indent
+
+IndentGotoLabels: true
+
+IndentPPDirectives: BeforeHash
+
+IndentWidth: 4
+
+IndentWrappedFunctionNames: false
+
+InsertBraces: false
+
+InsertNewlineAtEOF: true
+
+InsertTrailingCommas: None
+
+IntegerLiteralSeparator:
+  Binary: 4
+  BinaryMinDigits: 4
+  Decimal: 3
+  DecimalMinDigits: 5
+  Hex: 2
+  HexMinDigits: 6
+
+KeepEmptyLines:
+  AtEndOfFile: false
+  AtStartOfBlock: false
+  AtStartOfFile: false
+
+KeepFormFeed: false
+
+Language: Cpp
+
+LineEnding: LF
+
+MacroBlockBegin: ''
+
+MacroBlockEnd: ''
+
+Macros: [ ]
+
+MainIncludeChar: AngleBracket
+
+MaxEmptyLinesToKeep: 1
+
+PPIndentWidth: 4
+
+PointerAlignment: Left
+
+QualifierAlignment: Leave
+
+ReflowComments: Always
+
+RemoveBracesLLVM: false
+
+RemoveEmptyLinesInUnwrappedLines: true
+
+RemoveParentheses: Leave
+
+RemoveSemicolon: false
+
+SeparateDefinitionBlocks: Leave
+
+SkipMacroDefinitionBody: false
+
+SortIncludes: CaseSensitive
+
+SpaceAfterCStyleCast: false
+
+SpaceAfterLogicalNot: false
+
+SpaceAroundPointerQualifiers: Default
+
+SpaceBeforeAssignmentOperators: true
+
+SpaceBeforeCaseColon: false
+
+SpaceBeforeCpp11BracedList: false
+
+SpaceBeforeParens: ControlStatements # todo: use custom with 'SpaceBeforeParensOptions'
+
+SpaceBeforeSquareBrackets: false
+
+SpaceInEmptyBlock: true
+
+SpacesBeforeTrailingComments: 1
+
+SpacesInAngles: Leave
+
+SpacesInLineCommentPrefix:
+  Minimum:  1
+  Maximum: -1 # disable the maximum
+
+SpacesInParens: Custom
+
+SpacesInParensOptions:
+  ExceptDoubleParentheses: true
+  InConditionalStatements: false
+  InCStyleCasts: false
+  InEmptyParentheses: false
+  Other: false
+
+SpacesInSquareBrackets: false
+
+Standard: Latest
+
+StatementAttributeLikeMacros: [ ]
+
+StatementMacros: [ ]
+
+TabWidth: 4
+
+TypeNames: [ ]
+
+TypenameMacros: [ ]
+
+UseTab: Never
+
+WhitespaceSensitiveMacros: [ ]
