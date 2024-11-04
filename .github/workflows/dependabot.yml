@@ -1,0 +1,36 @@
+
+name: 'Dependency review'
+on:
+  pull_request:
+    branches: 
+      - "main"
+      - "**/dev/**"
+      - "release/**"
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+  push:
+    branches: 
+      - "main"
+      - "**/dev/**"
+      - "release/**"
+
+permissions:
+  contents: read
+  # Write permissions for pull-requests are required for using the `comment-summary-in-pr` option, comment out if you aren't using this option
+  pull-requests: write
+
+jobs:
+  dependency-review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 'Checkout repository'
+        uses: actions/checkout@v4
+      - name: 'Dependency Review'
+        uses: actions/dependency-review-action@v4
+        with:
+          comment-summary-in-pr: always
+          fail-on-severity: low
+          deny-licenses: GPL-1.0-or-later, LGPL-2.0-or-later

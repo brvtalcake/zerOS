@@ -1,0 +1,80 @@
+
+name: 'Manual dependency review'
+on:
+  workflow_dispatch:
+    inputs:
+      # Associated to `allow-licenses` or `deny-licenses` workflow options
+      license-selection:
+        description: 'Select the licenses to deny or allow'
+        required: true
+        type: string
+        default: 'GPL-1.0-or-later, LGPL-2.0-or-later'
+      # Describes what the previous selection will do
+      license-action:
+        description: 'Select the action to take on the selected licenses'
+        required: true
+        type: choice
+        default: deny
+        options:
+          - deny
+          - allow
+      # Associated to `fail-on-severity` workflow option
+      severity-selection:
+        description: 'Select the severity level to fail on'
+        required: true
+        type: choice
+        default: low
+        options:
+          - low
+          - moderate
+          - high
+          - critical
+      # Associated to `warn-only` workflow option
+      warn-only:
+        description: 'Select whether to fail the workflow or just warn'
+        required: true
+        type: boolean
+        default: false
+      # Associated to `fail-on-scopes` workflow option
+      scopes:
+        description: 'Select the scopes to run the action on'
+        required: true
+        type: choice
+        options:
+          - runtime
+          - development
+          - unknown
+        default: runtime
+
+permissions:
+  contents: read
+  # Write permissions for pull-requests are required for using the `comment-summary-in-pr` option, comment out if you aren't using this option
+  # pull-requests: write
+
+jobs:
+  dependency-review_with_allow_licenses:
+    runs-on: ubuntu-latest
+    if: ${{ inputs['license-action'] == 'allow' }}
+    steps:
+      - name: 'Checkout repository'
+        uses: actions/checkout@v4
+      - name: 'Dependency Review'
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: ${{ inputs['severity-selection'] }}
+          allow-licenses: ${{ inputs['license-selection'] }}
+          warn-only: ${{ inputs['warn-only'] }}
+          fail-on-scopes: ${{ inputs['scopes'] }}
+  dependency-review_with_deny_licenses:
+    runs-on: ubuntu-latest
+    if: ${{ inputs['license-action'] == 'deny' }}
+    steps:
+      - name: 'Checkout repository'
+        uses: actions/checkout@v4
+      - name: 'Dependency Review'
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: ${{ inputs['severity-selection'] }}
+          deny-licenses: ${{ inputs['license-selection'] }}
+          warn-only: ${{ inputs['warn-only'] }}
+          fail-on-scopes: ${{ inputs['scopes'] }}
