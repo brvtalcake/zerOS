@@ -46,7 +46,7 @@ on:
           - critical
       # Associated to `warn-only` workflow option
       warn-only:
-        description: 'Select whether to fail the workflow or just warn'
+        description: 'Only warn about the issues without failing the workflow'
         required: true
         type: boolean
         default: false
