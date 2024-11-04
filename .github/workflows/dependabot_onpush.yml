@@ -1,21 +1,20 @@
 
 name: 'Dependency review'
 on:
-  pull_request:
+  push:
     branches: 
       - "main"
       - "**/dev/**"
       - "release/**"
-    types:
-      - opened
-      - synchronize
-      - reopened
-      - ready_for_review
 
 permissions:
   contents: read
   # Write permissions for pull-requests are required for using the `comment-summary-in-pr` option, comment out if you aren't using this option
-  pull-requests: write
+  # pull-requests: write
+
+env:
+  HEAD_REF: ${{ github.event.ref }}
+  BASE_REF: ${{ (github.event.base_ref != null) && github.event.base_ref || github.event.ref }}
 
 jobs:
   dependency-review:
@@ -29,3 +28,5 @@ jobs:
           comment-summary-in-pr: always
           fail-on-severity: low
           deny-licenses: GPL-1.0-or-later, LGPL-2.0-or-later
+          base-ref: ${{ env.BASE_REF }}
+          head-ref: ${{ env.HEAD_REF }}
