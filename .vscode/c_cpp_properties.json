@@ -1,0 +1,48 @@
+{
+    "version": 4,
+    "configurations": [
+        {
+            "name": "Linux_ZerOS_kernel",
+            "includePath": [
+                "${workspaceFolder}/zerOS/include/",
+                "${workspaceFolder}/zerOS/third_party/",
+                "${workspaceFolder}/zerOS/third_party/incbin/",
+                "${workspaceFolder}/zerOS/third_party/stb/",
+                "${workspaceFolder}/zerOS/third_party/chaos-pp/",
+                "${workspaceFolder}/toolchain/install/lib/gcc/x86_64-elf/14.2.0/include",
+                "${workspaceFolder}/toolchain/install/lib/gcc/x86_64-elf/14.2.0/include-fixed",
+                "${workspaceFolder}/toolchain/install/include"
+            ],
+            "browse": {
+                "path": [
+                    "${workspaceFolder}",
+                    "${workspaceFolder}/zerOS/include",
+                    "${workspaceFolder}/toolchain/install/lib/gcc/x86_64-elf/14.2.0/include",
+                    "${workspaceFolder}/toolchain/install/lib/gcc/x86_64-elf/14.2.0/include-fixed",
+                    "${workspaceFolder}/toolchain/install/include"
+                ]
+                //"limitSymbolsToIncludedHeaders": true,
+                //"databaseFilename": ""
+            },
+            "defines": [
+                //"_GNU_SOURCE=1",
+                //"_LARGEFILE64_SOURCE=1",
+                //"_FILE_OFFSET_BITS=64",
+                //"_GLIBCXX_CONCEPT_CHECKS=1",
+                //"_GLIBCXX_ASSERTIONS=1",
+                //"_FORTIFY_SOURCE=2",
+                //"_LARGEFILE_SOURCE=1",
+                //"_TIME_BITS=64"
+            ],
+            "compilerPath": "${workspaceFolder}/toolchain/install/bin/x86_64-elf-gcc",
+            "cStandard": "gnu23",
+            "cppStandard": "gnu++23",
+            "intelliSenseMode": "gcc-x64",
+            "compilerArgs": [
+                "-O3",
+                "-ffreestanding"
+            ],
+            "mergeConfigurations": true
+        }
+    ]
+}

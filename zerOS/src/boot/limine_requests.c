@@ -196,7 +196,9 @@ static inline void* boot_memcpy(void* restrict dest, const void* restrict src, s
     return dest;
 }
 
-#undef __assert_good_response
+// clang-format off
+#undef  __assert_good_response
+// clang-format on
 #define __assert_good_response(request, additionalchecks)                                         \
     if ((request).response == nullptr ||                                                          \
         (request).revision != LIMINE_REQUESTED_REVISION ||                                        \

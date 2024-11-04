@@ -3,13 +3,14 @@
 
 #include <stdarg.h>
 
-#include <misc/sections.h>
-#include <misc/printf.h>
+#include <chaos/preprocessor/cat.h>
 
 #include <kernel/compiler/cast.h>
 
-#include <chaos/preprocessor/cat.h>
+#include <misc/printf.h>
+#include <misc/sections.h>
 
+// clang-format off
 #undef  EPRI_CAST
 #define EPRI_CAST(fmt_spec, ...) CHAOS_PP_CAT(__EPRI_CAST_, fmt_spec)(__VA_ARGS__)
 
@@ -32,6 +33,7 @@
 #define __EPRI_CAST_o(value) reinterpret_cast(uint64_t,    (value))
 #define __EPRI_CAST_c(value) reinterpret_cast(int,         (value))
 #define __EPRI_CAST_s(value) reinterpret_cast(const char*, (value))
+// clang-format on
 
 BOOT_FUNC
 extern int zerOS_early_vprintk(const char* str, va_list varargs);

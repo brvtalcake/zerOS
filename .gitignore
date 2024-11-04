@@ -6,7 +6,7 @@
 *.txt
 toolchain/**
 config-temp/**
-.vscode/
+#.vscode/
 **/__pycache__/
 *.aux
 *.log
