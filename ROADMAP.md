@@ -26,3 +26,11 @@
 ### 29/12/2024
 
 - [ ] start writing a task system, with a custom scheduler (?) (based on a multicore priority-based round robin scheduler)
+
+## TODO
+
+Below are some lists of not-already-planned features. Some of them may actually never be implemented, because unfeasible, unrealistic, or just not appropriate to kernel coding. However, for now, these are still some potential feature ideas.
+
+### Unsorted TODOs
+
+- [ ] implement a reference-counting garbage collector
