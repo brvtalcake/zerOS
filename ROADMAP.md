@@ -9,6 +9,7 @@
 - [ ] setup per-cpu variables
 - [ ] setup a stack for the kernel
 - [x] configure clang-format or some other formatter
+- [ ] add issue templates, code of conduct, contributing guidelines, dependabot, codeql, etc...
 
 ### 01/12/2024
 
