@@ -74,9 +74,29 @@ env:
   IS_MANUAL: ${{ contains(github.event_name, 'workflow_dispatch') }}
 
 jobs:
-  dependency-review-on-pr:
+  check-must-run:
     runs-on: ubuntu-latest
-    if: ${{ contains(github.event_name, 'pull_request') }}
+    if: ${{ contains(github.event_name, 'pull_request') || contains(github.event_name, 'push') }}
+    outputs:
+      must-run: ${{ steps.check-must-run-output-step.outputs.must-run }}
+    steps:
+      - name: 'Checkout repository'
+        uses: actions/checkout@v4
+      - name: 'Set up python'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: 'pip'
+      - name: 'Install dependencies'
+        run: 'pip3 install -r ./.github/ci-check-must-run/requirements.txt'
+      - name: 'Shall we run the workflow ?'
+        id: check-must-run-output-step
+        working-directory: './'
+        run: './scripts/ci-check-must-run.py'
+  dependency-review-on-pr:
+    needs: check-must-run
+    runs-on: ubuntu-latest
+    if: ${{ contains(github.event_name, 'pull_request') && needs.check-must-run.outputs.must-run == 'true' }}
     steps:
       - name: 'Checkout repository'
         uses: actions/checkout@v4
@@ -87,8 +107,9 @@ jobs:
           fail-on-severity: low
           deny-licenses: GPL-1.0-or-later, LGPL-2.0-or-later
   dependency-review-on-push:
+    needs: check-must-run
     runs-on: ubuntu-latest
-    if: ${{ contains(github.event_name, 'push') }}
+    if: ${{ contains(github.event_name, 'push') && needs.check-must-run.outputs.must-run == 'true' }}
     steps:
       - name: 'Checkout repository'
         uses: actions/checkout@v4

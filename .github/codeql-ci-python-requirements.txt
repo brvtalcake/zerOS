@@ -1,0 +1,10 @@
+beautifulsoup4==4.12.3
+dill==0.3.8
+mpire==2.10.2
+pandas==2.0.3
+pymupdf==1.24.13
+python_gnupg==0.5.3
+Requests==2.32.3
+semantic_version==2.10.0
+tqdm==4.66.4
+tqdm==4.66.1

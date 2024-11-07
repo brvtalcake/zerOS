@@ -16,3 +16,5 @@ config-temp/**
 *.fdb_latexmk
 *.fls
 *.out
+
+!.github/codeql-ci-python-requirements.txt
