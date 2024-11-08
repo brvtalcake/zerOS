@@ -7,6 +7,7 @@
 
 #include <kernel/cpu/cpu.h>
 
+// TODO: optimize so we don't have to call this function every time
 static inline bool zerOS_in_qemu(void)
 {
     struct zerOS_cpuid_info info;

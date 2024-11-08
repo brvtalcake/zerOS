@@ -3,6 +3,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <klibc/preprocessor/empty.h>
+
 #include <machine/path.h>
 #include MK_MACHINE_PATH(fast_data_types.h)
 

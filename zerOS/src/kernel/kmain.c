@@ -14,7 +14,15 @@
 #include <kernel/qemu.h>
 #include <kernel/serial/ports.h>
 
-static bool setup_paging(void) { return true; }
+static bool setup_paging(void)
+{
+    if (!zerOS_init_pmm())
+    {
+        zerOS_early_printk("zerOS: failed to initialize PMM\n");
+        return false;
+    }
+    return true;
+}
 
 static bool setup_printk_subsystem(void) { return true; }
 static bool setup_idt(void) { return true; }

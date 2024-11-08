@@ -57,7 +57,6 @@
 
 // clang-format on
 
-#if 0
 #ifndef __INTELLISENSE__
 static const char lut_lower[] = __digits_tablelookup_build(__digit_chars_lower);
 static const char lut_upper[] = __digits_tablelookup_build(__digit_chars_upper);
@@ -66,23 +65,22 @@ static const char lut_lower[] = "";
 static const char lut_upper[] = "";
 #endif
 
-static const uint128_t maxu128 = UINT128_MAX;
-static const int128_t  maxs128 = INT128_MAX;
-static const uint64_t  maxu64  = UINT64_MAX;
-static const int64_t   maxs64  = INT64_MAX;
-static const uint32_t  maxu32  = UINT32_MAX;
-static const int32_t   maxs32  = INT32_MAX;
-static const uint16_t  maxu16  = UINT16_MAX;
-static const int16_t   maxs16  = INT16_MAX;
-static const uint8_t   maxu8   = UINT8_MAX;
-static const int8_t    maxs8   = INT8_MAX;
+static constexpr const uint128_t maxu128 = UINT128_MAX;
+static constexpr const int128_t  maxs128 = INT128_MAX;
+static constexpr const uint64_t  maxu64  = UINT64_MAX;
+static constexpr const int64_t   maxs64  = INT64_MAX;
+static constexpr const uint32_t  maxu32  = UINT32_MAX;
+static constexpr const int32_t   maxs32  = INT32_MAX;
+static constexpr const uint16_t  maxu16  = UINT16_MAX;
+static constexpr const int16_t   maxs16  = INT16_MAX;
+static constexpr const uint8_t   maxu8   = UINT8_MAX;
+static constexpr const int8_t    maxs8   = INT8_MAX;
 
-static const int128_t  mins128 = INT128_MIN;
-static const int64_t   mins64  = INT64_MIN;
-static const int32_t   mins32  = INT32_MIN;
-static const int16_t   mins16  = INT16_MIN;
-static const int8_t    mins8   = INT8_MIN;
-#endif
+static constexpr const int128_t mins128 = INT128_MIN;
+static constexpr const int64_t  mins64  = INT64_MIN;
+static constexpr const int32_t  mins32  = INT32_MIN;
+static constexpr const int16_t  mins16  = INT16_MIN;
+static constexpr const int8_t   mins8   = INT8_MIN;
 
 BOOT_FUNC
 static inline void* boot_memcpy(void* restrict dest, const void* restrict src, size_t n)
@@ -94,13 +92,21 @@ static inline void* boot_memcpy(void* restrict dest, const void* restrict src, s
     return dest;
 }
 
+static bool in_qemu = false, inited = false;
+
 BOOT_FUNC
 static bool is_transmit_empty(enum zerOS_serial_port port) { return zerOS_inb(port + 5) & 0x20; }
 
 BOOT_FUNC
 static void write_serial(enum zerOS_serial_port port, char a)
 {
-    if (!zerOS_in_qemu() || !zerOS_CONFIG_UNDER_QEMU)
+    if (unlikely(!inited))
+    {
+        in_qemu = zerOS_in_qemu();
+        inited  = true;
+    }
+
+    if (!in_qemu || !zerOS_CONFIG_UNDER_QEMU)
         return;
 
     while (is_transmit_empty(port) == 0)
@@ -112,7 +118,13 @@ static void write_serial(enum zerOS_serial_port port, char a)
 BOOT_FUNC
 static void write_debugcon(char a)
 {
-    if (zerOS_in_qemu() && zerOS_CONFIG_UNDER_QEMU)
+    if (unlikely(!inited))
+    {
+        in_qemu = zerOS_in_qemu();
+        inited  = true;
+    }
+
+    if (in_qemu && zerOS_CONFIG_UNDER_QEMU)
         zerOS_outb(0xe9, a);
 }
 
@@ -140,6 +152,12 @@ BOOT_FUNC
 extern int zerOS_early_vprintk(const char* str, va_list varargs)
 {
     int written = 0;
+
+    if (!inited)
+    {
+        in_qemu = zerOS_in_qemu();
+        inited  = true;
+    }
 
     for (const char* ptr = str; *ptr != '\0'; ptr++)
     {

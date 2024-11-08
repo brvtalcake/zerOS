@@ -80,7 +80,7 @@ static bool fill_unassigned_gdtent(void)
     const unsigned int unassigned[] = zerOS_GDT_ENTRY_UNASSIGNED_INDEX;
     SYMBOL_ALIGNED_TO(16)
     const struct zerOS_gdt_normal_segment_descriptor unassigned_desc = zerOS_GDT_ENTRY_NULL;
-    for (size_t i = 0; i < ARRAY_LEN(unassigned); i++)
+    for (size_t i = 0; i < ALEN(unassigned); i++)
     {
         const unsigned int idx = unassigned[i];
         const unsigned int real_idx = idx & (~1U);
@@ -140,7 +140,7 @@ static bool setup_normsegs(void)
         zerOS_GDT_ENTRY_USER_DS
     };
 
-    for (size_t i = 0; i < ARRAY_LEN(normsegs); i++)
+    for (size_t i = 0; i < ALEN(normsegs); i++)
     {
         const unsigned int idx = normsegs[i];
         const unsigned int real_idx = idx & (~1U);
@@ -175,7 +175,7 @@ static bool setup_syssegs(void)
         zerOS_GDT_ENTRY_TSS
     };
 
-    for (size_t i = 0; i < ARRAY_LEN(syssegs); i++)
+    for (size_t i = 0; i < ALEN(syssegs); i++)
     {
         const unsigned int idx = syssegs[i];
         const unsigned int real_idx = idx & (~1U);
@@ -204,7 +204,7 @@ static bool setup_tlssegs(void)
         zerOS_GDT_ENTRY_USER_TLS
     };
 
-    for (size_t i = 0; i < ARRAY_LEN(tlssegs); i++)
+    for (size_t i = 0; i < ALEN(tlssegs); i++)
     {
         const unsigned int idx = tlssegs[i];
         const unsigned int real_idx = idx & (~1U);

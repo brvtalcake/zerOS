@@ -7,6 +7,7 @@
 #include <limine.h>
 
 #include <klibc/alloca.h>
+#include <klibc/assert.h>
 #include <klibc/maybe.h>
 #include <klibc/string.h>
 
@@ -21,18 +22,19 @@
 #include <misc/symbol.h>
 #include <misc/units.h>
 
-#if 0
-// TODO: Make this struct accept size in number of bits (i.e. number of pages) instead of size in number of zerOS_BITSET_UNDERLYING_TYPE elements
-struct pmm_basic_manager
-{
-    size_t limine_entry_index; ///< The index of the limine entry.
-    size_t base_page_index;    ///< The index of the first page, in physical memory.
-    bitset_t bitmap;           ///< The bitmap.
-    bitset_t bitmap_physaddr;  ///< The physical address of the bitmap.
-    size_t next_free;          ///< The index of the next free page, in the bitmap.
-    size_t size;               ///< The size of the bitmap, in bitmap elements (i.e. page_count / zerOS_fast_uint_bits or size_in_bytes / sizeof(zerOS_fast_uint_t)).
-};
-#else
+// clang-format off
+#undef  KLIBC_HARD_ASSERT_HOOK
+#define KLIBC_HARD_ASSERT_HOOK(cond, file, line, func)  \
+    do {                                                \
+        zerOS_early_printk(                             \
+            "zerOS: hard assertion failed: %s\n"        \
+            "    at %s:%d in %s\n",                     \
+            cond, file, line, func                      \
+        );                                              \
+        zerOS_hcf();                                    \
+    } while (false)
+// clang-format on
+
 struct pmm_basic_manager
 {
     size_t   limine_entry_index; ///< The index of the limine entry.
@@ -43,21 +45,15 @@ struct pmm_basic_manager
     size_t   size;               ///< The size of the bitmap, in bits \
         (i.e. page_count or size_in_bytes * __CHAR_BIT__).
 };
-#endif
 
 static struct pmm_basic_manager pmm_main_managers[zerOS_CONFIG_MAX_USABLE_MEMORY_REGIONS];
 
-static inline size_t calc_bitmap_size(size_t page_count)
+// Returns the size of the bitmap in bytes
+static inline size_t calc_bitmap_size(size_t bit_count)
 {
-    if (page_count % zerOS_fast_uint_bits != 0)
-    {
-        zerOS_early_printk(
-          "zerOS: unhandled code path: page count "
-          "is not a multiple of zerOS_fast_uint_bits\n"
-        );
-        zerOS_hcf();
-    }
-    const size_t bitmap_elem_count = page_count / zerOS_fast_uint_bits;
+    const size_t bitmap_elem_count = bit_count / zerOS_fast_uint_bits;
+    if (bit_count % zerOS_fast_uint_bits != 0)
+        return (bitmap_elem_count + 1) * sizeof(zerOS_fast_uint_t);
     return bitmap_elem_count * sizeof(zerOS_fast_uint_t);
 }
 
@@ -96,21 +92,45 @@ static void init_basic_managers(
         struct limine_memmap_entry* entry   = (struct limine_memmap_entry*)zerOS_get_limine_data(
           zerOS_LIMINE_MEMMAP_ENTRY, manageable[realind]
         );
+        hard_assert(
+          entry->type == LIMINE_MEMMAP_USABLE || entry->type == LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE
+        );
+        hard_assert(entry->length / zerOS_PAGE_SIZE <= needs[realind] * __CHAR_BIT__);
 
         current_offset -= (intptr_t)(needs[realind]);
 
-        struct pmm_basic_manager* manager = &pmm_main_managers[realind];
+        struct pmm_basic_manager* manager = pmm_main_managers + realind;
         manager->limine_entry_index       = manageable[realind];
         manager->base_page_index          = entry->base / zerOS_PAGE_SIZE;
-        manager->size                     = needs[realind] * 8;
+        manager->size                     = entry->length / zerOS_PAGE_SIZE;
         manager->bitmap_physaddr          = (bitset_t)current_offset;
         manager->bitmap                   = (bitset_t)(hhdm_offset + current_offset);
         manager->next_free                = 0;
 
+        // For some reasons, the vectorized versions of the following functions
+        // are not working as expected, so we have to use the non-vectorized versions
         if (entry->type == LIMINE_MEMMAP_USABLE)
+        {
+            // clang-format off
+#if 0
             zerOS_bitset_clear_all(manager->bitmap, manager->size);
+#else
+            for (size_t j = 0; j < manager->size; j++)
+                zerOS_bitset_clear(manager->bitmap, j);
+#endif
+            // clang-format on
+        }
         else if (entry->type == LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE)
+        {
+            // clang-format off
+#if 0
             zerOS_bitset_set_all(manager->bitmap, manager->size);
+#else
+            for (size_t j = 0; j < manager->size; j++)
+                zerOS_bitset_set(manager->bitmap, j);
+#endif
+            // clang-format on
+        }
 
         if (entry == bitmap_entry)
         {
@@ -129,7 +149,7 @@ static void init_basic_managers(
     }
 }
 
-static size_t __static_do_sum(size_t* arr, size_t count)
+static size_t __static_do_sum(const size_t* restrict arr, size_t count)
 {
     size_t sum = 0;
     for (size_t i = 0; i < count; i++)
@@ -170,10 +190,7 @@ extern bool zerOS_init_pmm(void)
                 zerOS_hcf();
             }
 
-            size_t bmsize = calc_bitmap_size(div);
-            // pmm_main_managers[manageable_count].limine_entry_index = i;
-            // pmm_main_managers[manageable_count].base_page_index = entry->base / zerOS_PAGE_SIZE;
-            // pmm_main_managers[manageable_count].size = bmsize / sizeof(zerOS_fast_uint_t);
+            size_t bmsize                  = calc_bitmap_size(div);
             manageable[manageable_count]   = i;
             memory_needs[manageable_count] = bmsize;
             ++manageable_count;
