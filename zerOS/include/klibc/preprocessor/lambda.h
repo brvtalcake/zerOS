@@ -5,7 +5,7 @@
 #include <chaos/preprocessor/detection/compare.h>
 #include <chaos/preprocessor/control/if.h>
 
-#include <pp_empty/pp_is_empty.h>
+#include <klibc/preprocessor/empty.h>
 
 #undef  KLIBC_PP_LAMBDA
 #define KLIBC_PP_LAMBDA(...) CHAOS_PP_LAMBDA(__VA_ARGS__)

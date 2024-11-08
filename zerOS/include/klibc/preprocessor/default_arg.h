@@ -3,7 +3,7 @@
 
 #include <chaos/preprocessor/control/variadic_if.h>
 #include <chaos/preprocessor/tuple/rem.h>
-#include <pp_empty/pp_is_empty.h>
+#include <klibc/preprocessor/empty.h>
 
 #undef  KLIBC_PP_DEFAULT_ARG
 #define KLIBC_PP_DEFAULT_ARG(default, ...) CHAOS_PP_VARIADIC_IF(ISEMPTY(__VA_ARGS__))(default)(__VA_ARGS__)

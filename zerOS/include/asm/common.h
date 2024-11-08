@@ -5,7 +5,7 @@
 
 #include <asm/syntax.h>
 
-#include <pp_empty/pp_is_empty.h>
+#include <klibc/preprocessor/empty.h>
 
 #include <chaos/preprocessor/control/variadic_if.h>
 #include <chaos/preprocessor/control/when.h>

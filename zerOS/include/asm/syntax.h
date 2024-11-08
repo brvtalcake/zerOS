@@ -5,7 +5,7 @@
 
 #include <chaos/preprocessor/extended/variadic_cat.h>
 
-#include <pp_empty/pp_is_empty.h>
+#include <klibc/preprocessor/empty.h>
 
 #undef  ASM_SYNTAX_INTEL
 #undef  ASM_SYNTAX_ATT

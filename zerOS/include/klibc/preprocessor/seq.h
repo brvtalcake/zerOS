@@ -1,7 +1,7 @@
 #ifndef zerOS_KLIBC_PREPROCESSOR_SEQ_H_INCLUDED
 #define zerOS_KLIBC_PREPROCESSOR_SEQ_H_INCLUDED
 
-#include <pp_empty/pp_is_empty.h>
+#include <klibc/preprocessor/empty.h>
 
 #include <klibc/preprocessor/variadics.h>
 #include <klibc/preprocessor/tuple.h>
@@ -30,6 +30,59 @@
 #include <chaos/preprocessor/comparison/greater_equal.h>
 #include <chaos/preprocessor/debug/assert.h>
 #include <chaos/preprocessor/arithmetic/inc.h>
+
+#undef  KLIBC_PP_SEQ_TO_VARIADIC
+/**
+ * @def KLIBC_PP_SEQ_TO_VARIADIC(seq)
+ * @brief Converts a sequence to a variadic list.
+ * @param seq The sequence.
+ * @return    The variadic list.
+ */
+#define KLIBC_PP_SEQ_TO_VARIADIC(seq)       \
+    CHAOS_PP_VARIADIC_IF(                   \
+        ISEMPTY(seq)                        \
+    )()(                                    \
+        __KLIBC_PP_SEQ_TO_VARIADIC_VALID(   \
+            seq                             \
+        )                                   \
+    )
+
+#undef  __KLIBC_PP_SEQ_TO_VARIADIC_VALID
+#define __KLIBC_PP_SEQ_TO_VARIADIC_VALID(seq)   \
+    KLIBC_PP_EXPAND(                            \
+        __KLIBC_PP_SEQ_TO_VARIADIC_IMPL(        \
+            seq                                 \
+        )                                       \
+    )
+
+#undef  __KLIBC_PP_SEQ_TO_VARIADIC_IMPL_ID
+#define __KLIBC_PP_SEQ_TO_VARIADIC_IMPL_ID() __KLIBC_PP_SEQ_TO_VARIADIC_IMPL
+
+#undef  __KLIBC_PP_SEQ_TO_VARIADIC_IMPL
+#define __KLIBC_PP_SEQ_TO_VARIADIC_IMPL(seq)        \
+    CHAOS_PP_VARIADIC_IF(                           \
+        CHAOS_PP_AND(                               \
+            ISEMPTY(CHAOS_PP_EAT seq)               \
+        )(                                          \
+            CHAOS_PP_NOT(                           \
+                ISEMPTY(                            \
+                    CHAOS_PP_EAT CHAOS_PP_EAT seq   \
+                )                                   \
+            )                                       \
+        )                                           \
+    )(                                              \
+        /* Last one */                              \
+        CHAOS_PP_SEQ_HEAD_ID()(seq)                 \
+             CHAOS_PP_EAT                           \
+    )(                                              \
+        /* More than one */                         \
+        CHAOS_PP_SEQ_HEAD_ID()(seq),                \
+        CHAOS_PP_OBSTRUCT(                          \
+            __KLIBC_PP_SEQ_TO_VARIADIC_IMPL_ID      \
+        )()                                         \
+    )(                                              \
+        CHAOS_PP_SEQ_TAIL_ID()(seq)                 \
+    )
 
 #undef  KLIBC_PP_SEQ_DROP_WHILE
 /**

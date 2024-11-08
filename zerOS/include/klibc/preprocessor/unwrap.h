@@ -8,7 +8,7 @@
 #include <chaos/preprocessor/detection/is_variadic.h>
 #include <chaos/preprocessor/debug/failure.h>
 
-#include <pp_empty/pp_is_empty.h>
+#include <klibc/preprocessor/empty.h>
 
 #undef  __KLIBC_PP_UNWRAP_PARENTHESES
 #undef  __KLIBC_PP_UNWRAP_CLASSIC
