@@ -31,7 +31,7 @@ static inline uintptr_t zerOS_align_down(uintptr_t x, size_t align)
         return x - (x % align);
 }
 
-static inline uintptr_t zerOS_is_aligned(uintptr_t x, size_t align)
+static inline bool zerOS_is_aligned(uintptr_t x, size_t align)
 {
     if (likely(zerOS_is_pow_two(align)))
         return (x & (align - 1)) == 0;

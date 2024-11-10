@@ -3,6 +3,14 @@
 
 #include <klibc/maybe.h>
 
+// clang-format off
+struct zerOS_address
+{
+    uintptr_t phys,
+              virt;
+};
+// clang-format on
+
 extern bool zerOS_init_pmm(void);
 
 #endif

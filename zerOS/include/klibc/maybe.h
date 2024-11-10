@@ -11,7 +11,8 @@
  */
 #define maybe_type(type)    \
     struct {                \
-        type value;         \
+        typeof_unqual(type) \
+          value;            \
         bool valid;         \
     }
 

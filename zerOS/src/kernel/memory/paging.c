@@ -15,7 +15,7 @@
 #include <misc/sections.h>
 #include <misc/symbol.h>
 
-extern bool zerOS_init_early_paging(void)
+extern bool zerOS_init_paging(void)
 {
     struct limine_memmap_response* memmap_resp =
       (struct limine_memmap_response*)zerOS_get_limine_data(zerOS_LIMINE_MEMMAP_RESPONSE);

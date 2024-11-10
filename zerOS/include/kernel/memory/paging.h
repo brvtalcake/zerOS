@@ -191,6 +191,8 @@ extern uint64_t zerOS_pagetable_phyaddr_mask[3];
 BOOT_FUNC
 extern void zerOS_init_paging_values(void);
 
+extern bool zerOS_init_paging(void);
+
 static inline uintptr_t zerOS_virt_to_phys(uintptr_t virt)
 {
 #undef  __GETCR3
