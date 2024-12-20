@@ -14,6 +14,14 @@
 
 INCBIN(logo_white_transparent_svg, "src/kernel/assets/logo/zeros-high-resolution-logo-white-transparent.svg");
 
+#ifdef __has_embed
+#if __has_embed("assets/logo/zeros-high-resolution-logo-white-transparent.svg")
+const char logo[] = 
+#embed "assets/logo/zeros-high-resolution-logo-white-transparent.svg"
+;
+#endif
+#endif
+
 #if 0
 void zerOS_get_logo(uint8_t** data, size_t* width, size_t* height, size_t* channels)
 {

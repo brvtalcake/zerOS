@@ -185,6 +185,25 @@ extern void* zerOS_get_limine_data(enum zerOS_limine_data_request req, ...)
             return nullptr;
     }
 }
+// clang-format off
+BOOT_FUNC SYMBOL_USED SYMBOL_UNUSED static inline
+void* boot_memmove(void* dest, const void* src, size_t n)
+// clang-format on
+{
+    unsigned char*       d = dest;
+    const unsigned char* s = src;
+    if (d < s)
+        while (n--)
+            *d++ = *s++;
+    else
+    {
+        d += n;
+        s += n;
+        while (n--)
+            *--d = *--s;
+    }
+    return dest;
+}
 
 BOOT_FUNC
 static inline void* boot_memcpy(void* restrict dest, const void* restrict src, size_t n)
@@ -338,4 +357,25 @@ extern void zerOS_copy_limine_requests(void)
       EPRI_CAST(p, kernel_address_response.physical_base),
       EPRI_CAST(p, kernel_address_response.virtual_base)
     );
+}
+
+BOOT_FUNC
+extern bool zerOS_has_bootloaded_modules(void)
+{
+    static bool has_bootloaded_modules = false, inited = false;
+    size_t      count = 0;
+
+    if (inited)
+        return has_bootloaded_modules;
+
+    for (size_t i = 0; i < memmap_response.entry_count && count < 2; ++i)
+    {
+        if (memmap_entry_buf[i].type == LIMINE_MEMMAP_KERNEL_AND_MODULES)
+            count++;
+    }
+
+    has_bootloaded_modules = count >= 2;
+    inited                 = true;
+
+    return has_bootloaded_modules;
 }

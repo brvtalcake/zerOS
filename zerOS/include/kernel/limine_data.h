@@ -22,5 +22,7 @@ BOOT_FUNC
 extern void zerOS_copy_limine_requests(void);
 BOOT_FUNC
 extern void* zerOS_get_limine_data(enum zerOS_limine_data_request req, ...);
+BOOT_FUNC
+extern bool zerOS_has_bootloaded_modules(void);
 
 #endif
