@@ -17,16 +17,42 @@ def is_newer_than(fromfile: str, tofile: str) -> bool:
     else:
         return True
 
+def walk_files_in(dir: str):
+    for path in os.scandir(dir):
+        if path.is_file(follow_symlinks=False):
+            yield path.path
+
 def cmd(cmd: list[str]):
     pinfo(f'running \'{' '.join(cmd)}\'')
     return subprocess.run(cmd, encoding='utf-8')
 
-def cmd_if_newer(cmd: list[str], fromfile: str, tofile: str):
-    do_it = is_newer_than(fromfile, tofile)
-    if not do_it:
-        pinfo(f'{fromfile} is older than {tofile}')
-        pinfo(f'no need to perform command \'{' '.join(cmd)}\'')
-        return None
+def cmd_if_newer(cmd: list[str], **kwargs):
+    if 'fromfile' in kwargs.keys() and 'tofile' in kwargs.keys():
+        fromfile = kwargs['fromfile']
+        tofile   = kwargs[  'tofile']
+        assert isinstance(fromfile, str) and isinstance(tofile, str)
+        do_it = is_newer_than(fromfile, tofile)
+        if not do_it:
+            pinfo(f'{fromfile} is older than {tofile}')
+            pinfo(f'no need to perform command \'{' '.join(cmd)}\'')
+            return None
+    elif 'pairs' in kwargs.keys():
+        pairs = kwargs['pairs']
+        assert isinstance(pairs, list) and all(
+            map(
+                lambda o: (isinstance(o, tuple) and len(o) == 2) and all(
+                    map(lambda item: isinstance(item, str), o)
+                ), pairs
+            )
+        )
+        do_it = any(map(lambda tp: is_newer_than(tp[0], tp[1]), pairs))
+        if not do_it:
+            fromfiles = ', '.join(map(lambda tp: tp[0], pairs))
+            tofiles   = ', '.join(map(lambda tp: tp[1], pairs))
+            pinfo(f'{fromfiles} are all respectively older than {tofiles}')
+            pinfo(f'no need to perform command \'{' '.join(cmd)}\'')
+    else:
+        raise RuntimeError('Internal error !')
     pinfo(f'running \'{' '.join(cmd)}\'')
     return subprocess.run(cmd, encoding='utf-8')
     
@@ -44,13 +70,13 @@ def cp_if_newer(fromfile: str, tofile: str):
     if not need_upd:
         pinfo(f'{fromfile} is older than {tofile}')
         pinfo('no need to perform any copy')
-        return None
+        return tofile
     pinfo(f'copying {fromfile} to {tofile}')
     fromfd = -1
     tofd = -1
     try:
         fromfd = os.open(fromfile, os.O_RDONLY)
-        tofd = os.open(tofile, os.O_WRONLY | os.O_TRUNC)
+        tofd = os.open(tofile, os.O_WRONLY | os.O_TRUNC | os.O_CREAT)
         os.sendfile(tofd, fromfd, None, os.fstat(fromfd).st_size)
     except:
         raise
@@ -59,7 +85,7 @@ def cp_if_newer(fromfile: str, tofile: str):
             os.close(fromfd)
         if tofd != -1:
             os.close(tofd)
-    return None
+    return tofile
 
 def cp(fromfile: str, tofile: str):
     fromfile, tofile, _ = _cp_common(fromfile, tofile)
@@ -68,7 +94,7 @@ def cp(fromfile: str, tofile: str):
     tofd = -1
     try:
         fromfd = os.open(fromfile, os.O_RDONLY)
-        tofd = os.open(tofile, os.O_WRONLY | os.O_TRUNC)
+        tofd = os.open(tofile, os.O_WRONLY | os.O_TRUNC | os.O_CREAT)
         os.sendfile(tofd, fromfd, None, os.fstat(fromfd).st_size)
     except:
         raise
@@ -77,12 +103,15 @@ def cp(fromfile: str, tofile: str):
             os.close(fromfd)
         if tofd != -1:
             os.close(tofd)
+    return tofile
+
+def cargo(cmd: str, **kwargs):
+    if 'features' in kwargs.keys() and len(kwargs['features']) > 0:
+
+def _zerOS_prebuild(features: list[str], profile: str):
     return None
 
-def _zerOS_pre(features: list[str]):
-    return None
-
-def _zerOS_build(features: list[str]):
+def _zerOS_build(features: list[str], profile: str):
     if len(features) == 0:
         _cmd = [ 'cargo', 'bamd64', '--artifact-dir', './build', '-Z', 'unstable-options' ]
     else:
@@ -91,7 +120,7 @@ def _zerOS_build(features: list[str]):
             '-Z', 'unstable-options', '--no-default-features',
             '--features', f'"{' '.join(features)}"'
         ]
-    saved = os.curdir
+    saved = os.getcwd()
     try:
         os.chdir('./zerOS')
         cmd(_cmd)
@@ -102,38 +131,41 @@ def _zerOS_build(features: list[str]):
         os.chdir(saved)
     return None
 
-def _zerOS_post(features: list[str]):
-    saved = os.curdir
+def _zerOS_postbuild(features: list[str], profile: str):
+    saved = os.getcwd()
     try:
         os.chdir('./zerOS')
-        cp_if_newer('./bin/zerOS', './iso_root/boot/')
-        cp_if_newer('./limine.conf', './iso_root/boot/limine/')
-        cp_if_newer('/usr/share/limine/BOOTX64.EFI', './iso_root/EFI/BOOT/')
-        #for path in os.walk
-        #cp $(LIMINE_DATADIR)/*.bin iso_root/boot/limine/
-        #cp $(LIMINE_DATADIR)/*.sys iso_root/boot/limine/
-        #cmd_if_newer(
-        #    [
-        #        'xorriso', '-as', 'mkisofs', '-no-emul-boot', '-boot-load-size',
-        #        '4', '-boot-info-table', --efi-boot boot/limine/limine-uefi-cd.bin 					\
-		#	-efi-boot-part --efi-boot-image --protective-msdos-label 	\
-		#	iso_root -o $@
-        #    ]
-        #)
+        pairs = [('./bin/zerOS', './bin/zerOS.iso')]
+        pairs.append(('./bin/zerOS', cp_if_newer('./bin/zerOS', './iso_root/boot/')))
+        pairs.append(('./config/limine.conf', cp_if_newer('./config/limine.conf', './iso_root/boot/limine/')))
+        pairs.append(('/usr/share/limine/BOOTX64.EFI', cp_if_newer('/usr/share/limine/BOOTX64.EFI', './iso_root/EFI/BOOT/')))
+        for path in walk_files_in('/usr/share/limine'):
+            if path.endswith('.sys') or path.endswith('.bin'):
+                pairs.append((path, cp_if_newer(path, './iso_root/boot/limine/')))
+        cmd_if_newer(
+            cmd=[
+                'xorriso', '-as', 'mkisofs', '-b', 'boot/limine/limine-bios-cd.bin',
+			    '-no-emul-boot', '-boot-load-size', '4', '-boot-info-table',
+			    '--efi-boot', 'boot/limine/limine-uefi-cd.bin', '-efi-boot-part',
+                '--efi-boot-image', '--protective-msdos-label', 'iso_root',
+                '-o', './bin/zerOS.iso'
+            ],
+            pairs=pairs
+        )
     except:
         raise
     finally:
         os.chdir(saved)
     return None
 
-def _macro_utils_pre(features: list[str]):
+def _macro_utils_prebuild(features: list[str], profile: str):
     return None
-def _macro_utils_build(features: list[str]):
+def _macro_utils_build(features: list[str], profile: str):
     if len(features) == 0:
         _cmd = [ 'cargo', 'build' ]
     else:
         _cmd = [ 'cargo', 'build', '--no-default-features', '--features', f'"{' '.join(features)}"']
-    saved = os.curdir
+    saved = os.getcwd()
     try:
         os.chdir('./zerOS')
         cmd(_cmd)
@@ -142,17 +174,17 @@ def _macro_utils_build(features: list[str]):
     finally:
         os.chdir(saved)
     return None
-def _macro_utils_post(features: list[str]):
+def _macro_utils_postbuild(features: list[str], profile: str):
     return None
 
-def _proc_macro_utils_pre(features: list[str]):
+def _proc_macro_utils_prebuild(features: list[str], profile: str):
     return None
-def _proc_macro_utils_build(features: list[str]):
+def _proc_macro_utils_build(features: list[str], profile: str):
     if len(features) == 0:
         _cmd = [ 'cargo', 'build' ]
     else:
         _cmd = [ 'cargo', 'build', '--no-default-features', '--features', f'"{' '.join(features)}"']
-    saved = os.curdir
+    saved = os.getcwd()
     try:
         os.chdir('./zerOS')
         cmd(_cmd)
@@ -161,45 +193,50 @@ def _proc_macro_utils_build(features: list[str]):
     finally:
         os.chdir(saved)
     return None
-def _proc_macro_utils_post(features: list[str]):
+def _proc_macro_utils_postbuild(features: list[str], profile: str):
     return None
 
 PACKAGE_LIST = {
     pathlib.Path('zerOS'): {
-        'pre'  : _zerOS_pre,
+        'prebuild'  : _zerOS_prebuild,
         'build': _zerOS_build,
-        'post' : _zerOS_post,
+        'postbuild' : _zerOS_postbuild,
     },
     pathlib.Path('macro-utils'): {
-        'pre'  : _macro_utils_pre,
+        'prebuild'  : _macro_utils_prebuild,
         'build': _macro_utils_build,
-        'post' : _macro_utils_post,
+        'postbuild' : _macro_utils_postbuild,
     },
     pathlib.Path('proc-macro-utils'): {
-        'pre'  : _proc_macro_utils_pre,
+        'prebuild'  : _proc_macro_utils_prebuild,
         'build': _proc_macro_utils_build,
-        'post' : _proc_macro_utils_post,
+        'postbuild' : _proc_macro_utils_postbuild,
     },
 }
 
-def package_build(pkg: str, features: list[str]):
+def package_build(pkg: str, features: list[str], profile: str):
     path = pathlib.Path(pkg)
     if not path in PACKAGE_LIST.keys():
         raise ValueError(f'Unknown package {pkg} !')
 
-    fn = PACKAGE_LIST[path]['pre']
+    fn = PACKAGE_LIST[path]['prebuild']
     if fn is not None:
-        fn(features)
+        fn(features, profile)
     
     fn = PACKAGE_LIST[path]['build']
     if fn is not None:
-        fn(features)
+        fn(features, profile)
     
-    fn = PACKAGE_LIST[path]['post']
+    fn = PACKAGE_LIST[path]['postbuild']
     if fn is not None:
-        fn(features)
+        fn(features, profile)
     
     return None
+
+def make_profile_string(profile: str, want_lto: bool) -> str:
+    if want_lto:
+        return f'{profile.strip().strip('-')}-lto'
+    return profile.strip().strip('-')
 
 def parse_cmdline():
     parser = argparse.ArgumentParser()
@@ -219,6 +256,18 @@ def parse_cmdline():
         type=str,
         default=None,
         help='Order of package compilation'
+    )
+    parser.add_argument(
+        '-p' '--profile',
+        type=str,
+        default='debug',
+        help='The base profile to use: release, debug, test, bench, etc...'
+    )
+    parser.add_argument(
+        '--lto',
+        action='store_true',
+        default=False,
+        help='Whether or not we want to compile using lto'
     )
     return parser.parse_args()
 
@@ -244,8 +293,9 @@ def main() -> int:
         PROJECTS = getattr(parsed, 'project-name')
         FEATURES = getattr(parsed, 'feature') or []
         ORDER    = getattr(parsed, 'order') or PROJECTS
+        PROFILE  = getattr(parsed, 'profile')
+        LTO      = getattr(parsed, 'lto')
         PROJECTS_len = len(PROJECTS)
-        FEATURES_len = len(FEATURES)
         ORDER_len    = None
         
         # Round 1 checks
@@ -272,10 +322,10 @@ def main() -> int:
                 if ORDER[j] == obj:
                     raise ValueError(f'{obj} specified more than one time (in order-list) !')
         
-        feat_dict = make_feature_dicts(getattr(parsed, 'project-name'), parsed.feature)
-        
+        feat_dict = make_feature_dicts(PROJECTS, FEATURES)
+        profile = make_profile_string(PROFILE, LTO)
         for pkg in ORDER:
-            package_build(pkg, feat_dict[pkg])
+            package_build(pkg, feat_dict[pkg], profile)
     except Exception:
         perror(traceback.format_exc())
         perror("terminating...")
