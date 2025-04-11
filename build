@@ -1,0 +1,286 @@
+#!/bin/env python3
+
+import sys
+import os
+import argparse
+import traceback
+import pathlib
+import subprocess
+from scripts.errprint import *
+
+def is_newer_than(fromfile: str, tofile: str) -> bool:
+    if os.path.exists(tofile):
+        return (
+            os.stat(fromfile, follow_symlinks=False).st_mtime >
+            os.stat(tofile  , follow_symlinks=False).st_mtime
+        )
+    else:
+        return True
+
+def cmd(cmd: list[str]):
+    pinfo(f'running \'{' '.join(cmd)}\'')
+    return subprocess.run(cmd, encoding='utf-8')
+
+def cmd_if_newer(cmd: list[str], fromfile: str, tofile: str):
+    do_it = is_newer_than(fromfile, tofile)
+    if not do_it:
+        pinfo(f'{fromfile} is older than {tofile}')
+        pinfo(f'no need to perform command \'{' '.join(cmd)}\'')
+        return None
+    pinfo(f'running \'{' '.join(cmd)}\'')
+    return subprocess.run(cmd, encoding='utf-8')
+    
+def _cp_common(fromfile: str, tofile: str):
+    if tofile[-1] == '/' or os.path.isdir(tofile):
+        if tofile[-1] != '/':
+            tofile += '/'
+        tofile += os.path.basename(fromfile)
+    os.makedirs(os.path.dirname(tofile), exist_ok=True)
+    need_update = is_newer_than(fromfile, tofile)
+    return fromfile, tofile, need_update
+
+def cp_if_newer(fromfile: str, tofile: str):
+    fromfile, tofile, need_upd = _cp_common(fromfile, tofile)
+    if not need_upd:
+        pinfo(f'{fromfile} is older than {tofile}')
+        pinfo('no need to perform any copy')
+        return None
+    pinfo(f'copying {fromfile} to {tofile}')
+    fromfd = -1
+    tofd = -1
+    try:
+        fromfd = os.open(fromfile, os.O_RDONLY)
+        tofd = os.open(tofile, os.O_WRONLY | os.O_TRUNC)
+        os.sendfile(tofd, fromfd, None, os.fstat(fromfd).st_size)
+    except:
+        raise
+    finally:
+        if fromfd != -1:
+            os.close(fromfd)
+        if tofd != -1:
+            os.close(tofd)
+    return None
+
+def cp(fromfile: str, tofile: str):
+    fromfile, tofile, _ = _cp_common(fromfile, tofile)
+    pinfo(f'copying {fromfile} to {tofile}')
+    fromfd = -1
+    tofd = -1
+    try:
+        fromfd = os.open(fromfile, os.O_RDONLY)
+        tofd = os.open(tofile, os.O_WRONLY | os.O_TRUNC)
+        os.sendfile(tofd, fromfd, None, os.fstat(fromfd).st_size)
+    except:
+        raise
+    finally:
+        if fromfd != -1:
+            os.close(fromfd)
+        if tofd != -1:
+            os.close(tofd)
+    return None
+
+def _zerOS_pre(features: list[str]):
+    return None
+
+def _zerOS_build(features: list[str]):
+    if len(features) == 0:
+        _cmd = [ 'cargo', 'bamd64', '--artifact-dir', './build', '-Z', 'unstable-options' ]
+    else:
+        _cmd = [
+            'cargo', 'bamd64', '--artifact-dir', './build',
+            '-Z', 'unstable-options', '--no-default-features',
+            '--features', f'"{' '.join(features)}"'
+        ]
+    saved = os.curdir
+    try:
+        os.chdir('./zerOS')
+        cmd(_cmd)
+        cp('./build/zerOS', './bin/')
+    except:
+        raise
+    finally:
+        os.chdir(saved)
+    return None
+
+def _zerOS_post(features: list[str]):
+    saved = os.curdir
+    try:
+        os.chdir('./zerOS')
+        cp_if_newer('./bin/zerOS', './iso_root/boot/')
+        cp_if_newer('./limine.conf', './iso_root/boot/limine/')
+        cp_if_newer('/usr/share/limine/BOOTX64.EFI', './iso_root/EFI/BOOT/')
+        #for path in os.walk
+        #cp $(LIMINE_DATADIR)/*.bin iso_root/boot/limine/
+        #cp $(LIMINE_DATADIR)/*.sys iso_root/boot/limine/
+        #cmd_if_newer(
+        #    [
+        #        'xorriso', '-as', 'mkisofs', '-no-emul-boot', '-boot-load-size',
+        #        '4', '-boot-info-table', --efi-boot boot/limine/limine-uefi-cd.bin 					\
+		#	-efi-boot-part --efi-boot-image --protective-msdos-label 	\
+		#	iso_root -o $@
+        #    ]
+        #)
+    except:
+        raise
+    finally:
+        os.chdir(saved)
+    return None
+
+def _macro_utils_pre(features: list[str]):
+    return None
+def _macro_utils_build(features: list[str]):
+    if len(features) == 0:
+        _cmd = [ 'cargo', 'build' ]
+    else:
+        _cmd = [ 'cargo', 'build', '--no-default-features', '--features', f'"{' '.join(features)}"']
+    saved = os.curdir
+    try:
+        os.chdir('./zerOS')
+        cmd(_cmd)
+    except:
+        raise
+    finally:
+        os.chdir(saved)
+    return None
+def _macro_utils_post(features: list[str]):
+    return None
+
+def _proc_macro_utils_pre(features: list[str]):
+    return None
+def _proc_macro_utils_build(features: list[str]):
+    if len(features) == 0:
+        _cmd = [ 'cargo', 'build' ]
+    else:
+        _cmd = [ 'cargo', 'build', '--no-default-features', '--features', f'"{' '.join(features)}"']
+    saved = os.curdir
+    try:
+        os.chdir('./zerOS')
+        cmd(_cmd)
+    except:
+        raise
+    finally:
+        os.chdir(saved)
+    return None
+def _proc_macro_utils_post(features: list[str]):
+    return None
+
+PACKAGE_LIST = {
+    pathlib.Path('zerOS'): {
+        'pre'  : _zerOS_pre,
+        'build': _zerOS_build,
+        'post' : _zerOS_post,
+    },
+    pathlib.Path('macro-utils'): {
+        'pre'  : _macro_utils_pre,
+        'build': _macro_utils_build,
+        'post' : _macro_utils_post,
+    },
+    pathlib.Path('proc-macro-utils'): {
+        'pre'  : _proc_macro_utils_pre,
+        'build': _proc_macro_utils_build,
+        'post' : _proc_macro_utils_post,
+    },
+}
+
+def package_build(pkg: str, features: list[str]):
+    path = pathlib.Path(pkg)
+    if not path in PACKAGE_LIST.keys():
+        raise ValueError(f'Unknown package {pkg} !')
+
+    fn = PACKAGE_LIST[path]['pre']
+    if fn is not None:
+        fn(features)
+    
+    fn = PACKAGE_LIST[path]['build']
+    if fn is not None:
+        fn(features)
+    
+    fn = PACKAGE_LIST[path]['post']
+    if fn is not None:
+        fn(features)
+    
+    return None
+
+def parse_cmdline():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        'project-name',
+        type=str,
+        nargs='+',
+        help='Projects to build'
+    )
+    parser.add_argument(
+        '-f', '--feature',
+        action='append',
+        help='Features to use. Optionally per-package with \'<pkg>:<feature>\' syntax'
+    )
+    parser.add_argument(
+        '-o', '--order',
+        type=str,
+        default=None,
+        help='Order of package compilation'
+    )
+    return parser.parse_args()
+
+def make_feature_dicts(pkgs: list[str], feats: list[str] | None) -> dict[str, list[str]]:
+    ret: dict[str, list[str]] = { }
+    def do_foreach_pkg(fn):
+        for pkg in pkgs:
+            ret[pkg] = fn(ret.get(pkg, []))
+        return None
+    do_foreach_pkg(lambda _: [])
+    if feats is not None:
+        for feat in feats:
+            if ':' not in feat:
+                do_foreach_pkg(lambda old: [*old, feat])
+                continue
+            [pkg, actual_feat] = feat.split(':', 2)
+            ret[pkg].append(actual_feat)
+    return ret
+
+def main() -> int:
+    try:
+        parsed = parse_cmdline()
+        PROJECTS = getattr(parsed, 'project-name')
+        FEATURES = getattr(parsed, 'feature') or []
+        ORDER    = getattr(parsed, 'order') or PROJECTS
+        PROJECTS_len = len(PROJECTS)
+        FEATURES_len = len(FEATURES)
+        ORDER_len    = None
+        
+        # Round 1 checks
+        if not isinstance(PROJECTS, list) or PROJECTS_len == 0:
+            raise ValueError('no value provided for project names')
+        if isinstance(ORDER, str):
+            ORDER = ORDER.split(',')
+            ORDER_len = len(ORDER)
+        elif isinstance(ORDER, list):
+            ORDER_len = len(ORDER)
+        else:
+            raise RuntimeError('Internal error !')
+        
+        if ORDER_len != PROJECTS_len:
+            raise ValueError('Mismatch of specified projects count in order list')
+        
+        # Round 2 checks
+        for i, obj in enumerate(PROJECTS):
+            for j in range(i + 1, PROJECTS_len):
+                if PROJECTS[j] == obj:
+                    raise ValueError(f'Project name {obj} specified more than one time !')
+        for i, obj in enumerate(ORDER):
+            for j in range(i + 1, ORDER_len):
+                if ORDER[j] == obj:
+                    raise ValueError(f'{obj} specified more than one time (in order-list) !')
+        
+        feat_dict = make_feature_dicts(getattr(parsed, 'project-name'), parsed.feature)
+        
+        for pkg in ORDER:
+            package_build(pkg, feat_dict[pkg])
+    except Exception:
+        perror(traceback.format_exc())
+        perror("terminating...")
+        return 1
+    return 0
+
+if __name__ == '__main__':
+    sys.exit(main())

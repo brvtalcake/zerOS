@@ -1,0 +1,6 @@
+[unstable]
+build-std = ["core", "compiler_builtins", "alloc"]
+build-std-features = ["compiler-builtins-mem"]
+
+[alias]
+bamd64 = [ "build", "--target=./llvm-targets/x86-64.json" ]
