@@ -52,6 +52,8 @@ $(eval $(call DEFAULT_VAR,KGDB,$(DEFAULT_KGDB)))
 
 override DEFAULT_KCFLAGS = -ggdb3 $(if $(call eq,$(DEBUG_KERNEL),1),-Og,-O3) -pipe -mno-80387 -ftrack-macro-expansion=0
 $(eval $(call DEFAULT_VAR,KCFLAGS,$(DEFAULT_KCFLAGS)))
+override DEFAULT_KCXXFLAGS = -ggdb3 $(if $(call eq,$(DEBUG_KERNEL),1),-Og,-O3) -pipe -mno-80387 -ftrack-macro-expansion=0
+$(eval $(call DEFAULT_VAR,KCXXFLAGS,$(DEFAULT_KCXXFLAGS)))
 override DEFAULT_KCPPFLAGS := -DCHAOS_PP_VARIADICS=1 -ftrack-macro-expansion=0
 $(eval $(call DEFAULT_VAR,KCPPFLAGS,$(DEFAULT_KCPPFLAGS)))
 override DEFAULT_KNASMFLAGS := -F dwarf -g

@@ -22,11 +22,14 @@ include gnumake/gmsl
 include gnumake/misc.mk
 include gnumake/default_kvars.mk
 include gnumake/flags.mk
-include gnumake/prerequisites.mk
 
 override CFILES := $(shell cd src && find -L * -type f -name '*.c')
 override KLIBC_CFILES := $(addprefix klibc/,$(shell cd src/klibc && find -L * -type f -name '*.c'))
 override KERNEL_CFILES := $(filter-out $(KLIBC_CFILES),$(CFILES))
+
+override CXXFILES := $(shell cd src && find -L * -type f \( -name '*.cc' -o -name '*.cpp' \))
+override KLIBC_CXXFILES := $(addprefix klibc/,$(shell cd src/klibc && find -L * -type f \( -name '*.cc' -o -name '*.cpp' \)))
+override KERNEL_CXXFILES := $(filter-out $(KLIBC_CXXFILES),$(CXXFILES))
 
 override ASFILES := $(shell cd src && find -L * -type f -name '*.s')
 override KLIBC_ASFILES := $(addprefix klibc/,$(shell cd src/klibc && find -L * -type f -name '*.s'))
@@ -40,11 +43,11 @@ override NASMFILES := $(shell cd src && find -L * -type f -name '*.asm')
 override KLIBC_NASMFILES := $(addprefix klibc/,$(shell cd src/klibc && find -L * -type f -name '*.asm'))
 override KERNEL_NASMFILES := $(filter-out $(KLIBC_NASMFILES),$(NASMFILES))
 
-override OBJ := $(addprefix obj/,$(CFILES:.c=.c.o) $(ASFILES:.s=.s.o) $(NASMFILES:.asm=.asm.o) $(GCCASFILES:.S=.S.o))
-override KLIBC_OBJ := $(addprefix obj/,$(KLIBC_CFILES:.c=.c.o) $(KLIBC_ASFILES:.s=.s.o) $(KLIBC_NASMFILES:.asm=.asm.o) $(KLIBC_GCCASFILES:.S=.S.o))
-override KERNEL_OBJ := $(addprefix obj/,$(KERNEL_CFILES:.c=.c.o) $(KERNEL_ASFILES:.s=.s.o) $(KERNEL_NASMFILES:.asm=.asm.o) $(KERNEL_GCCASFILES:.S=.S.o))
+override OBJ := $(call MK_OBJFILE,$(CFILES) $(CXXFILES) $(ASFILES) $(NASMFILES) $(GCCASFILES))
+override KLIBC_OBJ := $(call MK_OBJFILE,$(KLIBC_CFILES) $(KLIBC_CXXFILES) $(KLIBC_ASFILES) $(KLIBC_NASMFILES) $(KLIBC_GCCASFILES))
+override KERNEL_OBJ := $(call MK_OBJFILE,$(KERNEL_CFILES) $(KERNEL_CXXFILES) $(KERNEL_ASFILES) $(KERNEL_NASMFILES) $(KERNEL_GCCASFILES))
 
-override HEADER_DEPS := $(addprefix obj/,$(CFILES:.c=.c.d) $(GCCASFILES:.S=.S.d))
+override HEADER_DEPS := $(call MK_DEPFILE,$(CFILES) $(CXXFILES) $(GCCASFILES))
 override KERNEL_SUPDEF_CONFIG := include/config.sd
 override CONFIG_DEPS := $(shell find -L include/config.d/ -type f)
 

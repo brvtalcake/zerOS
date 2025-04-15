@@ -10,6 +10,7 @@ python-gnupg = "*"
 semantic-version = "*"
 bs4 = "*"
 requests = "*"
+lark = "*"
 
 [dev-packages]
 

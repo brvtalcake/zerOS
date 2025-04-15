@@ -118,5 +118,7 @@
     },
     "[cpp]": {
         "editor.defaultFormatter": "xaver.clang-format"
-    }
+    },
+    "python.pipenvPath": "pipenv",
+    "python.analysis.languageServerMode": "full"
 }
