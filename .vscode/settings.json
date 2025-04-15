@@ -120,5 +120,9 @@
         "editor.defaultFormatter": "xaver.clang-format"
     },
     "rust-analyzer.check.workspace": true,
-    "rust-analyzer.cargo.buildScripts.enable": true
+    "rust-analyzer.cargo.buildScripts.enable": true,
+    "rust-analyzer.rustfmt.extraArgs": [
+        "--config",
+        "brace_style=AlwaysNextLine,control_brace_style=AlwaysNextLine,combine_control_expr=false",
+    ]
 }

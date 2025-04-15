@@ -5,8 +5,8 @@ OUTPUT_FORMAT(elf64-x86-64)
 OUTPUT_ARCH(i386:x86-64)
 
 /* We want the symbol _start to be our entry point */
-/* ENTRY(zerOS_boot_setup) */
-ENTRY(kmain)
+ENTRY(zerOS_boot_setup)
+/* ENTRY(kmain) */
 
 /* Define the program headers we want so the bootloader gives us the right */
 /* MMU permissions; this also allows us to exert more control over the linking */
@@ -44,6 +44,11 @@ SECTIONS
         *(.bootcode .bootcode.*)
     } :othertext
 
+    .ctors_init_array : {
+        KEEP(*(.ctors_init_array))
+        KEEP(*(.ctors_init_array.*))
+    } :othertext
+
     /* Move to the next memory page for .rodata */
     . = ALIGN(CONSTANT(MAXPAGESIZE));
 
@@ -76,6 +81,16 @@ zerOS_bootcode_start = LOADADDR(.bootcode);
 . = ALIGN(CONSTANT(MAXPAGESIZE) / 64);
 zerOS_bootcode_end = LOADADDR(.bootcode) + SIZEOF(.bootcode);
 /* --- SECTIONINFO END: bootcode --- */
+
+/* --- SECTIONINFO START: ctors_init_array --- */
+ASSERT(LOADADDR(.ctors_init_array) == ABSOLUTE(ADDR(.ctors_init_array)), "Section ctors_init_array is not loaded at the correct address");
+
+. = ALIGN(CONSTANT(MAXPAGESIZE) / 64);
+zerOS_ctors_init_array_start = LOADADDR(.ctors_init_array);
+
+. = ALIGN(CONSTANT(MAXPAGESIZE) / 64);
+zerOS_ctors_init_array_end = LOADADDR(.ctors_init_array) + SIZEOF(.ctors_init_array);
+/* --- SECTIONINFO END: ctors_init_array --- */
 
 /* --- SECTIONINFO START: rodata --- */
 ASSERT(LOADADDR(.rodata) == ABSOLUTE(ADDR(.rodata)), "Section rodata is not loaded at the correct address");
@@ -152,6 +167,10 @@ zerOS_bss_end = LOADADDR(.bss) + SIZEOF(.bss);
         *(.eh_frame*)
         *(.note .note.*)
         *(.interp)
+        *(.comment*)
+        *(.gcc_except_table*)
+        *(.note*)
+        *(.rel.eh_frame*)
     }
 }
 

@@ -8,6 +8,13 @@ import pathlib
 import subprocess
 from scripts.errprint import *
 
+class ProcessFailedError(Exception):
+    def __init__(self, process: subprocess.CompletedProcess[str]) -> None:
+        super().__init__()
+        self.proc = process
+        return None
+    
+
 def is_newer_than(fromfile: str, tofile: str) -> bool:
     if os.path.exists(tofile):
         return (
@@ -105,25 +112,34 @@ def cp(fromfile: str, tofile: str):
             os.close(tofd)
     return tofile
 
-def cargo(cmd: str, **kwargs):
+def cargo(cargo_cmd: str, *extra: str, **kwargs):
+    args = [ 'cargo', cargo_cmd, '-Z', 'unstable-options' ]
+    args.extend(extra)
     if 'features' in kwargs.keys() and len(kwargs['features']) > 0:
+        args.extend(
+            [
+                '--no-default-features', '--features',
+                f'"{' '.join(kwargs['features'])}"'
+            ]
+        )
+    if 'profile' in kwargs.keys():
+        args.extend([ '--profile', kwargs['profile'] ])
+    return cmd(args)
+
+def checkps(ps: subprocess.CompletedProcess[str]):
+    if ps.returncode != 0:
+        raise ProcessFailedError(ps)
+    return None
 
 def _zerOS_prebuild(features: list[str], profile: str):
     return None
 
 def _zerOS_build(features: list[str], profile: str):
-    if len(features) == 0:
-        _cmd = [ 'cargo', 'bamd64', '--artifact-dir', './build', '-Z', 'unstable-options' ]
-    else:
-        _cmd = [
-            'cargo', 'bamd64', '--artifact-dir', './build',
-            '-Z', 'unstable-options', '--no-default-features',
-            '--features', f'"{' '.join(features)}"'
-        ]
     saved = os.getcwd()
     try:
         os.chdir('./zerOS')
-        cmd(_cmd)
+        ps = cargo('bamd64', '--artifact-dir', './build', features=features, profile=profile)
+        checkps(ps)
         cp('./build/zerOS', './bin/')
     except:
         raise
@@ -142,7 +158,7 @@ def _zerOS_postbuild(features: list[str], profile: str):
         for path in walk_files_in('/usr/share/limine'):
             if path.endswith('.sys') or path.endswith('.bin'):
                 pairs.append((path, cp_if_newer(path, './iso_root/boot/limine/')))
-        cmd_if_newer(
+        ps = cmd_if_newer(
             cmd=[
                 'xorriso', '-as', 'mkisofs', '-b', 'boot/limine/limine-bios-cd.bin',
 			    '-no-emul-boot', '-boot-load-size', '4', '-boot-info-table',
@@ -152,6 +168,7 @@ def _zerOS_postbuild(features: list[str], profile: str):
             ],
             pairs=pairs
         )
+        checkps(ps) if ps is not None else None
     except:
         raise
     finally:
@@ -168,7 +185,8 @@ def _macro_utils_build(features: list[str], profile: str):
     saved = os.getcwd()
     try:
         os.chdir('./zerOS')
-        cmd(_cmd)
+        ps = cmd(_cmd)
+        checkps(ps)
     except:
         raise
     finally:
@@ -260,8 +278,8 @@ def parse_cmdline():
     parser.add_argument(
         '-p' '--profile',
         type=str,
-        default='debug',
-        help='The base profile to use: release, debug, test, bench, etc...'
+        default='dev',
+        help='The base profile to use: release, dev, test, bench, etc...'
     )
     parser.add_argument(
         '--lto',
@@ -293,7 +311,7 @@ def main() -> int:
         PROJECTS = getattr(parsed, 'project-name')
         FEATURES = getattr(parsed, 'feature') or []
         ORDER    = getattr(parsed, 'order') or PROJECTS
-        PROFILE  = getattr(parsed, 'profile')
+        PROFILE  = getattr(parsed, 'p__profile')
         LTO      = getattr(parsed, 'lto')
         PROJECTS_len = len(PROJECTS)
         ORDER_len    = None
@@ -326,6 +344,9 @@ def main() -> int:
         profile = make_profile_string(PROFILE, LTO)
         for pkg in ORDER:
             package_build(pkg, feat_dict[pkg], profile)
+    except ProcessFailedError as e:
+        perror(f'command \'{' '.join(e.proc.args)}\' exited with error code {e.proc.returncode}')
+        perror("terminating...")
     except Exception:
         perror(traceback.format_exc())
         perror("terminating...")

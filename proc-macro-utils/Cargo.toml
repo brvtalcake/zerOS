@@ -23,12 +23,18 @@ test = true
 [[test]]
 name = "test-array_size"
 
+[[test]]
+name = "test-ctor"
+
 [dependencies]
 proc-macro2 = "1.0.94"
 quote = "*"
-syn = "2.0"
+syn = { version = "2.0", features = [ "full" ] }
+getrandom = "*"
+paste = "*"
 
 [dev-dependencies]
+libc = "*"
 
 #[target]
 
