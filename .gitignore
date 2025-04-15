@@ -18,3 +18,4 @@ config-temp/**
 *.out
 
 !.github/codeql-ci-python-requirements.txt
+**/target/

@@ -56,7 +56,7 @@ gnome-terminal --window --title="$3" --working-directory=$(PWD) \
 --geometry=$(__OPEN_TWO_TERMINALS_width)x$(__OPEN_TWO_TERMINALS_height)+$(__OPEN_TWO_TERMINALS_x_second)+$(__OPEN_TWO_TERMINALS_y_second) \
 -- bash -c "$4" &
 endef
-else ifeq $(call seq,$(call MK_LOWERCASE,$(DESKTOPENV)),kde)
+else ifeq ($(call seq,$(call MK_LOWERCASE,$(DESKTOPENV))),kde)
 override DESKTOPENV := kde
 override SCREENRES := $(shell xrandr | sed -n -e 's/.*current \([0-9]*\) x \([0-9]*\),.*/\1 \2/p')
 override __OPEN_TWO_TERMINALS_width := $(shell echo $(SCREENRES) | awk '{print $$1/2}')
@@ -69,10 +69,10 @@ override define OPEN_TWO_TERMINALS =
 @konsole --new-tab --workdir $(PWD) --profile "Shell" --title "$1" --geometry $(__OPEN_TWO_TERMINALS_width)x$(__OPEN_TWO_TERMINALS_height)+$(__OPEN_TWO_TERMINALS_x_first)+$(__OPEN_TWO_TERMINALS_y_first) -e "$2" & \
 konsole --new-tab --workdir $(PWD) --profile "Shell" --title "$3" --geometry $(__OPEN_TWO_TERMINALS_width)x$(__OPEN_TWO_TERMINALS_height)+$(__OPEN_TWO_TERMINALS_x_second)+$(__OPEN_TWO_TERMINALS_y_second) -e "$4" &
 endef
-else ifeq $(call seq,$(DESKTOPENV),)
-	$(call PERROR,Desktop environment not detected)
+else ifeq ($(call seq,$(DESKTOPENV)),)
+#$(call PERROR,Desktop environment not detected)
 else
-	$(call PERROR,Desktop environment '$(DESKTOPENV)' not supported)
+$(call PERROR,Desktop environment '$(DESKTOPENV)' not supported)
 endif
 
 override __DBGSESSION_QEMU_CMD = $(KQEMU) $(KQEMU_RUNFLAGS) $1 -s

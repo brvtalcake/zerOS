@@ -1,10 +1,10 @@
-override BOOT_KCFLAGS = $(KCFLAGS) -Wall -Wextra 	\
+override BOOT_KCFLAGS := $(KCFLAGS) -Wall -Wextra 	\
 	-std=gnu23 -ffreestanding -fno-stack-protector 	\
     -fno-stack-check -m64 -mno-mmx					\
 	$(call CC_TUNE_FOR,x86-64)	-mno-sse -mno-sse2 	\
 	-mno-red-zone -mno-avx -mno-avx2 -mno-avx512f	\
 	-nodefaultlibs -nostdlib -nostartfiles 			\
-	-m128bit-long-double -fno-lto
+	-m128bit-long-double -fno-lto -msoft-float
 
 override KCFLAGS += -Wall -Wextra -std=gnu23	\
 	-ffreestanding -fno-stack-protector 		\
