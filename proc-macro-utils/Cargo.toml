@@ -29,9 +29,10 @@ name = "test-ctor"
 [dependencies]
 proc-macro2 = "1.0.94"
 quote = "*"
-syn = { version = "2.0", features = [ "full" ] }
+syn = { version = "2.0", features = [ "full", "parsing" ] }
 getrandom = "*"
 paste = "*"
+either = "*"
 
 [dev-dependencies]
 libc = "*"

@@ -4,7 +4,7 @@
 !**/config.d
 *.log
 *.txt
-toolchain/**
+toolchain/
 config-temp/**
 #.vscode/
 **/__pycache__/

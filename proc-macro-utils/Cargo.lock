@@ -422,6 +422,7 @@ dependencies = [
  "cc",
  "cpp",
  "cpp_build",
+ "either",
  "getrandom",
  "jobserver",
  "libc",

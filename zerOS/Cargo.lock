@@ -79,6 +79,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "bitfield-struct"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2be5a46ba01b60005ae2c51a36a29cfe134bcacae2dd5cedcd4615fbaad1494b"
+dependencies = [
+ "proc-macro2 1.0.94",
+ "quote 1.0.40",
+ "syn 2.0.100",
+]
+
+[[package]]
 name = "bitflags"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -503,6 +514,26 @@ dependencies = [
  "proc-macro2 0.4.30",
  "quote 0.6.13",
  "syn 0.15.44",
+]
+
+[[package]]
+name = "overloadf"
+version = "0.1.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8a89f4fbf223b3173cc6166c017d816a0c14061670531e97c4a68d82b246485a"
+dependencies = [
+ "overloadf_derive",
+]
+
+[[package]]
+name = "overloadf_derive"
+version = "0.1.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "972cc79f744373bf005144681fbbdb06ec52f097062db331260a5068a1d2407b"
+dependencies = [
+ "proc-macro2 1.0.94",
+ "quote 1.0.40",
+ "syn 2.0.100",
 ]
 
 [[package]]
@@ -934,6 +965,7 @@ dependencies = [
  "autocfg",
  "bindgen",
  "bitfield",
+ "bitfield-struct",
  "bitflags 2.9.0",
  "bitfrob",
  "bytemuck",
@@ -957,6 +989,7 @@ dependencies = [
  "memoffset",
  "multiboot2",
  "overloadable",
+ "overloadf",
  "paste",
  "proc-macro2 1.0.94",
  "quote 1.0.40",
@@ -997,6 +1030,7 @@ dependencies = [
  "cc",
  "cpp",
  "cpp_build",
+ "either",
  "getrandom",
  "jobserver",
  "paste",

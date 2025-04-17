@@ -60,6 +60,8 @@ x86_64 = "0.15"
 zerOS-proc-macro-utils = { path = "../proc-macro-utils" }
 zerOS-macro-utils = { path = "../macro-utils" }
 log = "0.4.27"
+overloadf = "0.1.8"
+bitfield-struct = "0.10.1"
 
 [dependencies.uuid]
 version = "1.16"
