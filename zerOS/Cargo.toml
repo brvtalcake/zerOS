@@ -1,10 +1,10 @@
-cargo-features = [ "different-binary-name" ]
+cargo-features = ["different-binary-name"]
 
 [package]
 name = "zerOS-kernel"
 description = "The zerOS kernel"
 version = "0.1.0"
-authors = [ "Axel PASCON <axelpascon@nullware.dev>" ]
+authors = ["Axel PASCON <axelpascon@nullware.dev>"]
 edition = "2024"
 homepage = "https://github.com/brvtalcake/zerOS"
 repository = "https://github.com/brvtalcake/zerOS"
@@ -29,6 +29,7 @@ doc = true
 
 [dependencies]
 overloadable = "0.4"
+fastdivide = "0.4.2"
 bitflags = "2.9"
 itertools = { version = "0.14", default-features = false }
 hashbrown = "0.15"
@@ -39,12 +40,12 @@ cpufeatures = "0.2"
 memoffset = "0.9"
 getrandom = "0.3"
 time = { version = "0.3", default-features = false }
-zerocopy = "0.8"
+zerocopy = { version = "0.8", default-features = false, features = ["derive"]}
 limine = "0.4"
 x86 = "0.52.0"
 compiler_builtins = "*"
 paste = "1.0.15"
-static_assertions = "1.1.0"
+#static_assertions = "1.1.0"
 bytemuck = "1.22.0"
 bitfrob = "1.3.2"
 lru = "0.14.0"
@@ -53,20 +54,71 @@ raw-cpuid = "11.5.0"
 goblin = { version = "0.9", default-features = false }
 gimli = { version = "0.31", default-features = false }
 either = { version = "1.15.0", default-features = false }
-lazy_static = { version = "1.5", features = [ "spin_no_std" ]}
+lazy_static = { version = "1.5", features = ["spin_no_std"] }
 multiboot2 = "0.23"
-bitfield = "0.19"
+#bitfield = "0.19"
 x86_64 = "0.15"
 zerOS-proc-macro-utils = { path = "../proc-macro-utils" }
 zerOS-macro-utils = { path = "../macro-utils" }
 log = "0.4.27"
-overloadf = "0.1.8"
-bitfield-struct = "0.10.1"
+#overloadf = "0.1.8"
+overloadf = { git = "https://github.com/brvtalcake/overloadf.git", branch = "patch-1" }
+critical-section = { version = "1.2", default-features = false }
+#backtrace = { version = "0.3", default-features = false }
+anyhow = { version = "1.0", default-features = false}
+#bitfield-struct = "0.10.1"
 
 [dependencies.uuid]
 version = "1.16"
 default-features = false
-features = [ "rng-getrandom", "v1", "v3", "v4", "v5", "v6", "v7", "v8" ]
+features = ["rng-getrandom", "v1", "v3", "v4", "v5", "v6", "v7", "v8"]
+
+[dependencies.rustc-demangle]
+version = "0.1.16"
+default-features = false
+
+[dependencies.libm]
+version = "0.2"
+default-features = false
+features = ["force-soft-floats", "unstable"]
+
+[dependencies.num-traits]
+version = "0.2"
+default-features = false
+features = ["libm", "i128"]
+
+[dependencies.serde]
+version = "1.0"
+default-features = false
+features = ["derive", "unstable"]
+
+[dependencies.byteorder]
+version = "*"
+default-features = false
+features = ["i128"]
+
+[dependencies.rmp]
+version = "0.8"
+default-features = false
+
+[dependencies.defmt]
+version = "1.0"
+default-features = false
+
+[dependencies.postcard]
+version = "1.1"
+default-features = false
+features = ["use-crc", "use-defmt", "experimental-derive", "heapless"]
+
+[dependencies.heapless]
+version = "0.8"
+default-features = false
+features = ["portable-atomic-critical-section"]
+
+[dependencies.portable-atomic]
+version = "1.11"
+features = ["critical-section"]
+
 
 [dev-dependencies]
 

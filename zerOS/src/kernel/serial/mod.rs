@@ -26,7 +26,9 @@ impl SerialPort
         outb(self.id.bits() + 4, 0x1E);
 
         // perform test
+        #[allow(clippy::identity_op)]
         outb(self.id.bits() + 0, 0xae);
+        #[allow(clippy::identity_op)]
         let ret = inb(self.id.bits() + 0) != 0xae;
 
         // Set back to normal operation mode
@@ -50,6 +52,7 @@ impl SerialPort
         // from OSDev
         outb(self.id.bits() + 1, 0x00); // Disable all interrupts
         outb(self.id.bits() + 3, 0x80); // Enable DLAB (set baud rate divisor)
+        #[allow(clippy::identity_op)]
         outb(self.id.bits() + 0, 0x03); // Set divisor to 3 (lo byte) 38400 baud
         outb(self.id.bits() + 1, 0x00); //                  (hi byte)
         outb(self.id.bits() + 3, 0x03); // 8 bits, no parity, one stop bit

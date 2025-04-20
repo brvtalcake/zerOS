@@ -1,5 +1,4 @@
 use core::panic;
-use std;
 use std::ffi::OsString;
 use std::fs;
 use std::io;
@@ -36,7 +35,7 @@ pub fn main() {
 fn realpath<P: AsRef<std::path::Path> + Clone>(path: P) -> io::Result<std::path::PathBuf>
 {
     let thispath: &std::path::Path = ".".as_ref();
-    return fs::canonicalize(thispath.join(path));
+    fs::canonicalize(thispath.join(path))
 }
 
 macro_rules! KERNEL_SECTION_LIST {
@@ -89,7 +88,7 @@ mod tests
     }
 }
 "#;
-    out.write(content.as_bytes())?;
+    out.write_all(content.as_bytes())?;
     Ok(())
 }
 

@@ -36,11 +36,7 @@ overloadable! {
             cpuid_res.edx.to_ne_bytes(),
         ].as_flattened()
             .try_into()?;
-        let is_qemu = if
-            hyperv == *QEMU_HYPERV[0] || hyperv == *QEMU_HYPERV[1]
-                { true  }
-            else
-                { false };
+        let is_qemu = hyperv == *QEMU_HYPERV[0] || hyperv == *QEMU_HYPERV[1];
         if cache_result
         {
             unsafe {

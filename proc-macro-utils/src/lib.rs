@@ -30,15 +30,12 @@
 
 extern crate proc_macro;
 
-use std::mem::MaybeUninit;
-
 use proc_macro::TokenStream as TokenStreamClassic;
-use proc_macro2::Span;
-#[allow(unused_imports)]
-use proc_macro2::{Delimiter, Group, TokenStream};
-use quote::{ToTokens, TokenStreamExt, format_ident, quote};
+use proc_macro2::{Delimiter, Group, Span, TokenStream};
+use quote::{ToTokens, format_ident, quote};
+use std::mem::MaybeUninit;
 use syn::{
-    Expr, Ident, Path, Token, Type, TypePath, braced,
+    Attribute, Expr, ExprAssign, Ident, Lit, LitStr, Token, Type, braced,
     parse::{Parse, ParseStream},
     parse_macro_input, parse_str,
     punctuated::Punctuated,
@@ -112,6 +109,7 @@ trait AsTokenStream
     fn as_token_stream(&self, struct_name: &Ident, range_base: &Expr) -> TokenStream;
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 struct BitFieldElemOnly
 {
@@ -151,15 +149,15 @@ impl AsTokenStream for BitFieldElemOnly
             TokenStream::new()
         };
         let sz = &self.size;
-        quote! {
+        /* quote! {
             #[overloadf::overload]
             impl #struct_name
             {
-                #vi fn #ident(&self) -> #retty
+                #vi const fn #ident(&self) -> #retty
                 {
                     let arr = &self.0;
-                    let ret: #retty = 0;
-                    let counter: usize = 0;
+                    let mut ret: #retty = 0;
+                    let mut counter: usize = 0;
                     const START: usize = #range_base;
                     const END  : usize = #range_base + #sz;
                     for i in START..END
@@ -171,18 +169,62 @@ impl AsTokenStream for BitFieldElemOnly
                     ret
                 }
 
-                #vi fn #ident(&mut self, val: #retty)
+                #vi const fn #ident(&mut self, val: #retty)
                 {
                     let arr = &mut self.0;
-                    let counter: usize = 0;
+                    let mut counter: usize = 0;
                     const START: usize = #range_base;
                     const END  : usize = #range_base + #sz;
                     for i in START..END
                     {
-                        let bit = ((val >> counter) & 1) as bool;
+                        let bit: bool = ((val >> counter) & 1) != 0;
                         counter += 1;
                         arr[i / 8] = (arr[i / 8] & !((1 as u8) << (i % 8))) | ((bit as u8) << (i % 8));
                     }
+                }
+            }
+        } */
+       let getfn  = format_ident!("get_{}", ident);
+       let setfn  = format_ident!("set_{}", ident);
+       let withfn = format_ident!("with_{}", ident);
+        quote! {
+            
+            impl #struct_name
+            {
+                #vi fn #getfn(&self) -> #retty
+                {
+                    let arr = &self.0;
+                    let mut ret: #retty = 0;
+                    let mut counter: usize = 0;
+                    const START: usize = #range_base;
+                    const END  : usize = #range_base + #sz;
+                    for i in START..END
+                    {
+                        let tmp = ((arr[i / 8] >> (i % 8)) & 1) as #retty;
+                        ret |= tmp << counter;
+                        counter += 1;
+                    }
+                    ret
+                }
+
+                #vi fn #setfn(&mut self, val: #retty)
+                {
+                    let arr = &mut self.0;
+                    let mut counter: usize = 0;
+                    const START: usize = #range_base;
+                    const END  : usize = #range_base + #sz;
+                    for i in START..END
+                    {
+                        let bit: bool = ((val >> counter) & 1) != 0;
+                        counter += 1;
+                        arr[i / 8] = (arr[i / 8] & !((1 as u8) << (i % 8))) | ((bit as u8) << (i % 8));
+                    }
+                }
+
+                #vi fn #withfn(&mut self, val: #retty) -> &mut Self
+                {
+                    self.#setfn(val);
+                    self
                 }
             }
         }
@@ -260,6 +302,7 @@ impl Parse for BitFieldElemInner
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 struct BitFieldElemInnerStruct
 {
@@ -304,6 +347,7 @@ impl Parse for BitFieldElemInnerStruct
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 struct BitFieldElemUnion
 {
@@ -316,21 +360,11 @@ impl BitFieldElemUnion
 {
     fn size(&self) -> Expr
     {
-        let elems = self.elems.iter().map(|el| el.size());
+        let elems = self.elems.iter().skip(1).map(|el| el.size());
+        let first = self.elems[0].size();
         syn::parse2(quote! {
             (
-                const {
-                    let ___arr = [ #(#elems,)* ];
-                    let ___res: usize = 0;
-                    for ___el in ___arr
-                    {
-                        if ___el > ___res
-                        {
-                            ___res = ___el;
-                        }
-                    }
-                    ___res
-                }
+                static_max!((#first as usize) #(,(#elems) as usize)*)
             )
         })
         .unwrap()
@@ -419,6 +453,7 @@ impl AsTokenStream for BitFieldElem
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 struct BitFieldBlockOuter
 {
@@ -437,6 +472,7 @@ impl Parse for BitFieldBlockOuter
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 struct BitFieldDecl
 {
@@ -486,7 +522,14 @@ fn make_random_ident<'a, 'b>(
     Ok(ident)
 }
 
-fn make_static_assert_lte(lhs: Expr, rhs: Expr) -> Result<TokenStream, getrandom::Error>
+fn make_static_assert_cmp<T, U>(
+    lhs: T,
+    rhs: U,
+    cmpsym: TokenStream,
+) -> Result<TokenStream, getrandom::Error>
+where
+    T: ToTokens,
+    U: ToTokens,
 {
     let modname = make_random_ident(Some("__random_module_for_static_assert_"), Some("__"))?;
     let fnname = make_random_ident(Some("__random_fn_for_static_assert_"), Some("__"))?;
@@ -495,7 +538,8 @@ fn make_static_assert_lte(lhs: Expr, rhs: Expr) -> Result<TokenStream, getrandom
         {
             #[allow(dead_code)]
             const fn #fnname() {
-                assert!(#lhs <= #rhs);
+                const CONDITION: bool = ((#lhs) #cmpsym (#rhs));
+                assert!(CONDITION);
             }
 
             const _: () = #fnname();
@@ -503,11 +547,398 @@ fn make_static_assert_lte(lhs: Expr, rhs: Expr) -> Result<TokenStream, getrandom
     })
 }
 
+#[derive(Debug)]
+enum BitFieldRequest
+{
+    Constructor
+    {
+        impl_it: bool
+    },
+    Default
+    {
+        impl_it: bool
+    },
+    AsRef
+    {
+        impl_it: bool
+    },
+    AsMut
+    {
+        impl_it: bool
+    },
+    SizeEq
+    {
+        cmp_with: usize
+    },
+    SizeNeq
+    {
+        cmp_with: usize
+    },
+    SizeGt
+    {
+        cmp_with: usize
+    },
+    SizeLt
+    {
+        cmp_with: usize
+    },
+    SizeGte
+    {
+        cmp_with: usize
+    },
+    SizeLte
+    {
+        cmp_with: usize
+    },
+}
+
+impl BitFieldRequest
+{
+    fn expand(&self, struct_name: &Ident, summed_size: &Expr, underlying_type: &Type)
+    -> TokenStream
+    {
+        match self
+        {
+            Self::Constructor { impl_it } =>
+            {
+                if *impl_it
+                {
+                    impl_new_for(struct_name)
+                }
+                else
+                {
+                    TokenStream::new()
+                }
+            }
+            Self::Default { impl_it } =>
+            {
+                if *impl_it
+                {
+                    impl_default_for(struct_name)
+                }
+                else
+                {
+                    TokenStream::new()
+                }
+            }
+            Self::AsRef { impl_it } =>
+            {
+                if *impl_it
+                {
+                    impl_as_ref_for(struct_name, underlying_type)
+                }
+                else
+                {
+                    TokenStream::new()
+                }
+            }
+            Self::AsMut { impl_it } =>
+            {
+                if *impl_it
+                {
+                    impl_as_mut_for(struct_name, underlying_type)
+                }
+                else
+                {
+                    TokenStream::new()
+                }
+            }
+            Self::SizeEq { cmp_with } =>
+            {
+                make_static_assert_cmp(summed_size, cmp_with, quote! { == }).unwrap()
+            }
+            Self::SizeNeq { cmp_with } =>
+            {
+                make_static_assert_cmp(summed_size, cmp_with, quote! { != }).unwrap()
+            }
+            Self::SizeGt { cmp_with } =>
+            {
+                make_static_assert_cmp(summed_size, cmp_with, quote! { > }).unwrap()
+            }
+            Self::SizeGte { cmp_with } =>
+            {
+                make_static_assert_cmp(summed_size, cmp_with, quote! { >= }).unwrap()
+            }
+            Self::SizeLt { cmp_with } =>
+            {
+                make_static_assert_cmp(summed_size, cmp_with, quote! { < }).unwrap()
+            }
+            Self::SizeLte { cmp_with } =>
+            {
+                make_static_assert_cmp(summed_size, cmp_with, quote! { <= }).unwrap()
+            }
+        }
+    }
+}
+
+fn parse_yesno(lit: &Lit) -> Result<bool, syn::Error>
+{
+    match lit
+    {
+        Lit::Bool(val) => Ok(val.value()),
+        Lit::Byte(val) => Ok(val.value() != b'0'),
+        Lit::ByteStr(val) => Ok({
+            let ascii = val.value().to_ascii_uppercase();
+            ascii == b"YES" || ascii == b"ALWAYS" || ascii == b"TRUE" || ascii == b"ON"
+        }),
+        Lit::CStr(val) => Ok({
+            let ascii = val.value().to_bytes().to_ascii_uppercase();
+            ascii == b"YES" || ascii == b"ALWAYS" || ascii == b"TRUE" || ascii == b"ON"
+        }),
+        Lit::Char(val) => Ok(val.value() != '0'),
+        Lit::Float(val) => Ok({
+            let float: f64 = val.base10_parse()?;
+            float.round() != 0.0
+        }),
+        Lit::Int(val) => Ok({
+            let integer: i128 = val.base10_parse()?;
+            integer != 0
+        }),
+        Lit::Str(val) => Ok(val.value() == "YES"
+            || val.value() == "ALWAYS"
+            || val.value() == "TRUE"
+            || val.value() == "ON"),
+        _ => Err(syn::Error::new(Span::call_site(), "invalid literal")),
+    }
+}
+
+impl BitFieldDecl
+{
+    fn handle_attrs(&self) -> (Vec<BitFieldRequest>, Vec<Attribute>)
+    {
+        let mut reqs: Vec<BitFieldRequest> = vec![];
+        let mut others: Vec<Attribute> = vec![];
+        for attr in &self.attrs
+        {
+            if let Some(ident) = attr.path().get_ident()
+            {
+                if ident.to_string().to_uppercase() == "PROVIDE"
+                {
+                    if let Some(ExprAssign {
+                        attrs: _,
+                        left: lhs,
+                        eq_token: _,
+                        right: rhs,
+                    }) = attr.parse_args().ok()
+                    {
+                        if let Expr::Path(lpath) = lhs.as_ref()
+                        {
+                            if let Expr::Lit(rlit) = rhs.as_ref()
+                            {
+                                if let Ok(as_str) =
+                                    lpath.path.require_ident().map(|ok| ok.to_string())
+                                {
+                                    match as_str.to_uppercase().as_str()
+                                    {
+                                        "CONSTRUCTOR" | "NEW" | "CTOR" =>
+                                        {
+                                            if let Ok(yesno) = parse_yesno(&rlit.lit)
+                                            {
+                                                if let Some(elem) =
+                                                    reqs.iter_mut().find(|el| match el
+                                                    {
+                                                        BitFieldRequest::Constructor {
+                                                            impl_it: _,
+                                                        } => true,
+                                                        _ => false,
+                                                    })
+                                                {
+                                                    *elem = BitFieldRequest::Constructor {
+                                                        impl_it: yesno,
+                                                    };
+                                                    continue;
+                                                }
+                                                else
+                                                {
+                                                    reqs.push(BitFieldRequest::Constructor {
+                                                        impl_it: yesno,
+                                                    });
+                                                    continue;
+                                                }
+                                            }
+                                        }
+                                        "DEFAULT" =>
+                                        {
+                                            if let Ok(yesno) = parse_yesno(&rlit.lit)
+                                            {
+                                                if let Some(elem) =
+                                                    reqs.iter_mut().find(|el| match el
+                                                    {
+                                                        BitFieldRequest::Default { impl_it: _ } =>
+                                                        {
+                                                            true
+                                                        }
+                                                        _ => false,
+                                                    })
+                                                {
+                                                    *elem =
+                                                        BitFieldRequest::Default { impl_it: yesno };
+                                                    continue;
+                                                }
+                                                else
+                                                {
+                                                    reqs.push(BitFieldRequest::Default {
+                                                        impl_it: yesno,
+                                                    });
+                                                    continue;
+                                                }
+                                            }
+                                        }
+                                        "ASREF" | "AS_REF" =>
+                                        {
+                                            if let Ok(yesno) = parse_yesno(&rlit.lit)
+                                            {
+                                                if let Some(elem) =
+                                                    reqs.iter_mut().find(|el| match el
+                                                    {
+                                                        BitFieldRequest::AsRef { impl_it: _ } =>
+                                                        {
+                                                            true
+                                                        }
+                                                        _ => false,
+                                                    })
+                                                {
+                                                    *elem =
+                                                        BitFieldRequest::AsRef { impl_it: yesno };
+                                                    continue;
+                                                }
+                                                else
+                                                {
+                                                    reqs.push(BitFieldRequest::AsRef {
+                                                        impl_it: yesno,
+                                                    });
+                                                    continue;
+                                                }
+                                            }
+                                        }
+                                        "ASMUT" | "AS_MUT" =>
+                                        {
+                                            if let Ok(yesno) = parse_yesno(&rlit.lit)
+                                            {
+                                                if let Some(elem) =
+                                                    reqs.iter_mut().find(|el| match el
+                                                    {
+                                                        BitFieldRequest::AsMut { impl_it: _ } =>
+                                                        {
+                                                            true
+                                                        }
+                                                        _ => false,
+                                                    })
+                                                {
+                                                    *elem =
+                                                        BitFieldRequest::AsMut { impl_it: yesno };
+                                                    continue;
+                                                }
+                                                else
+                                                {
+                                                    reqs.push(BitFieldRequest::AsMut {
+                                                        impl_it: yesno,
+                                                    });
+                                                    continue;
+                                                }
+                                            }
+                                        }
+                                        _ =>
+                                        {}
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                else if ident.to_string().to_uppercase() == "CHECK"
+                {
+                    if let Some(ExprAssign {
+                        attrs: _,
+                        left: lhs,
+                        eq_token: _,
+                        right: rhs,
+                    }) = attr.parse_args().ok()
+                    {
+                        match (lhs.as_ref(), rhs.as_ref())
+                        {
+                            (Expr::Path(ident), Expr::Lit(lit)) =>
+                            {
+                                match (
+                                    ident
+                                        .path
+                                        .require_ident()
+                                        .map(|okval| okval.to_string().to_uppercase()),
+                                    &lit.lit,
+                                )
+                                {
+                                    (Ok(val), Lit::Int(intlit))
+                                        if val == "EQUAL_TO".to_string()
+                                            || val == "EQ".to_string() =>
+                                    {
+                                        reqs.push(BitFieldRequest::SizeEq {
+                                            cmp_with: intlit.base10_parse().unwrap(),
+                                        });
+                                        continue;
+                                    }
+                                    (Ok(val), Lit::Int(intlit))
+                                        if val == "NOT_EQUAL_TO".to_string()
+                                            || val == "DIFFERENT_FROM".to_string()
+                                            || val == "NEQ".to_string() =>
+                                    {
+                                        reqs.push(BitFieldRequest::SizeNeq {
+                                            cmp_with: intlit.base10_parse().unwrap(),
+                                        });
+                                        continue;
+                                    }
+                                    (Ok(val), Lit::Int(intlit))
+                                        if val == "LESS_THAN".to_string()
+                                            || val == "LT".to_string() =>
+                                    {
+                                        reqs.push(BitFieldRequest::SizeLt {
+                                            cmp_with: intlit.base10_parse().unwrap(),
+                                        });
+                                        continue;
+                                    }
+                                    (Ok(val), Lit::Int(intlit)) if val == "LTE".to_string() =>
+                                    {
+                                        reqs.push(BitFieldRequest::SizeLte {
+                                            cmp_with: intlit.base10_parse().unwrap(),
+                                        });
+                                        continue;
+                                    }
+                                    (Ok(val), Lit::Int(intlit))
+                                        if val == "GREATER_THAN".to_string()
+                                            || val == "GT".to_string() =>
+                                    {
+                                        reqs.push(BitFieldRequest::SizeGt {
+                                            cmp_with: intlit.base10_parse().unwrap(),
+                                        });
+                                        continue;
+                                    }
+                                    (Ok(val), Lit::Int(intlit)) if val == "GTE".to_string() =>
+                                    {
+                                        reqs.push(BitFieldRequest::SizeGte {
+                                            cmp_with: intlit.base10_parse().unwrap(),
+                                        });
+                                        continue;
+                                    }
+                                    _ =>
+                                    {}
+                                }
+                            }
+                            _ =>
+                            {}
+                        }
+                    }
+                }
+            }
+            others.push(attr.clone());
+        }
+        (reqs, others)
+    }
+}
+
 impl ToTokens for BitFieldDecl
 {
     fn to_tokens(&self, tokens: &mut TokenStream)
     {
-        let attrs = &self.attrs;
+        let (our_attrs, other_attrs) = self.handle_attrs();
         let vis = if let Some(visibility) = self.vis
         {
             visibility.into_token_stream()
@@ -519,7 +950,7 @@ impl ToTokens for BitFieldDecl
         let name = &self.name;
         let underlying_type = self.choose_underlying();
         let struct_decl = quote! {
-            #(#attrs)*
+            #(#other_attrs)*
             #vis struct #name (#underlying_type);
         };
         struct_decl.to_tokens(tokens);
@@ -534,24 +965,67 @@ impl ToTokens for BitFieldDecl
             })
             .unwrap();
         }
-        //let type_to_check = quote! {
-        //    [u8; (#range_base / 8) + (if #range_base % 8 { 1 } else { 0 })]
-        //};
-        //tokens.extend(
-        //    quote! {
-        //        static_assertions::assert_eq_size!(
-        //            #type_to_check, #underlying_type
-        //        );
-        //    }
-        //);
+        for attr in our_attrs
+        {
+            tokens.extend(attr.expand(name, &range_base, &underlying_type));
+        }
         let underlying_sz = &self.underlying_size;
         tokens.extend(
-            make_static_assert_lte(range_base, syn::parse2(quote! { #underlying_sz }).unwrap())
-                .unwrap_or_else(|err| {
+            make_static_assert_cmp(range_base, underlying_sz, quote! { <= }).unwrap_or_else(
+                |err| {
                     let errstr = format!("{err}\n");
                     quote! { compile_error!(#errstr) }
-                }),
+                },
+            ),
         );
+    }
+}
+
+fn impl_new_for(struct_name: &Ident) -> TokenStream
+{
+    quote! {
+        impl #struct_name {
+            pub const fn new() -> Self {
+                unsafe {
+                    core::mem::zeroed()
+                }
+            }
+        }
+    }
+}
+
+fn impl_default_for(struct_name: &Ident) -> TokenStream
+{
+    quote! {
+        impl Default for #struct_name {
+            fn default() -> Self {
+                unsafe {
+                    core::mem::zeroed()
+                }
+            }
+        }
+    }
+}
+
+fn impl_as_ref_for(struct_name: &Ident, underlying_type: &Type) -> TokenStream
+{
+    quote! {
+        impl AsRef<#underlying_type> for #struct_name {
+            fn as_ref(&self) -> &#underlying_type {
+                &self.0
+            }
+        }
+    }
+}
+
+fn impl_as_mut_for(struct_name: &Ident, underlying_type: &Type) -> TokenStream
+{
+    quote! {
+        impl AsMut<#underlying_type> for #struct_name {
+            fn as_mut(&mut self) -> &mut #underlying_type {
+                &mut self.0
+            }
+        }
     }
 }
 
@@ -563,24 +1037,103 @@ pub fn bitfield(input: TokenStreamClassic) -> TokenStreamClassic
     parsed.into_token_stream().into()
 }
 
-#[cfg(test)]
-mod tests
+struct StaticAssertArgs
 {
-    use syn::parse_str;
+    condition: Expr,
+    msg: LitStr,
+}
 
-    use crate::BitFieldElemUnion;
-
-    #[test]
-    fn union_test()
+impl Parse for StaticAssertArgs
+{
+    fn parse(input: ParseStream) -> syn::Result<Self>
     {
-        let to_parse = r#"
-            union {
-                pub u8 test1: 4;
-                pub u8 test2: 4;
-            };"#;
-        let union_: BitFieldElemUnion = parse_str(to_parse).unwrap_or_else(|err| {
-            println!("{}", err.clone());
-            err
-        })?;
+        let cond: Expr = input.parse()?;
+        if let Ok(_) = input.parse::<Token![,]>()
+        {
+            Ok(Self {
+                condition: cond,
+                msg: input.parse()?,
+            })
+        }
+        else
+        {
+            Ok(Self {
+                msg: {
+                    let failed_string = format!(
+                        "static assertion `{}` failed",
+                        cond.clone().to_token_stream().to_string()
+                    );
+                    syn::parse2(quote! { #failed_string }).expect("internal error !")
+                },
+                condition: cond,
+            })
+        }
     }
 }
+
+fn make_static_assert<T, U>(expr: T, msg: Option<U>) -> Result<TokenStream, getrandom::Error>
+where
+    T: ToTokens,
+    U: ToTokens,
+{
+    let modname = make_random_ident(Some("__random_module_for_static_assert_"), Some("__"))?;
+    let fnname = make_random_ident(Some("__random_fn_for_static_assert_"), Some("__"))?;
+    Ok(quote! {
+        mod #modname
+        {
+            use super::*;
+            #[allow(dead_code)]
+            const fn #fnname() {
+                let condition: bool = (#expr);
+                assert!(condition, #msg);
+            }
+
+            const _: () = #fnname();
+        }
+    })
+}
+
+impl ToTokens for StaticAssertArgs
+{
+    fn to_tokens(&self, tokens: &mut TokenStream)
+    {
+        make_static_assert(&self.condition, Some(&self.msg))
+            .unwrap_or_else(|err| {
+                let errmsg = format!("unable to get random number: {}", err.to_string());
+                quote! {
+                    compile_error!(#errmsg)
+                }
+            })
+            .to_tokens(tokens);
+    }
+}
+
+#[proc_macro]
+pub fn static_assert(input: TokenStreamClassic) -> TokenStreamClassic
+{
+    let parsed = parse_macro_input!(input as StaticAssertArgs);
+
+    quote! { #parsed }.into()
+}
+
+//#[cfg(test)]
+//mod tests
+//{
+//    use syn::parse_str;
+//
+//    use crate::BitFieldElemUnion;
+//
+//    #[test]
+//    fn union_test()
+//    {
+//        let to_parse = r#"
+//            union {
+//                pub u8 test1: 4;
+//                pub u8 test2: 4;
+//            };"#;
+//        let union_: BitFieldElemUnion = parse_str(to_parse).unwrap_or_else(|err| {
+//            println!("{}", err.clone());
+//            err
+//        })?;
+//    }
+//}

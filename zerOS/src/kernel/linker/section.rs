@@ -2,7 +2,7 @@ use core::ffi::c_void;
 
 use crate::kernel::linker::map::*;
 
-pub fn in_section<'a>(secname: &'a str, addr: *const c_void) -> Option<bool>
+pub fn in_section(secname: &str, addr: *const c_void) -> Option<bool>
 {
     type TupleType = (&'static str, LinkerSym, LinkerSym);
     #[rustfmt::skip]
