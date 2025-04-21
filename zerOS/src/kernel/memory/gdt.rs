@@ -1,5 +1,7 @@
-use core::{arch::asm,
-           mem::{align_of, size_of}};
+use core::{
+	arch::asm,
+	mem::{align_of, size_of}
+};
 
 use num_traits::AsPrimitive;
 use zerocopy::{FromBytes, IntoBytes};

@@ -1,5 +1,7 @@
-use limine::{BaseRevision,
-             request::{FramebufferRequest, HhdmRequest, MemoryMapRequest}};
+use limine::{
+	BaseRevision,
+	request::{FramebufferRequest, HhdmRequest, MemoryMapRequest}
+};
 
 macro_rules! requests {
     {$($it:item)*} => {

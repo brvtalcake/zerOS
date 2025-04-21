@@ -57,6 +57,30 @@ macro_rules! KERNEL_SECTION_LIST {
 	};
 }
 
+fn format_generated_file<P: AsRef<std::path::Path>>(path: P) -> io::Result<std::process::Child>
+{
+	let config_file_path = realpath("./rustfmt.toml").expect("couldn't find config file !");
+	let config_file = config_file_path
+		.as_os_str()
+		.try_into()
+		.expect("couldn't convert path to string !");
+	let args = [
+		"--config-path",
+		config_file,
+		path.as_ref()
+			.as_os_str()
+			.try_into()
+			.expect("couldn't convert path to string !")
+	];
+	println!(
+		"formatting {} with command `{} {}`",
+		&args[2],
+		&config_file,
+		args.join(" ")
+	);
+	Command::new("rustfmt").args(args).spawn()
+}
+
 const KERNEL_SECTION_COUNT: usize = KERNEL_SECTION_LIST!(array_size);
 const KERNEL_SECTIONS: [&str; KERNEL_SECTION_COUNT] = KERNEL_SECTION_LIST!();
 
@@ -167,5 +191,37 @@ fn update_linker_script_and_related(gensecinfo: &PathBuf) -> std::path::PathBuf
 			)
 		})
 		.expect("unreachable"); // we `panic!`
+	if let Ok(mut process) = format_generated_file(&modrsfile)
+	{
+		if process.wait().is_ok_and(|status| status.success())
+		{
+			println!("successfully formatted {}", modrsfile.display());
+		}
+		else
+		{
+			println!("couldn't properly format {}", modrsfile.display());
+		}
+	}
+	else
+	{
+		println!("couldn't properly format {}", modrsfile.display());
+	}
+
+	if let Ok(mut process) = format_generated_file(&rsfile)
+	{
+		if process.wait().is_ok_and(|status| status.success())
+		{
+			println!("successfully formatted {}", rsfile);
+		}
+		else
+		{
+			println!("couldn't properly format {}", rsfile);
+		}
+	}
+	else
+	{
+		println!("couldn't properly format {}", rsfile);
+	}
+
 	out_ldfile
 }

@@ -2,8 +2,10 @@ use core::result::Result;
 
 use overloadable::overloadable;
 
-use crate::kernel::{cpuid,
-                    sync::{Mutex, MutexGuard}};
+use crate::kernel::{
+	cpuid,
+	sync::{Mutex, MutexGuard}
+};
 
 overloadable! {
 	pub under_qemu as
