@@ -10,18 +10,18 @@ pub mod sync;
 pub use core::arch::x86_64::CpuidResult;
 
 overloadable! {
-    pub cpuid as
+	pub cpuid as
 
-    fn(leaf: u32, subleaf: u32) -> CpuidResult
-    {
-        unsafe {
-            core::arch::x86_64::__cpuid_count(leaf, subleaf)
-        }
-    },
-    fn(leaf: u32) -> CpuidResult
-    {
-        unsafe {
-            core::arch::x86_64::__cpuid_count(leaf, 0)
-        }
-    }
+	fn(leaf: u32, subleaf: u32) -> CpuidResult
+	{
+		unsafe {
+			core::arch::x86_64::__cpuid_count(leaf, subleaf)
+		}
+	},
+	fn(leaf: u32) -> CpuidResult
+	{
+		unsafe {
+			core::arch::x86_64::__cpuid_count(leaf, 0)
+		}
+	}
 }

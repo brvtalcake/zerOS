@@ -1,4 +1,1 @@
-pub enum KError
-{
-    
-}
+pub enum KError {}
