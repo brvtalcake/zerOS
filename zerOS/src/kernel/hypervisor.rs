@@ -26,7 +26,7 @@ overloadable! {
             return Ok(unsafe { CACHED_VALUE });
         }
 
-        const QEMU_HYPERV: [&'static [u8; 12]; 2] = [
+        const QEMU_HYPERV: [&[u8; 12]; 2] = [
             b"TCGTCGTCGTCG", b"KVMKVMKVM\0\0\0"
         ];
         let cpuid_res = cpuid(0x40000000_u32);

@@ -5,6 +5,12 @@ pub struct Mutex
     flag: AtomicBool,
 }
 
+impl Default for Mutex {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Mutex
 {
     pub const fn new() -> Self
@@ -14,7 +20,7 @@ impl Mutex
 
     pub fn lock(&self)
     {
-        while let Err(_) = self.flag.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        while self.flag.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire).is_err()
         { }
     }
 

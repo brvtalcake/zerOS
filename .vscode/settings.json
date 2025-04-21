@@ -1,4 +1,5 @@
 {
+    "editor.detectIndentation": true,
     "files.associations": {
         "*gmsl": "makefile",
         "*.h": "c",
@@ -134,7 +135,7 @@
     "rust-analyzer.signatureInfo.documentation.enable": true,
     "rust-analyzer.signatureInfo.detail": "full",
     "rust-analyzer.rustfmt.extraArgs": [
-        "--config",
-        "brace_style=AlwaysNextLine,control_brace_style=AlwaysNextLine,combine_control_expr=false",
+        "--config-path",
+        "${workspaceFolder}/zerOS/rustfmt.toml",
     ]
 }
