@@ -1,7 +1,0 @@
-
-#pragma supdef runnable C RETCODE begin C_TYPE_SIZE_IS_XBITS
-int main(void)
-{
-    return (sizeof($1) * 8 == $2) ? 1 : 0;
-}
-#pragma supdef end

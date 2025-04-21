@@ -1,5 +1,0 @@
-#ifndef zerOS_KERNEL_MEMORY_VMM_H_INCLUDED
-#define zerOS_KERNEL_MEMORY_VMM_H_INCLUDED
-
-
-#endif

@@ -1,0 +1,83 @@
+[package]
+name = "zerOS-proc-macro-utils"
+description = "A bunch of rust utility proc macros"
+version = "0.1.0"
+authors = [ "Axel PASCON <axelpascon@nullware.dev>" ]
+edition = "2024"
+homepage = "https://github.com/brvtalcake/zerOS"
+repository = "https://github.com/brvtalcake/zerOS"
+license-file = "../LICENSE"
+readme = "../README.md"
+
+autobins = false
+autoexamples = false
+autotests = false
+autobenches = false
+
+[lib]
+name = "proc_macro_utils"
+proc-macro = true
+doc = true
+test = true
+
+[[test]]
+name = "test-array_size"
+
+[[test]]
+name = "test-ctor"
+
+[dependencies]
+proc-macro2 = "1.0.94"
+quote = "*"
+syn = { version = "2.0", features = [ "full", "parsing", "extra-traits" ] }
+getrandom = "*"
+paste = "*"
+either = "*"
+
+[dev-dependencies]
+libc = "*"
+
+#[target]
+
+[build-dependencies]
+cc = "1.2.18"
+autocfg = "1.4.0"
+bindgen = "0.71.1"
+jobserver = "0.1.33"
+cpp = "0.5.10"
+cpp_build = "0.5.10"
+
+[profile.dev]
+opt-level = 0
+debug = "full"
+split-debuginfo = "off"
+strip = "none"
+debug-assertions = true
+overflow-checks = true
+lto = "off"
+panic = "abort"
+incremental = true
+#codegen-units = 256
+rpath = false
+
+[profile.release]
+opt-level = 3
+debug = false
+split-debuginfo = "packed"
+strip = "none"
+debug-assertions = false
+overflow-checks = false
+lto = false
+panic = "abort"
+incremental = false
+#codegen-units = 16
+rpath = false
+
+[profile.release-lto]
+inherits = "release"
+lto = true
+
+[profile.dev-lto]
+inherits = "dev"
+lto = true
+incremental = false

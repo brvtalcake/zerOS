@@ -17,37 +17,37 @@ LOG_PERROR_START:   str = "  [ERROR]  "
 LOG_PERROR_END:     str = ""
 
 import io
-debug: bool = False
-logfile: io.TextIOWrapper | None = None
+_debug: bool = False
+_logfile: io.TextIOWrapper | None = None
 
 def _handle_logfile(msg: str) -> None:
-    global logfile
-    if logfile is not None:
-        logfile.write(msg)
-        logfile.flush()
+    global _logfile
+    if _logfile is not None:
+        _logfile.write(msg)
+        _logfile.flush()
     return None
 
 def set_logfile(filename: str) -> None:
-    global logfile
-    logfile = open(filename, "w")
+    global _logfile
+    _logfile = open(filename, "w")
     return None
 
 def get_logfile() -> io.TextIOWrapper | None:
-    global logfile
-    return logfile
+    global _logfile
+    return _logfile
 
 def set_debug_mode(active: bool = True) -> None:
-    global debug
-    debug = active
+    global _debug
+    _debug = active
     return None
 
 def get_debug_mode() -> bool:
-    global debug
-    return debug
+    global _debug
+    return _debug
 
 def pdebug(msg: str, end: str | None = '\n') -> None:
-    global debug
-    if debug:
+    global _debug
+    if _debug:
         print(f"{PDEBUG_START}{msg}{PDEBUG_END}", end=end)
         _handle_logfile(f"{LOG_PDEBUG_START}{msg}{LOG_PDEBUG_END}" + end if end is not None else "")
     return None
