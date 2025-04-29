@@ -1,8 +1,125 @@
-use core::panic;
-use std::{ffi::OsString, fs, io, io::Write, path::PathBuf, process::Command};
+#![recursion_limit = "512"]
+#![allow(unused_macros)]
 
+use core::panic;
+use std::{
+	ffi::OsString,
+	fs,
+	io::{self, Write},
+	path::PathBuf,
+	process::{Command, exit}
+};
+
+use cfg_aliases::cfg_aliases;
 use macro_utils::{callback, identity_expand};
 use proc_macro_utils::array_size;
+use serde::Deserialize;
+use strum::VariantNames;
+
+macro_rules! to_cargo {
+	($cfgstring:expr => $what:expr) => {
+		println!("cargo::{}={}", $cfgstring, $what)
+	};
+}
+
+macro_rules! from_cargo {
+	($cfgvar:expr) => {
+		::std::env::var_os($cfgvar)
+	};
+}
+
+#[derive(Deserialize, Debug, Default)]
+#[serde(rename_all = "kebab-case")]
+struct KConfig
+{
+	boot: Option<KConfigBoot>
+}
+
+#[derive(Deserialize, Debug, Default)]
+#[serde(rename_all = "kebab-case")]
+#[serde(rename = "boot")]
+struct KConfigBoot
+{
+	bootloader: Option<KConfigBootBootloader>
+}
+
+#[derive(
+	Deserialize,
+	Debug,
+	Default,
+	Clone,
+	Copy,
+	strum::AsRefStr,
+	strum::EnumString,
+	strum::VariantNames,
+)]
+#[strum(serialize_all = "kebab-case")]
+#[serde(rename_all = "kebab-case")]
+#[serde(rename = "bootloader")]
+enum KConfigBootBootloader
+{
+	#[default]
+	Limine,
+	GRUB2,
+	UEFI
+}
+
+fn parse_kconfig() -> KConfig
+{
+	toml::from_str(fs::read_to_string("./kconfig.toml").unwrap_or_else(
+		|err| {
+			to_cargo!("error" => format!("couldn't read kernel configuration file `./kconfig.toml`: {err}"));
+			exit(1)
+		}
+	).as_str()).unwrap_or_else(
+		|err| {
+			to_cargo!("error" => format!("couldn't parse kernel configuration file `./kconfig.toml`: {err}"));
+			exit(1)
+		}
+	)
+}
+
+macro_rules! custom_kcfg {
+	($cfg:ident : $type:ty = $parsed:expr) => {
+		to_cargo!("rustc-cfg" => format!("{}=\"{}\"", stringify!($cfg), $parsed));
+		let mut cfgstr = String::from(format!("cfg({}, values(", stringify!($cfg)));
+		cfgstr += format!("\"{}\"", <$type>::VARIANTS[0]).as_str();
+		for authorized in <$type>::VARIANTS.iter().skip(1)
+		{
+			cfgstr += format!(",\"{}\"", authorized).as_str();
+		}
+		cfgstr += "))";
+		to_cargo!("rustc-check-cfg" => cfgstr);
+	};
+}
+
+fn generate_kconfig_aliases()
+{
+	let kconfig = parse_kconfig();
+	if let Some(bootconf) = &kconfig.boot
+	{
+		let bootloader = bootconf.bootloader.unwrap_or_default();
+		custom_kcfg!(bootloader: KConfigBootBootloader = bootloader.as_ref());
+	}
+}
+
+fn generate_config_arch_aliases()
+{
+	cfg_aliases! {
+		x86_alike: { any(target_arch = "x86", target_arch = "x86_64") },
+		avr_alike: { target_arch = "avr" },
+		sparc_alike: { any(target_arch = "sparc", target_arch = "sparc64") },
+		loongarch_alike: { target_arch = "loongarch64" },
+		mips_alike: { any(
+			target_arch = "mips",
+			target_arch = "mips64",
+			target_arch = "mips32r6",
+			target_arch = "mips64r6") },
+		ppc_alike: { any(target_arch = "powerpc", target_arch = "powerpc64") },
+		riscv_alike: { any(target_arch = "riscv32", target_arch = "riscv64") },
+		arm_alike: { any(target_arch = "aarch64", target_arch = "arm", target_arch = "arm64ec") }
+	};
+}
 
 pub fn main()
 {
@@ -10,6 +127,9 @@ pub fn main()
 	// .arg("Hello world")
 	// .output()
 	// .expect("Failed to execute command");
+	generate_config_arch_aliases();
+	generate_kconfig_aliases();
+
 	let relpath: &'static str = "../scripts/gensectioninfo.py";
 	let abspath = match realpath(relpath)
 	{
@@ -17,22 +137,19 @@ pub fn main()
 		Err(e) => panic!("can not find {relpath}: {}", e.to_string())
 	};
 
-	println!(
-		"cargo::rerun-if-changed={}",
-		abspath
-			.clone()
-			.into_os_string()
-			.into_string()
-			.expect("invalid path !")
-	);
-	println!("cargo::rerun-if-changed=build.rs");
-	println!("cargo::rerun-if-changed=linker/linker-x86_64.ld.template");
+	to_cargo!("rerun-if-changed" => abspath
+		.clone()
+		.into_os_string()
+		.into_string()
+		.expect("invalid path !"));
+	to_cargo!("rerun-if-changed" => "build.rs");
+	to_cargo!("rerun-if-changed" => "linker/linker-x86_64.ld.template");
 
 	let linker_script = update_linker_script_and_related(&abspath)
 		.into_os_string()
 		.into_string()
 		.expect("unreachable");
-	println!("cargo::rustc-link-arg=-T{linker_script}");
+	to_cargo!("rustc-link-arg" => format!("-T{linker_script}"));
 }
 
 fn realpath<P: AsRef<std::path::Path> + Clone>(path: P) -> io::Result<std::path::PathBuf>

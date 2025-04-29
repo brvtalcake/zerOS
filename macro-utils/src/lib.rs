@@ -1,6 +1,5 @@
 #![feature(concat_idents)]
 #![no_std]
-
 #![recursion_limit = "1024"]
 
 #[macro_export]
@@ -92,22 +91,44 @@ macro_rules! static_max {
          } };
 }
 
+#[macro_export]
+macro_rules! max {
+    () => { 0_usize };
+    ($expr:expr) => { { ($expr) } };
+    ($first:expr $(,$rest:expr)*)
+        => { {
+            if ($first) >= (max!(@inner $(,$rest)*))
+            { ($first) }
+            else
+            { max!(@inner $(,$rest)*) }
+         } };
+    (@inner, $expr:expr) => { { ($expr) } };
+    (@inner, $first:expr $(,$rest:expr)*)
+        => { {
+            if ($first) >= (max!(@inner $(,$rest)*))
+            { ($first) }
+            else
+            { max!(@inner $(,$rest)*) }
+         } };
+}
+
 #[cfg(test)]
 mod tests
 {
-    use super::*;
-    use proc_macro_utils::array_size;
+	use proc_macro_utils::array_size;
 
-    macro_rules! MY_ARRAY_CONSTANT {
-        ($callback:tt) => {
-            callback!($callback([0, 1, 2, 3, 4, 5]))
-        };
-        () => {
-            [0, 1, 2, 3, 4, 5]
-        };
-    }
+	use super::*;
 
-    macro_rules! MY_MACRO {
+	macro_rules! MY_ARRAY_CONSTANT {
+		($callback:tt) => {
+			callback!($callback([0, 1, 2, 3, 4, 5]))
+		};
+		() => {
+			[0, 1, 2, 3, 4, 5]
+		};
+	}
+
+	macro_rules! MY_MACRO {
         ($($tokens:tt)*) => {
             callback!(
                 $($tokens)*(
@@ -117,50 +138,50 @@ mod tests
         };
     }
 
-    macro_rules! MY_COOL_CALLBACK1 {
+	macro_rules! MY_COOL_CALLBACK1 {
         ($($args:tt)*) => {
             static_max!($($args)*)
         };
     }
 
-    macro_rules! MY_COOL_CALLBACK2 {
+	macro_rules! MY_COOL_CALLBACK2 {
         ($($args:tt)*) => {
             (($($args)*) * 2)
         };
     }
 
-    #[test]
-    fn callback_test()
-    {
-        assert_eq!(MY_ARRAY_CONSTANT!(identity_expand), MY_ARRAY_CONSTANT!());
-        assert_eq!(MY_ARRAY_CONSTANT!(array_size), MY_ARRAY_CONSTANT!().len());
-        assert_eq!(MY_MACRO!(MY_COOL_CALLBACK1), 6);
-        assert_eq!(MY_MACRO!(@foreach @delim(+) MY_COOL_CALLBACK2), 42);
-    }
+	#[test]
+	fn callback_test()
+	{
+		assert_eq!(MY_ARRAY_CONSTANT!(identity_expand), MY_ARRAY_CONSTANT!());
+		assert_eq!(MY_ARRAY_CONSTANT!(array_size), MY_ARRAY_CONSTANT!().len());
+		assert_eq!(MY_MACRO!(MY_COOL_CALLBACK1), 6);
+		assert_eq!(MY_MACRO!(@foreach @delim(+) MY_COOL_CALLBACK2), 42);
+	}
 
-    #[test]
-    fn identity_expand_test()
-    {
-        assert_eq!(
-            identity_expand!("The quick brown fox blah blah blah"),
-            "The quick brown fox blah blah blah"
-        );
-    }
+	#[test]
+	fn identity_expand_test()
+	{
+		assert_eq!(
+			identity_expand!("The quick brown fox blah blah blah"),
+			"The quick brown fox blah blah blah"
+		);
+	}
 
-    #[test]
-    fn count_exprs_test()
-    {
-        assert_eq!(count_exprs!("1"), 1);
-        assert_eq!(count_exprs!("1", "2"), 2);
-        assert_eq!(count_exprs!("1", "2", "3"), 3);
-        assert_eq!(count_exprs!("1", "2", "3", "4"), 4);
-        assert_eq!(count_exprs!("1", "2", "3", "4", 5), 5);
-    }
+	#[test]
+	fn count_exprs_test()
+	{
+		assert_eq!(count_exprs!("1"), 1);
+		assert_eq!(count_exprs!("1", "2"), 2);
+		assert_eq!(count_exprs!("1", "2", "3"), 3);
+		assert_eq!(count_exprs!("1", "2", "3", "4"), 4);
+		assert_eq!(count_exprs!("1", "2", "3", "4", 5), 5);
+	}
 
-    #[test]
-    fn static_max_test()
-    {
-        assert_eq!(static_max!(0, 8, 18, 2, 4235468, 1), 4235468);
-        assert_eq!(static_max!(0, 8, 18, 2, 18, 1), 18);
-    }
+	#[test]
+	fn static_max_test()
+	{
+		assert_eq!(static_max!(0, 8, 18, 2, 4235468, 1), 4235468);
+		assert_eq!(static_max!(0, 8, 18, 2, 18, 1), 18);
+	}
 }

@@ -33,6 +33,9 @@ syn = { version = "2.0", features = [ "full", "parsing", "extra-traits" ] }
 getrandom = "*"
 paste = "*"
 either = "*"
+num-traits = "*"
+#darling = "*"
+pathsearch = "*"
 
 [dev-dependencies]
 libc = "*"

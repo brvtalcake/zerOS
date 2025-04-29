@@ -1,64 +1,108 @@
-use bitflags::bitflags;
+use core::fmt;
 
-bitflags! {
-	pub struct SerialPortId : u16
+use super::io::{KernelIO, KernelIOExt};
+
+pub trait SerialIO
+{
+	fn supports_ansi_escape_codes(&self) -> bool
 	{
-		const COM1 = 0x3f8_u16;
-		const COM2 = 0x2f8_u16;
-		const COM3 = 0x3e8_u16;
-		const COM4 = 0x2e8_u16;
-		const DEBUG = SerialPortId::COM1.bits();
+		false
+	}
+
+	fn serial_write_byte(&self, byte: u8);
+	fn serial_read_byte(&self) -> u8;
+
+	fn serial_write_bytes(&self, bytes: &[u8])
+	{
+		for b in bytes
+		{
+			self.serial_write_byte(*b);
+		}
+	}
+	fn serial_read_bytes(&self, bytes: &mut [u8], max: Option<usize>)
+	{
+		if let Some(max_written) = max
+		{
+			let absmax = bytes.len();
+			for i in 0..(max!(max_written, absmax))
+			{
+				bytes[i] = self.serial_read_byte();
+			}
+		}
+		else
+		{
+			for b in bytes
+			{
+				*b = self.serial_read_byte();
+			}
+		}
+	}
+
+	fn serial_read_bytes_while(
+		&self,
+		bytes: &mut [u8],
+		mut predicate: impl FnMut(&u8) -> bool
+	) -> usize
+	{
+		let (mut i, absmax): (usize, usize) = (0, bytes.len());
+		while i < absmax
+		{
+			let buf = self.serial_read_byte();
+			if !predicate(&buf)
+			{
+				return i;
+			}
+			bytes[i] = buf;
+			i += 1;
+		}
+		i
+	}
+	fn serial_read_bytes_until(
+		&self,
+		bytes: &mut [u8],
+		mut predicate: impl FnMut(&u8) -> bool
+	) -> usize
+	{
+		self.serial_read_bytes_while(bytes, |val| !predicate(val))
 	}
 }
 
-pub struct SerialPort
+pub struct SerialIOWriter<T: SerialIO>
 {
-	id: SerialPortId
+	serial_writer: T
 }
 
-impl SerialPort
+impl<T: SerialIO> fmt::Write for SerialIOWriter<T>
 {
-	fn is_faulty(&self) -> bool
+	fn write_str(&mut self, s: &str) -> fmt::Result
 	{
-		use crate::kernel::cpu::io::{inb, outb};
+		self.serial_writer.serial_write_bytes(s.as_bytes());
+		Ok(())
+	}
+}
 
-		// Set in loopback mode, test the serial chip
-		outb(self.id.bits() + 4, 0x1e);
-
-		// perform test
-		#[allow(clippy::identity_op)]
-		outb(self.id.bits() + 0, 0xae);
-		#[allow(clippy::identity_op)]
-		let ret = inb(self.id.bits() + 0) != 0xae;
-
-		// Set back to normal operation mode
-		outb(self.id.bits() + 4, 0x0f);
-
-		ret
+impl<T: SerialIO> KernelIO for SerialIOWriter<T>
+{
+	fn flush(&mut self) -> fmt::Result
+	{
+		Ok(())
 	}
 
-	pub fn early_dbg_port() -> Option<Self>
+	fn supports_ansi_escape_codes(&self) -> bool
 	{
-		let ret = Self {
-			id: SerialPortId::DEBUG
-		};
-		if ret.early_setup() { Some(ret) } else { None }
+		self.serial_writer.supports_ansi_escape_codes()
 	}
 
-	pub fn early_setup(&self) -> bool
-	{
-		use crate::kernel::cpu::io::outb;
-
-		// from OSDev
-		outb(self.id.bits() + 1, 0x00); // Disable all interrupts
-		outb(self.id.bits() + 3, 0x80); // Enable DLAB (set baud rate divisor)
-		#[allow(clippy::identity_op)]
-		outb(self.id.bits() + 0, 0x03); // Set divisor to 3 (lo byte) 38400 baud
-		outb(self.id.bits() + 1, 0x00); //                  (hi byte)
-		outb(self.id.bits() + 3, 0x03); // 8 bits, no parity, one stop bit
-		outb(self.id.bits() + 2, 0xc7); // Enable FIFO, clear them, with 14-byte threshold
-		outb(self.id.bits() + 4, 0x0b); // IRQs enabled, RTS/DSR set
-
-		!self.is_faulty()
+	fn read_byte(&self) -> u8 {
+		self.serial_writer.serial_read_byte()
 	}
+
+	fn write_byte(&self, byte: u8) {
+		self.serial_writer.serial_write_byte(byte);
+	}
+}
+
+impl<T: SerialIO> KernelIOExt for SerialIOWriter<T>
+{
+
 }

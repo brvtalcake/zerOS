@@ -2,9 +2,9 @@ use core::result::Result;
 
 use overloadable::overloadable;
 
-use crate::kernel::{
-	cpuid,
-	sync::{Mutex, MutexGuard}
+use crate::{
+	arch::target::cpu::cpuid,
+	kernel::sync::{Mutex, MutexGuard}
 };
 
 overloadable! {

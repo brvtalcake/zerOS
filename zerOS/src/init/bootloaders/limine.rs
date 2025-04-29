@@ -31,3 +31,34 @@ mod __markers
 	#[unsafe(link_section = ".requests_end_marker")]
 	pub static _END_MARKER: RequestsEndMarker = RequestsEndMarker::new();
 }
+
+mod entry
+{
+	use super::*;
+	use crate::{
+		arch::target::cpu::misc::hcf,
+		init::{self, ctors::CtorIter},
+		kernel,
+		kmain
+	};
+
+	#[unsafe(no_mangle)]
+	extern "C" fn zerOS_boot_setup() -> !
+	{
+		// All limine requests must also be referenced in a called function, otherwise
+		// they may be removed by the linker.
+		assert!(BASE_REVISION.is_supported());
+
+		CtorIter::new().for_each(|ctor| unsafe { ctor() });
+
+		let under_qemu = kernel::hypervisor::under_qemu();
+		if under_qemu.is_err() || !under_qemu.expect("unreachable")
+		{
+			hcf();
+		}
+
+		init::memory::gdt::init();
+
+		kmain()
+	}
+}

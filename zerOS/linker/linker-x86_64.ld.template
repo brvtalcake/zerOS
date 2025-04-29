@@ -6,7 +6,6 @@ OUTPUT_ARCH(i386:x86-64)
 
 /* We want the symbol _start to be our entry point */
 ENTRY(zerOS_boot_setup)
-/* ENTRY(kmain) */
 
 /* Define the program headers we want so the bootloader gives us the right */
 /* MMU permissions; this also allows us to exert more control over the linking */
@@ -44,10 +43,21 @@ SECTIONS
         *(.bootcode .bootcode.*)
     } :othertext
 
+    . = ALIGN(16);
+    PROVIDE(__ctor_init_array_start = .);
     .ctors_init_array : {
         KEEP(*(.ctors_init_array))
         KEEP(*(.ctors_init_array.*))
     } :othertext
+    PROVIDE(__ctor_init_array_end = .);
+
+    /* Inserting these two lines */
+    . = ALIGN(8);
+    PROVIDE(__eh_frame = .);
+    /* before .eh_frame rule */
+    .eh_frame : {
+        KEEP (*(.eh_frame)) *(.eh_frame.*)
+    } :data
 
     /* Move to the next memory page for .rodata */
     . = ALIGN(CONSTANT(MAXPAGESIZE));
@@ -100,13 +110,13 @@ SECTIONS
     /* more or less equivalent to the --no-dynamic-linker linker flag, except that it */
     /* works with ld.gold. */
     /DISCARD/ : {
-        *(.eh_frame*)
+        /* *(.eh_frame*) */
         *(.note .note.*)
         *(.interp)
         *(.comment*)
         *(.gcc_except_table*)
         *(.note*)
-        *(.rel.eh_frame*)
+        /* *(.rel.eh_frame*) */
     }
 }
 

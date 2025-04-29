@@ -5,6 +5,10 @@
 #![feature(unboxed_closures, fn_traits)] // for crate 'overloadable' and overloadf
 #![feature(const_slice_make_iter)]
 #![feature(const_trait_impl)]
+#![feature(generic_arg_infer)]
+#![feature(sync_unsafe_cell)]
+#![feature(trait_alias)]
+#![feature(variant_count)]
 
 #[macro_use]
 extern crate macro_utils;
@@ -12,31 +16,16 @@ extern crate macro_utils;
 #[macro_use]
 extern crate proc_macro_utils;
 
+pub mod arch;
 pub mod error;
 pub mod init;
 pub mod kernel;
+#[macro_use]
+pub mod logging;
 pub mod panic;
 pub mod utils;
 
-use crate::kernel::cpu::misc::hcf;
-
-#[unsafe(no_mangle)]
-extern "C" fn zerOS_boot_setup() -> !
-{
-	// All limine requests must also be referenced in a called function, otherwise
-	// they may be removed by the linker.
-	assert!(init::bootloaders::limine::BASE_REVISION.is_supported());
-
-	let under_qemu = kernel::hypervisor::under_qemu();
-	if under_qemu.is_err() || !under_qemu.expect("unreachable")
-	{
-		hcf();
-	}
-
-	init::memory::gdt::init();
-
-	kmain()
-}
+use crate::arch::target::cpu::misc::hcf;
 
 fn kmain() -> !
 {

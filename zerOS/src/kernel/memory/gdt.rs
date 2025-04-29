@@ -28,9 +28,9 @@ bitfield! {
 	#[check(equal_to = 16)]
 	pub struct GDTSelector -> 16
 	{
-		pub u8  rpl  : 2;
-		pub u8  table: 1;
-		pub u16 index: 13;
+		pub _ rpl  : 2;
+		pub _ table: 1;
+		pub _ index: 13;
 	}
 }
 static_assert!(size_of::<GDTSelector>() == 2);
@@ -61,31 +61,31 @@ bitfield! {
 	#[check(equal_to = 64)]
 	pub struct GDTNormalSegmentDescriptor -> 64
 	{
-		pub u16 limit_low: 16;
-		pub u32 base_low : 24;
+		pub usize limit_low: 16;
+		pub usize base_low : 24;
 		union {
-			pub u8 access: 8;
+			pub _ access: 8;
 			struct {
-				pub u8 accessed: 1;  //< Is the segment accessed ?
-				pub u8 rw_bit: 1;    //< Additional read or write permissions
-				pub u8 dc_bit: 1;    //< Grows down or up ? (for data segments). Conforming ? (for code segments)
-				pub u8 exec_bit: 1;  //< Code segment if 1, data segment if 0
-				pub u8 desc_type: 1; //< Descriptor type
-				pub u8 priv_lvl: 2;  //< Privilege level
-				pub u8 present: 1;   //< Present bit
+				pub _ accessed: 1;  //< Is the segment accessed ?
+				pub _ rw_bit: 1;    //< Additional read or write permissions
+				pub _ dc_bit: 1;    //< Grows down or up ? (for data segments). Conforming ? (for code segments)
+				pub _ exec_bit: 1;  //< Code segment if 1, data segment if 0
+				pub _ desc_type: 1; //< Descriptor type
+				pub _ priv_lvl: 2;  //< Privilege level
+				pub _ present: 1;   //< Present bit
 			};
 		};
-		pub u8 limit_hi: 4;
+		pub usize limit_hi: 4;
 		union {
-			pub u8 flags: 4;
+			pub _ flags: 4;
 			struct {
-				pub u8 _reserved: 1;
-				pub u8 long_mode: 1;
-				pub u8 size: 1;
-				pub u8 granularity: 1;
+				pub _ _reserved: 1;
+				pub _ long_mode: 1;
+				pub _ size: 1;
+				pub _ granularity: 1;
 			};
 		};
-		pub u8 base_hi: 8;
+		pub usize base_hi: 8;
 	}
 }
 
@@ -141,28 +141,28 @@ bitfield! {
 	#[check(equal_to = 128)]
 	pub struct GDTSystemSegmentDescriptor -> 128
 	{
-		pub u16 limit_low: 16;
-		pub u32 base_low : 24;
+		pub usize limit_low: 16;
+		pub usize base_low : 24;
 		union {
-			pub u8 access: 8;
+			pub _ access: 8;
 			struct {
-				pub u8 sys_type: 4;  //< Type of system segment
-				pub u8 desc_type: 1; //< Descriptor type
-				pub u8 priv_lvl: 2;  //< Privilege level
-				pub u8 present: 1;   //< Present bit
+				pub _ sys_type: 4;  //< Type of system segment
+				pub _ desc_type: 1; //< Descriptor type
+				pub _ priv_lvl: 2;  //< Privilege level
+				pub _ present: 1;   //< Present bit
 			};
 		};
-		pub u8 limit_hi: 4;
+		pub usize limit_hi: 4;
 		union {
-			pub u8 flags: 4;
+			pub _ flags: 4;
 			struct {
-				pub u8 available: 1;
-				pub u8 _unused: 2;
-				pub u8 granularity: 1;
+				pub _ available: 1;
+				pub _ _unused: 2;
+				pub _ granularity: 1;
 			};
 		};
-		pub u32 base_hi: 40;
-		pub u32 _reserved: 32;
+		pub usize base_hi: 40;
+		pub _ _reserved: 32;
 	}
 }
 
@@ -390,10 +390,11 @@ impl GDT
 	pub unsafe fn set(&self)
 	{
 		let gdt_desc = GDTDescriptor {
-			size:   ((self.entries.len() * 2) - 1).as_(),
+			// (zerOS_GDT_ENTRY_INDEX_MAX * sizeof(struct zerOS_gdt_normal_segment_descriptor)) - 1
+			size:   ((entry_index!(MAX) * size_of::<GDTNormalSegmentDescriptor>()) - 1).as_(),
 			offset: self.entries.as_ptr() as u64
 		};
-		let mut gdt_desc_ptr: *const GDTDescriptor = &gdt_desc;
+		let gdt_desc_ptr: *const GDTDescriptor = &gdt_desc;
 		let gdt_regs = GDTSegmentRegisters {
 			cs: *GDTSelector::default().with_index(entry_index!(KERNEL64_CS)),
 			ds: *GDTSelector::default().with_index(entry_index!(KERNEL_DS)),
@@ -402,10 +403,9 @@ impl GDT
 			gs: *GDTSelector::default().with_index(entry_index!(KERNEL_DS)),
 			ss: *GDTSelector::default().with_index(entry_index!(KERNEL_DS))
 		};
-		let mut gdt_regs_ptr: *const GDTSegmentRegisters = &gdt_regs;
-		kernel::cpu::irq::disable();
+		let gdt_regs_ptr: *const GDTSegmentRegisters = &gdt_regs;
+		crate::arch::target::cpu::irq::disable();
 		unsafe {
-			#![allow(path_statements)]
 			asm! {
 				"lgdt 0({gdt_desc_ptr_reg})",
 				"xor %rax, %rax",
@@ -421,21 +421,14 @@ impl GDT
 				"movw  6({gdt_regs_ptr_reg}), %fs",
 				"movw  8({gdt_regs_ptr_reg}), %gs",
 				"movw 10({gdt_regs_ptr_reg}), %ss",
+				// TODO: which registers really end up being clobbered ?
 				out("rax") _,
-				//out("cs")  _, ///< apparently unknown to rustc
-				//out("ds")  _, ///< apparently unknown to rustc
-				//out("es")  _, ///< apparently unknown to rustc
-				//out("fs")  _, ///< apparently unknown to rustc
-				//out("gs")  _, ///< apparently unknown to rustc
-				//out("ss")  _, ///< apparently unknown to rustc
-				gdt_desc_ptr_reg = inout(reg) gdt_desc_ptr,
-				gdt_regs_ptr_reg = inout(reg) gdt_regs_ptr,
+				gdt_desc_ptr_reg = inout(reg) gdt_desc_ptr => _,
+				gdt_regs_ptr_reg = inout(reg) gdt_regs_ptr => _,
 				options(att_syntax)
 			};
-			gdt_desc_ptr;
-			gdt_regs_ptr;
 		}
-		kernel::cpu::irq::enable();
+		crate::arch::target::cpu::irq::enable();
 	}
 }
 
