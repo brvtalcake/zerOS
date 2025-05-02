@@ -1,3 +1,5 @@
+use core::mem::{Assume, TransmuteFrom};
+
 #[macro_export]
 macro_rules! alignment_of {
 	(    ) => {
@@ -100,4 +102,11 @@ macro_rules! size_of {
 	(f128) => {
 		16
 	};
+}
+
+pub fn assume_aligned<T: Copy>(src: T) -> T
+where
+	T: TransmuteFrom<T, { Assume::ALIGNMENT }>
+{
+	unsafe { <T as TransmuteFrom<T, { Assume::ALIGNMENT }>>::transmute(src) }
 }

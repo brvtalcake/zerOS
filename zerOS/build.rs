@@ -3,11 +3,13 @@
 
 use core::panic;
 use std::{
+	cell::OnceCell,
 	ffi::OsString,
 	fs,
 	io::{self, Write},
-	path::PathBuf,
-	process::{Command, exit}
+	path::{self, PathBuf},
+	process::{Command, exit},
+	sync::OnceLock
 };
 
 use cfg_aliases::cfg_aliases;
@@ -79,6 +81,23 @@ fn parse_kconfig() -> KConfig
 	)
 }
 
+fn get_outdir() -> Option<&'static String>
+{
+	static OUTDIR: OnceLock<Option<String>> = OnceLock::new();
+	OUTDIR
+		.get_or_init(|| from_cargo!("OUT_DIR").map(|val| val.into_string().unwrap()))
+		.as_ref()
+}
+
+fn compile_static_allocator()
+{
+	let outdir = get_outdir();
+	if outdir.is_none()
+	{
+		return;
+	}
+}
+
 macro_rules! custom_kcfg {
 	($cfg:ident : $type:ty = $parsed:expr) => {
 		to_cargo!("rustc-cfg" => format!("{}=\"{}\"", stringify!($cfg), $parsed));
@@ -129,6 +148,7 @@ pub fn main()
 	// .expect("Failed to execute command");
 	generate_config_arch_aliases();
 	generate_kconfig_aliases();
+	compile_static_allocator();
 
 	let relpath: &'static str = "../scripts/gensectioninfo.py";
 	let abspath = match realpath(relpath)

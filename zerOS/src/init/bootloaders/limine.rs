@@ -38,7 +38,7 @@ mod entry
 	use crate::{
 		arch::target::cpu::misc::hcf,
 		init::{self, ctors::CtorIter},
-		kernel,
+		kernel::{self, linker::map::zerOS_kernel_start},
 		kmain
 	};
 
@@ -48,6 +48,7 @@ mod entry
 		// All limine requests must also be referenced in a called function, otherwise
 		// they may be removed by the linker.
 		assert!(BASE_REVISION.is_supported());
+		assert_eq!(unsafe { zerOS_kernel_start as usize }, 0xffffffff80000000_usize);
 
 		CtorIter::new().for_each(|ctor| unsafe { ctor() });
 

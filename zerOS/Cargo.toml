@@ -73,6 +73,9 @@ strum = { version = "0.27", default-features = false, features = [
     "derive",
     #"phf",
 ] }
+bincode = { version = "2.0.1", default-features = false }
+intrusive-collections = { version = "0.9", features = ["alloc", "nightly"] }
+strength_reduce = "0.2.4"
 #bitfield = "0.19"
 x86_64 = "0.15"
 zerOS-proc-macro-utils = { path = "../proc-macro-utils" }
@@ -84,6 +87,11 @@ critical-section = { version = "1.2", default-features = false }
 anyhow = { version = "1.0", default-features = false }
 #bitfield-struct = "0.10.1"
 anstyle = { version = "1.0.10", default-features = false }
+downcast-rs = { version = "2.0.1", default-features = false }
+psm = "0.1"
+logos = { version = "0.15.0", default-features = false, features = [
+    "export_derive",
+] }
 
 [dependencies.log]
 version = "0.4.27"

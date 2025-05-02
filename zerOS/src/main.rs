@@ -9,6 +9,13 @@
 #![feature(sync_unsafe_cell)]
 #![feature(trait_alias)]
 #![feature(variant_count)]
+#![feature(transmutability)]
+#![feature(allocator_api)]
+#![feature(unsafe_cell_access)]
+#![feature(nonzero_ops)]
+#![feature(trivial_bounds)]
+
+extern crate alloc;
 
 #[macro_use]
 extern crate macro_utils;

@@ -602,6 +602,7 @@ impl Parse for BitFieldBlockOuter
 struct BitFieldDecl
 {
 	attrs:           Vec<syn::Attribute>,
+	/// TODO: this should be `syn::Visibility`
 	vis:             Option<Token![pub]>,
 	kw:              Token![struct],
 	name:            syn::Ident,
