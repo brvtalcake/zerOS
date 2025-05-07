@@ -1,4 +1,4 @@
-use core::mem::{Assume, TransmuteFrom};
+use core::mem::{self, Assume, TransmuteFrom};
 
 #[macro_export]
 macro_rules! alignment_of {
@@ -109,4 +109,14 @@ where
 	T: TransmuteFrom<T, { Assume::ALIGNMENT }>
 {
 	unsafe { <T as TransmuteFrom<T, { Assume::ALIGNMENT }>>::transmute(src) }
+}
+
+pub const unsafe fn with_lifetime<'from, 'to, T: ?Sized>(from: &'from T) -> &'to T
+{
+	unsafe { mem::transmute(from) }
+}
+
+pub const unsafe fn with_lifetime_mut<'from, 'to, T: ?Sized>(from: &'from mut T) -> &'to mut T
+{
+	unsafe { mem::transmute(from) }
 }

@@ -1,5 +1,6 @@
 #![recursion_limit = "512"]
 #![allow(unused_macros)]
+#![feature(exit_status_error)]
 
 use core::panic;
 use std::{
@@ -89,13 +90,62 @@ fn get_outdir() -> Option<&'static String>
 		.as_ref()
 }
 
-fn compile_static_allocator()
+fn compile_region_allocator()
 {
+	// clang -march=x86-64 -O3 -ffreestanding -fno-builtin -nostdlib
+	// --target=x86_64-unknown-none-elf zerOS/src/kernel/memory/allocators/region.c
+	// -c -mfloat-abi=soft
+	// -Wall -Wextra -std=gnu23 	-xc -ffreestanding -fno-stack-protector
+	// -fno-stack-check -m64 -mno-mmx 	$(call CC_TUNE_FOR,$(KCPU))	-mno-sse
+	// -mno-sse2 	-mno-red-zone -mno-avx -mno-avx2 -mno-avx512f 	-nodefaultlibs
+	// -nostdlib -nostartfiles 	-m128bit-long-double -fno-lto -msoft-float
+	// and maybe `-fno-builtin` when compiling the four aformentioned `mem...`
+	// functions
 	let outdir = get_outdir();
 	if outdir.is_none()
 	{
 		return;
 	}
+
+	Command::new("clang")
+		.args([
+			"-I./include",
+			"--target=x86_64-unknown-none-elf",
+			"-xc",
+			"-std=gnu23",
+			"-O3",
+			"-Wall",
+			"-Wextra",
+			"-flto",
+			"-ffreestanding",
+			"-fno-stack-protector",
+			"-fno-stack-check",
+			"-m64",
+			"-march=x86-64",
+			"-mno-mmx",
+			"-mno-sse",
+			"-mno-sse2",
+			"-mno-red-zone",
+			"-mno-avx",
+			"-mno-avx2",
+			"-mno-avx512f",
+			"-nodefaultlibs",
+			"-nostdlib",
+			//"-nostartfiles",
+			//"-m128bit-long-double",
+			//"-mfloat-abi=soft",
+			"-msoft-float",
+			"-c"
+		])
+		.arg("./src/kernel/memory/allocators/region.c")
+		.arg("-o")
+		.arg(path::PathBuf::from(outdir.unwrap()).join("region.o"))
+		.spawn()
+		.expect("couldn't swpan Clang !")
+		.wait()
+		.expect("couldn't compile C file !")
+		.exit_ok()
+		.expect("couldn't compile C file !");
 }
 
 macro_rules! custom_kcfg {
@@ -140,15 +190,38 @@ fn generate_config_arch_aliases()
 	};
 }
 
+fn declare_c_source_code<T: AsRef<path::Path>>(paths: &[T])
+{
+	for path in paths.iter().filter(|path| path.as_ref().is_dir())
+	{
+		for in_dir in fs::read_dir(path).unwrap()
+		{
+			if let Ok(p) = in_dir
+			{
+				if p.file_type().map_or(false, |val| val.is_file())
+				{
+					to_cargo!(
+						"rerun-if-changed" => p.file_name().into_string().unwrap()
+					);
+				}
+			}
+		}
+	}
+
+	for path in paths.iter().filter(|path| path.as_ref().is_file())
+	{
+		to_cargo!(
+			"rerun-if-changed" => path.as_ref().file_name().unwrap().to_string_lossy()
+		);
+	}
+}
+
 pub fn main()
 {
-	// let ld_script = Command::new("echo")
-	// .arg("Hello world")
-	// .output()
-	// .expect("Failed to execute command");
 	generate_config_arch_aliases();
 	generate_kconfig_aliases();
-	compile_static_allocator();
+	compile_region_allocator();
+	declare_c_source_code(&["./include", "./src/kernel/memory/allocators/region.c"]);
 
 	let relpath: &'static str = "../scripts/gensectioninfo.py";
 	let abspath = match realpath(relpath)

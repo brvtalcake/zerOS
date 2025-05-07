@@ -1,11 +1,16 @@
 use core::sync::atomic::{AtomicBool, Ordering};
 
-pub struct Mutex
+use lock_api::{GuardSend, RawMutex};
+
+/// TODO: also store cpu core id:
+/// - see [this thread](https://stackoverflow.com/questions/22310028/is-there-an-x86-instruction-to-tell-which-core-the-instruction-is-being-run-on)
+/// - see `IA32_TSC_AUX` MSR and `RDCPUID` instruction
+pub struct BasicMutexRaw
 {
 	flag: AtomicBool
 }
 
-impl Default for Mutex
+impl Default for BasicMutexRaw
 {
 	fn default() -> Self
 	{
@@ -13,7 +18,7 @@ impl Default for Mutex
 	}
 }
 
-impl Mutex
+impl BasicMutexRaw
 {
 	pub const fn new() -> Self
 	{
@@ -21,45 +26,47 @@ impl Mutex
 			flag: AtomicBool::new(false)
 		}
 	}
+}
 
-	pub fn lock(&self)
+unsafe impl RawMutex for BasicMutexRaw
+{
+	type GuardMarker = GuardSend;
+
+	const INIT: Self = Self::new();
+
+	fn is_locked(&self) -> bool
+	{
+		self.flag.load(Ordering::Acquire)
+	}
+
+	fn lock(&self)
 	{
 		while self
 			.flag
 			.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
 			.is_err()
-		{}
+		{
+			core::hint::spin_loop();
+		}
 	}
 
-	pub fn unlock(&self)
+	fn try_lock(&self) -> bool
+	{
+		match self
+			.flag
+			.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+		{
+			Ok(false) => true,
+			Ok(true) => unreachable!(),
+			Err(true) => false,
+			Err(false) => unreachable!()
+		}
+	}
+
+	unsafe fn unlock(&self)
 	{
 		self.flag.store(false, Ordering::Release);
 	}
-
-	pub fn locked(&self) -> bool
-	{
-		self.flag.load(Ordering::Acquire)
-	}
 }
 
-pub struct MutexGuard<'a>
-{
-	mtx: &'a Mutex
-}
-
-impl<'a> From<&'a Mutex> for MutexGuard<'a>
-{
-	fn from(value: &'a Mutex) -> Self
-	{
-		value.lock();
-		Self { mtx: value }
-	}
-}
-
-impl<'a> Drop for MutexGuard<'a>
-{
-	fn drop(&mut self)
-	{
-		self.mtx.unlock();
-	}
-}
+pub type BasicMutex<T> = lock_api::Mutex<BasicMutexRaw, T>;

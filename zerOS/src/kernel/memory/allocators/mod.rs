@@ -22,9 +22,8 @@ use alloc::alloc::{AllocError, Allocator, Layout};
 use core::{
 	cell::RefCell,
 	cmp,
-	mem::MaybeUninit,
 	num::NonZero,
-	ptr::{NonNull, copy_nonoverlapping}
+	ptr::{self, copy_nonoverlapping, NonNull}
 };
 
 use intrusive_collections::{
@@ -38,56 +37,23 @@ use intrusive_collections::{
 };
 use lazy_static::lazy_static;
 use strength_reduce::StrengthReducedUsize;
-use zerocopy::{FromBytes, IntoBytes, transmute_mut};
 
-use crate::arch::target::PAGE_SIZE;
+use crate::{arch::target::PAGE_SIZE, utils::with_lifetime_mut};
 
-#[derive(Clone, Copy, FromBytes, IntoBytes)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 struct MemorySubRegionHeaderInfo
 {
-	page_count: usize,
-	free:       u8,
-	__padding:  MaybeUninit<[u8; align_of::<usize>() - size_of::<u8>()]>
+	page_count: NonZero<usize>,
+	free:       bool
 }
 
-impl MemorySubRegionHeaderInfo
-{
-	const fn new(page_count: usize, free: bool) -> Self
-	{
-		if free
-		{
-			Self {
-				page_count,
-				free: u8::MAX,
-				__padding: MaybeUninit::uninit()
-			}
-		}
-		else
-		{
-			Self {
-				page_count,
-				free: u8::MIN,
-				__padding: MaybeUninit::uninit()
-			}
-		}
-	}
-}
-
-impl PartialEq<Self> for MemorySubRegionHeaderInfo
-{
-	fn eq(&self, other: &Self) -> bool
-	{
-		(self.page_count == other.page_count) && ((self.free == u8::MIN) == (other.free == u8::MIN))
-	}
-}
-
-impl Eq for MemorySubRegionHeaderInfo {}
+impl MemorySubRegionHeaderInfo {}
 
 impl PartialOrd<Self> for MemorySubRegionHeaderInfo
 {
 	fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering>
 	{
-		match (self.free != u8::MIN, other.free != u8::MIN)
+		match (self.free, other.free)
 		{
 			// just separate them in the tree
 			// saying that those that aren't free are *LESS* than those that are free, means that
@@ -133,7 +99,13 @@ impl MemorySubRegionHeader
 		(
 			self.as_ptr() as usize,
 			self.as_ptr() as usize
-				+ unsafe { self.info.borrow_mut().page_count.unchecked_mul(PAGE_SIZE) }
+				+ unsafe {
+					self.info
+						.borrow_mut()
+						.page_count
+						.unchecked_mul(NonZero::new_unchecked(PAGE_SIZE))
+						.get()
+				}
 		)
 	}
 
@@ -177,7 +149,7 @@ struct RegionAllocator
 {
 	rbtree: RefCell<RBTree<MemorySubRegionHeaderRBTreeAdapter>>,
 	list:   RefCell<LinkedList<MemorySubRegionHeaderLinkedListAdapter>>,
-	region: RefCell<*mut u8>,
+	region: RefCell<&'static mut [u8]>,
 	size:   NonZero<usize>
 }
 
@@ -189,7 +161,7 @@ lazy_static! {
 
 impl RegionAllocator
 {
-	fn initial_sanity_checks(region: &[u8]) -> bool
+	fn initial_sanity_checks(region: &'_ [u8]) -> bool
 	{
 		let start = region.as_ptr() as usize;
 		let len = region.len();
@@ -198,14 +170,17 @@ impl RegionAllocator
 
 	// fn split_chunk(&mut self, orig: *mut MemorySubRegionHeader, split_at: usize)
 
-	pub fn new(region: &[u8], region_header: bool) -> Option<Self>
+	/// # SAFETY
+	/// The caller must ensure that the managed region remains valid, live, and
+	/// untouched while being used by the allocator
+	pub unsafe fn new<'a>(region: &'a mut [u8], region_header: bool) -> Option<Self>
 	{
 		if let Some(this) = Self::initial_sanity_checks(region).then_some(Self {
 			rbtree: RefCell::new(RBTree::new(MemorySubRegionHeaderRBTreeAdapter::default())),
 			list:   RefCell::new(LinkedList::new(
 				MemorySubRegionHeaderLinkedListAdapter::default()
 			)),
-			region: RefCell::new(region.as_ptr().cast_mut()),
+			region: RefCell::new(unsafe { with_lifetime_mut(region) }),
 			size:   region.len().try_into().ok()?
 		})
 		{
@@ -219,17 +194,21 @@ impl RegionAllocator
 				let hdr = MemorySubRegionHeader {
 					list_link:   Default::default(),
 					rbtree_link: Default::default(),
-					info:        RefCell::new(MemorySubRegionHeaderInfo::new(
-						(region.len() / *PAGE_SIZE_FAST).try_into().ok()?,
-						true
-					))
+					info:        RefCell::new(MemorySubRegionHeaderInfo {
+						page_count: (region.len() / *PAGE_SIZE_FAST).try_into().ok()?,
+						free:       true
+					})
 				};
 				let val = unsafe {
-					copy_nonoverlapping(&raw const hdr, this.region.borrow().cast(), 1);
+					copy_nonoverlapping(
+						&raw const hdr,
+						this.region.borrow_mut().as_mut_ptr().cast(),
+						1
+					);
 					this.region
 						.borrow()
+						.as_ptr()
 						.cast::<MemorySubRegionHeader>()
-						.cast_const()
 				};
 				this.list
 					.borrow_mut()
@@ -254,14 +233,20 @@ impl RegionAllocator
 
 		#[rustfmt::skip]
 		// region must contain space for `layout_size` + the size of the memory header
-		let region_bound = MemorySubRegionHeaderInfo::new(
-			(required_minimum_size / *PAGE_SIZE_FAST)
-				+ (if (required_minimum_size % *PAGE_SIZE_FAST) == 0
-				{ 0 }
-				else
-				{ 1 }
-			), true
-		);
+		let region_bound = unsafe {
+			MemorySubRegionHeaderInfo {
+				page_count: <NonZero<usize>>::new_unchecked(
+					(required_minimum_size / *PAGE_SIZE_FAST)
+						+ (
+							if (required_minimum_size % *PAGE_SIZE_FAST) == 0
+							{ 0 }
+							else
+							{ 1 }
+						)
+				),
+				free: true
+			}
+		};
 		let bound = intrusive_collections::Bound::Included(&region_bound);
 		let mut rbtree = self.rbtree.borrow_mut();
 		let mut list = self.list.borrow_mut();
@@ -284,7 +269,15 @@ impl RegionAllocator
 				else
 				{
 					// mark as used an do not split the chunk
-					let removed = rbtree_cursor.remove().unwrap().as_mut_ptr();
+					let removed = UnsafeRef::<MemorySubRegionHeader>::into_raw(
+						rbtree_cursor.remove().unwrap()
+					);
+					unsafe {
+						(*removed).info.borrow_mut().free = false;
+						rbtree.insert(UnsafeRef::from_raw(removed.cast_const()));
+						let ret: *mut [u8] = ptr::slice_from_raw_parts_mut(aligned as *mut u8, layout_size);
+						return Ok(NonNull::new_unchecked(ret));
+					}
 				}
 			}
 			rbtree_cursor.move_next()
@@ -295,39 +288,6 @@ impl RegionAllocator
 	pub fn allocate_first_fit(&self, layout: &Layout) -> Result<NonNull<[u8]>, AllocError>
 	{
 		Err(AllocError)
-	}
-}
-
-unsafe impl Allocator for RegionAllocator
-{
-	fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError>
-	{
-		self.allocate_best_fit(&layout)
-	}
-
-	unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout)
-	{
-		todo!()
-	}
-
-	unsafe fn grow(
-		&self,
-		ptr: NonNull<u8>,
-		old_layout: Layout,
-		new_layout: Layout
-	) -> Result<NonNull<[u8]>, AllocError>
-	{
-		todo!()
-	}
-
-	unsafe fn shrink(
-		&self,
-		ptr: NonNull<u8>,
-		old_layout: Layout,
-		new_layout: Layout
-	) -> Result<NonNull<[u8]>, AllocError>
-	{
-		todo!()
 	}
 }
 

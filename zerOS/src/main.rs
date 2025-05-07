@@ -14,6 +14,9 @@
 #![feature(unsafe_cell_access)]
 #![feature(nonzero_ops)]
 #![feature(trivial_bounds)]
+#![feature(exclusive_wrapper)]
+#![feature(ptr_as_ref_unchecked)]
+#![feature(phantom_variance_markers)]
 
 extern crate alloc;
 

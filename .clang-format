@@ -1,6 +1,6 @@
 AccessModifierOffset: 0
 
-AlignAfterOpenBracket: BlockIndent
+AlignAfterOpenBracket: AlwaysBreak #BlockIndent
 
 AlignArrayOfStructures: Right
 
@@ -9,7 +9,7 @@ AlignConsecutiveAssignments:
   AcrossEmptyLines: false
   AcrossComments: false
   AlignCompound: true
-  PadOperators: false
+  PadOperators: true
 
 AlignConsecutiveBitFields: Consecutive
 
@@ -46,7 +46,7 @@ AllowShortCaseLabelsOnASingleLine: false
 
 AllowShortEnumsOnASingleLine: false
 
-AllowShortFunctionsOnASingleLine: All
+AllowShortFunctionsOnASingleLine: Empty #All
 
 AllowShortIfStatementsOnASingleLine: Never
 
@@ -58,7 +58,8 @@ AttributeMacros: []
 
 BinPackArguments: true
 
-BinPackParameters: BinPack
+BinPackParameters: OnePerLine
+#BinPackParameters: BinPack
 #BinPackParameters: true
 
 BitFieldColonSpacing: Both
@@ -88,19 +89,21 @@ BreakAfterAttributes: Leave
 
 BreakAfterReturnType: ExceptShortType
 
-BreakBeforeBinaryOperators: None # or maybe 'All' ?
+BreakBeforeBinaryOperators: NonAssignment # or maybe 'All' ?
 
 BreakBeforeBraces: Custom
 
 BreakBeforeInlineASMColon: Always # fixme: 'OnlyMultiLine' not recognised
 
-BreakBeforeTernaryOperators: false # todo: try true
+BreakBeforeTernaryOperators: true # todo: try true
 
 BreakBinaryOperations: RespectPrecedence
 
 BreakFunctionDefinitionParameters: false
 
 BreakStringLiterals: true
+
+Cpp11BracedListStyle: false
 
 ColumnLimit: 100 # todo: try smaller values
 
@@ -171,7 +174,7 @@ IndentCaseBlocks: false
 
 IndentCaseLabels: true
 
-IndentExternBlock: Indent
+IndentExternBlock: NoIndent #Indent
 
 IndentGotoLabels: true
 
@@ -287,6 +290,7 @@ TypeNames: [ ]
 
 TypenameMacros: [ ]
 
-UseTab: Never
+#UseTab: Never
+UseTab: ForContinuationAndIndentation
 
 WhitespaceSensitiveMacros: [ ]

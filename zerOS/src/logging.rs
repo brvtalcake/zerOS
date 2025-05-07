@@ -9,7 +9,7 @@ use core::{
 use anyhow::anyhow;
 use lazy_static::lazy_static;
 
-use crate::kernel::io::KernelIO;
+use crate::kernel::{self, io::KernelIO, sync::BasicMutex};
 
 /// copied and adapted from `log` crate source code
 #[macro_export]
@@ -245,13 +245,13 @@ macro_rules! trace {
 static mut ZEROS_GLOBAL_LOGGER: MultiLogger = MultiLogger::new();
 
 ctor! {
-    crate::arch::target::cpu::irq::disable();
-    unsafe {
-    	log::set_logger_racy(&ZEROS_GLOBAL_LOGGER).unwrap_or_else(
-    		|_| crate::arch::target::cpu::misc::hcf()
-    	);
-    }
-    crate::arch::target::cpu::irq::enable();
+	crate::arch::target::cpu::irq::disable();
+	unsafe {
+		log::set_logger_racy(&ZEROS_GLOBAL_LOGGER).unwrap_or_else(
+			|_| crate::arch::target::cpu::misc::hcf()
+		);
+	}
+	crate::arch::target::cpu::irq::enable();
 }
 
 pub const MAX_LOGGER_COUNT: usize = 30;
@@ -305,7 +305,10 @@ lazy_static! {
 
 impl Logger
 {
-	fn log_event(&self, event: &str) -> bool
+	/// # SAFETY
+	/// The caller must ensure there is no live reference to the `event_filter`
+	/// field before calling this function
+	unsafe fn log_event(&self, event: &str) -> bool
 	{
 		match unsafe { &mut *self.event_filter.get() }
 		{
@@ -314,7 +317,10 @@ impl Logger
 		}
 	}
 
-	fn level_style(&self, lvl: log::Level) -> anstyle::Style
+	/// # SAFETY
+	/// The caller must ensure there is no live reference to the `logger`
+	/// field before calling this function
+	unsafe fn level_style(&self, lvl: log::Level) -> anstyle::Style
 	{
 		if !unsafe { &mut *self.logger.get() }.supports_ansi_escape_codes()
 		{
@@ -349,7 +355,7 @@ impl log::Log for Logger
 	{
 		(unsafe { ENABLED_LOGGING_BACKENDS[self.backend as usize].load(atomic::Ordering::Acquire) })
 			&& metadata.level().to_level_filter() <= log::max_level()
-			&& self.log_event(metadata.target())
+			&& (unsafe { self.log_event(metadata.target()) })
 	}
 
 	fn flush(&self)
@@ -367,11 +373,12 @@ impl log::Log for Logger
 			return;
 		}
 
+		let lvl_style = unsafe { self.level_style(record.level()) };
+
 		// SAFETY: loggers are Sync + Send, and should implement writing
 		// to the underlying resource in a race-free maner
 		let logger: &'static mut (dyn KernelIO + Sync + Send) = unsafe { *self.logger.get() };
 
-		let lvl_style = self.level_style(record.level());
 		let lvl_string = record.level().as_str();
 		let args = record.args();
 		let _ = match (record.line(), record.file(), record.module_path())
@@ -435,7 +442,7 @@ impl log::Log for Logger
 
 pub struct MultiLogger
 {
-	loggers: [Option<Logger>; MAX_LOGGER_COUNT]
+	loggers: BasicMutex<[Option<Logger>; MAX_LOGGER_COUNT]>
 }
 
 impl MultiLogger
@@ -443,7 +450,9 @@ impl MultiLogger
 	pub const fn new() -> Self
 	{
 		Self {
-			loggers: constinit_array!([Option<Logger>; MAX_LOGGER_COUNT] with None)
+			loggers: BasicMutex::new(
+				constinit_array!([Option<Logger>; MAX_LOGGER_COUNT] with None)
+			)
 		}
 	}
 
@@ -454,7 +463,9 @@ impl MultiLogger
 		backend: LoggingBackend
 	) -> anyhow::Result<&mut Self>
 	{
-		self.loggers
+		let res = self
+			.loggers
+			.lock()
 			.iter_mut()
 			.find(|item| (*item).is_none())
 			.map_or(
@@ -467,8 +478,8 @@ impl MultiLogger
 					});
 					anyhow::Ok(())
 				}
-			)
-			.map(|_| self)
+			);
+		res.map(|_| self)
 	}
 }
 
@@ -488,7 +499,7 @@ impl log::Log for MultiLogger
 			return;
 		}
 
-		for maybe_logger in &self.loggers
+		for maybe_logger in self.loggers.lock().iter()
 		{
 			if let Some(logger) = maybe_logger
 			{
