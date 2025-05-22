@@ -17,6 +17,9 @@
 #![feature(exclusive_wrapper)]
 #![feature(ptr_as_ref_unchecked)]
 #![feature(phantom_variance_markers)]
+#![feature(slice_ptr_get)]
+
+// TODO: change the compile flags to use vector extensions IN-KERNEL
 
 extern crate alloc;
 

@@ -8,9 +8,7 @@ pub fn halt()
 	unsafe {
 		asm! {
 			"hlt",
-			options(att_syntax),
-			options(nomem),
-			options(nostack)
+			options(att_syntax, nomem, nostack)
 		}
 	}
 }

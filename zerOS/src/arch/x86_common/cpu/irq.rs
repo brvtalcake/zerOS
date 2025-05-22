@@ -6,9 +6,7 @@ pub fn enable()
 	unsafe {
 		asm! {
 			"sti",
-			options(att_syntax),
-			options(nomem),
-			options(nostack)
+			options(att_syntax, nomem, nostack)
 		}
 	}
 }
@@ -18,9 +16,7 @@ pub fn disable()
 	unsafe {
 		asm! {
 			"cli",
-			options(att_syntax),
-			options(nomem),
-			options(nostack)
+			options(att_syntax, nomem, nostack)
 		}
 	}
 }

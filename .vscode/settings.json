@@ -1,4 +1,5 @@
 {
+    "nasm.outputFormat": "elf64",
     "editor.detectIndentation": true,
     "files.associations": {
         "*.h": "c",

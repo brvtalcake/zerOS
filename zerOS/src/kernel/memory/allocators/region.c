@@ -1,29 +1,18 @@
+// TODO: libdivide is only available for x86-64 targets...
+// TODO: random idea I had when writing code here: write a clang plugin to optimize data structure
+//       layout for structure marked with a custom attribute
+
 #include <libdivide.h>
 #include <region_allocator.h>
 #include <stdalign.h>
 #include <stdatomic.h>
 
-#ifdef __INTELLISENSE__
-	#ifndef constexpr
-		#define constexpr const
-	#endif
-	#ifndef nullptr
-		#define nullptr NULL
-	#endif
-	#ifndef static_assert
-		#define static_assert(...) _Static_assert(__VA_ARGS__)
-	#endif
-	#ifndef alignas
-		#define alignas _Alignas
-	#endif
-	#ifndef alignof
-		#define alignof _Alignof
-	#endif
-#endif
-
 #undef fast_log2_approx
 #define fast_log2_approx(X) \
 	((unsigned)(__CHAR_BIT__ * sizeof(typeof((X))) - __builtin_clzg((X), 0)))
+
+#undef is_power_of_two
+#define is_power_of_two(value) ((bool)(value && !(value & (value - 1))))
 
 #undef L1_CACHE_LINE_SIZE
 #define L1_CACHE_LINE_SIZE 64
@@ -37,8 +26,8 @@
 #undef MAX_ALIGN_LOG2
 #define MAX_ALIGN_LOG2 PAGE_SIZE_LOG2
 
-#undef MAX_ADDRESS_LOG2
-#define MAX_ADDRESS_LOG2 57
+#undef MAX_VIRTUAL_ADDRESS_LOG2
+#define MAX_VIRTUAL_ADDRESS_LOG2 57
 
 #undef PAGE_SIZE_LOG2
 #define PAGE_SIZE_LOG2 12
@@ -46,8 +35,8 @@
 #undef likely
 #undef unlikely
 #undef expect
-#define likely(...)         __builtin_expect(!!(__VA_ARGS__), true)
-#define unlikely(...)       __builtin_expect(!!(__VA_ARGS__), false)
+#define likely(...)         __builtin_expect((bool)(__VA_ARGS__), true)
+#define unlikely(...)       __builtin_expect((bool)(__VA_ARGS__), false)
 #define expect(expr, value) __builtin_expect((expr), (value))
 
 #undef prefetch
@@ -76,7 +65,7 @@
 #define assume_aligned(ptr, align) __builtin_assume_aligned((ptr), (align))
 
 #undef assume
-#define assume(cond) __builtin_assume(!!(cond))
+#define assume(cond) __builtin_assume((bool)(cond))
 
 #undef assume_unaliasing_pointers
 #define assume_unaliasing_pointers(ptr1, ptr2) __builtin_assume_separate_storage((ptr1), (ptr2))
@@ -146,17 +135,94 @@ enum rbtree_direction
 	RBTREE_RIGHT = 1u,
 };
 
-struct [[gnu::packed]] subregion_node
+struct subregion_node
 {
-	uintptr_t prev : MAX_ADDRESS_LOG2;
-	uintptr_t next : MAX_ADDRESS_LOG2;
-	bool      free : 1;
-	size_t    page_count : (MAX_ADDRESS_LOG2 - PAGE_SIZE_LOG2);
+	// this remains in memory even when allocated, hence it shall never be overwritten by user
+	struct [[gnu::packed]] subregion_node_persistent
+	{
+		uintptr_t xored_prev_next : MAX_VIRTUAL_ADDRESS_LOG2;
+		bool      free : 1;
+		size_t    page_count : (MAX_VIRTUAL_ADDRESS_LOG2 - PAGE_SIZE_LOG2);
+	} persistent;
 
-	uintptr_t         left : MAX_ADDRESS_LOG2;
-	uintptr_t         right : MAX_ADDRESS_LOG2;
-	enum rbtree_color color : 1;
+	// this can be overwritten by user when it has been allocated, hence it is not marked with
+	// `[[gnu::packed]]`, since it won't take too much user space on user allocated pages
+	struct subregion_node_rbtree_info
+	{
+		struct subregion_node* parent;
+		struct subregion_node* left;
+		struct subregion_node* right;
+		enum rbtree_color      color;
+	} rbt_info;
 };
+
+[[gnu::pure]]
+static inline size_t subregion_page_count(const struct subregion_node* const restrict node)
+{
+	return node->persistent.page_count;
+}
+
+static inline void subregion_set_page_count(struct subregion_node* node, size_t new_count)
+{
+	node->persistent.page_count = new_count;
+}
+
+[[gnu::pure]]
+static inline bool subregion_free(const struct subregion_node* const restrict node)
+{
+	return node->persistent.free;
+}
+
+static inline void subregion_set_free(struct subregion_node* node, bool new_value)
+{
+	node->persistent.free = new_value;
+}
+
+[[clang::overloadable]]
+static inline struct subregion_node* node_at(zerOS_byte_t* addr)
+{
+	return on_page_start((struct subregion_node*)addr);
+}
+
+[[clang::overloadable]]
+static inline struct subregion_node* node_at(uintptr_t addr)
+{
+	return node_at((zerOS_byte_t*)addr);
+}
+
+[[clang::overloadable]]
+static inline struct subregion_node* node_at(void* addr)
+{
+	return node_at((zerOS_byte_t*)addr);
+}
+
+enum offset_kind
+{
+	OFFSET_KIND_PAGE,
+	OFFSET_KIND_RAW
+};
+
+[[clang::overloadable]]
+static inline struct subregion_node*
+node_at(zerOS_byte_t* base_addr, ptrdiff_t offset, enum offset_kind offkind)
+{
+	const size_t multiplier = offkind == OFFSET_KIND_PAGE ? PAGE_SIZE : 1;
+	return node_at(base_addr + (offset * multiplier));
+}
+
+[[clang::overloadable]]
+static inline struct subregion_node*
+node_at(uintptr_t base_addr, ptrdiff_t offset, enum offset_kind offkind)
+{
+	return node_at((zerOS_byte_t*)base_addr, offset, offkind);
+}
+
+[[clang::overloadable]]
+static inline struct subregion_node*
+node_at(void* base_addr, ptrdiff_t offset, enum offset_kind offkind)
+{
+	return node_at((zerOS_byte_t*)base_addr, offset, offkind);
+}
 
 struct subregion_list
 {
@@ -166,81 +232,96 @@ struct subregion_list
 
 // TODO: maybe accessor functions could be `__attribute__((const))` or `__attribute__((pure))` ?
 
-static inline struct subregion_node* subregion_list_prev(struct subregion_node* node)
+[[gnu::pure]]
+static inline struct subregion_node*
+subregion_list_prev(const struct subregion_node* const restrict node, const struct subregion_node* const restrict next)
 {
-	return on_page_start((struct subregion_node*)node->prev);
+	return node_at(node->persistent.xored_prev_next ^ (uintptr_t)next);
 }
 
-static inline struct subregion_node* subregion_list_next(struct subregion_node* node)
+[[gnu::pure]]
+static inline struct subregion_node*
+subregion_list_next(const struct subregion_node* const restrict node, const struct subregion_node* const restrict prev)
 {
-	return on_page_start((struct subregion_node*)node->next);
+	return node_at(node->persistent.xored_prev_next ^ (uintptr_t)prev);
 }
 
-static inline void subregion_list_set_prev(struct subregion_node* node, struct subregion_node* new)
+static inline void subregion_list_set_prev_next(
+  struct subregion_node* node, struct subregion_node* prev, struct subregion_node* next)
 {
-	node->prev = (uintptr_t)new;
-}
-
-static inline void subregion_list_set_next(struct subregion_node* node, struct subregion_node* new)
-{
-	node->next = (uintptr_t)new;
+	node->persistent.xored_prev_next = (uintptr_t)prev ^ (uintptr_t)next;
 }
 
 static inline struct subregion_list subregion_list_new(struct subregion_node* node)
 {
-	subregion_list_set_prev(node, nullptr);
-	subregion_list_set_next(node, nullptr);
+	subregion_list_set_prev_next(node, nullptr, nullptr);
 	return (struct subregion_list){ .head = node, .tail = node };
 }
 
 static inline void subregion_list_insert_before(
-  struct subregion_list* list, struct subregion_node* at, struct subregion_node* node)
+  struct subregion_list* list, struct subregion_node* at, struct subregion_node* new_node)
 {
-	struct subregion_node* prev = subregion_list_prev(at);
-	if (!prev)
+	enum
 	{
-		// `at` is the list `head`
-		list->head = node;
+		LIST_PREV = 0,
+		LIST_CURR,
+		LIST_NEXT
+	};
 
-		subregion_list_set_prev(node, nullptr);
-		subregion_list_set_next(node, at);
+	struct subregion_node* const tmp =
+	  at == list->tail ? nullptr
+					   : node_at((uintptr_t)at, at->persistent.page_count, OFFSET_KIND_PAGE);
+	struct subregion_node* const current_state[3] = {
+		[LIST_CURR] = at, [LIST_NEXT] = tmp, [LIST_PREV] = subregion_list_prev(at, tmp)
+	};
 
-		subregion_list_set_prev(at, node);
+	// set the "next" of `at`'s current "prev" as being `new_node`
+	if (current_state[LIST_PREV])
+	{
+		struct subregion_node* const prev_prev =
+		  subregion_list_prev(current_state[LIST_PREV], current_state[LIST_CURR]);
+		subregion_list_set_prev_next(current_state[LIST_PREV], prev_prev, new_node);
 	}
 	else
-	{
-		// general case
-		subregion_list_set_prev(node, prev);
-		subregion_list_set_next(node, at);
+		// as of now, we should have: `list->head == at`
+		list->head = new_node;
 
-		subregion_list_set_prev(at, node);
-		subregion_list_set_next(prev, node);
-	}
+	subregion_list_set_prev_next(new_node, current_state[LIST_PREV], current_state[LIST_CURR]);
+
+	subregion_list_set_prev_next(at, new_node, current_state[LIST_NEXT]);
 }
 
 static inline void subregion_list_insert_after(
-  struct subregion_list* list, struct subregion_node* at, struct subregion_node* node)
+  struct subregion_list* list, struct subregion_node* at, struct subregion_node* new_node)
 {
-	struct subregion_node* next = subregion_list_prev(at);
-	if (!next)
+	enum
 	{
-		// `at` is the list `tail`
-		list->tail = node;
+		LIST_PREV = 0,
+		LIST_CURR,
+		LIST_NEXT
+	};
 
-		subregion_list_set_prev(node, at);
-		subregion_list_set_next(node, nullptr);
+	struct subregion_node* const tmp =
+	  at == list->tail ? nullptr
+					   : node_at((uintptr_t)at, at->persistent.page_count, OFFSET_KIND_PAGE);
+	struct subregion_node* const current_state[3] = {
+		[LIST_CURR] = at, [LIST_NEXT] = tmp, [LIST_PREV] = subregion_list_prev(at, tmp)
+	};
 
-		subregion_list_set_next(at, node);
+	// set the "next" of `at`'s current "prev" as being `new_node`
+	if (current_state[LIST_NEXT])
+	{
+		struct subregion_node* const next_next =
+		  subregion_list_next(current_state[LIST_NEXT], current_state[LIST_CURR]);
+		subregion_list_set_prev_next(current_state[LIST_NEXT], new_node, next_next);
 	}
 	else
-	{
-		// general case
-		subregion_list_set_prev(node, at);
-		subregion_list_set_next(node, next);
+		// as of now, we should have: `list->tail == at`
+		list->tail = new_node;
 
-		subregion_list_set_next(at, node);
-		subregion_list_set_prev(next, node);
-	}
+	subregion_list_set_prev_next(new_node, current_state[LIST_CURR], current_state[LIST_NEXT]);
+
+	subregion_list_set_prev_next(at, current_state[LIST_PREV], new_node);
 }
 
 /*
@@ -253,23 +334,35 @@ struct subregion_rbtree
 	size_t                 count;
 };
 
-static inline size_t subregion_rbtree_max_height(struct subregion_rbtree* rbtree)
+[[gnu::pure]]
+static inline size_t subregion_rbtree_max_height(const struct subregion_rbtree* const restrict rbtree)
 {
+	if (rbtree->count == 0)
+		return 1;
 	return (2 * fast_log2_approx(rbtree->count + 1)) + 1;
 }
 
-static inline struct subregion_node* subregion_rbtree_left(struct subregion_node* node)
+[[gnu::pure]]
+static inline struct subregion_node* subregion_rbtree_parent(const struct subregion_node* const restrict node)
 {
-	return on_page_start((struct subregion_node*)node->left);
+	return node_at(node->rbt_info.parent);
 }
 
-static inline struct subregion_node* subregion_rbtree_right(struct subregion_node* node)
+[[gnu::pure]]
+static inline struct subregion_node* subregion_rbtree_left(const struct subregion_node* const restrict node)
 {
-	return on_page_start((struct subregion_node*)node->right);
+	return node_at(node->rbt_info.left);
 }
 
+[[gnu::pure]]
+static inline struct subregion_node* subregion_rbtree_right(const struct subregion_node* const restrict node)
+{
+	return node_at(node->rbt_info.right);
+}
+
+[[gnu::pure]]
 static inline struct subregion_node*
-subregion_rbtree_child(struct subregion_node* node, enum rbtree_direction dir)
+subregion_rbtree_child(const struct subregion_node* const restrict node, enum rbtree_direction dir)
 {
 	switch (dir)
 	{
@@ -282,33 +375,48 @@ subregion_rbtree_child(struct subregion_node* node, enum rbtree_direction dir)
 	}
 }
 
-static inline enum rbtree_color subregion_rbtree_color(struct subregion_node* node)
+[[gnu::pure]]
+static inline size_t subregion_rbtree_child_count(const struct subregion_node* const restrict node)
 {
-	return node->color;
+	size_t has_left  = (!subregion_rbtree_left(node)) ? 0 : 1;
+	size_t has_right = (!subregion_rbtree_right(node)) ? 0 : 1;
+	return has_left + has_right;
+}
+
+[[gnu::pure]]
+static inline enum rbtree_color subregion_rbtree_color(const struct subregion_node* const restrict node)
+{
+	return node->rbt_info.color;
 }
 
 static inline void
-subregion_rbtree_set_left(struct subregion_node* node, struct subregion_node* new)
+subregion_rbtree_set_parent(struct subregion_node* node, struct subregion_node* new_node)
 {
-	node->left = (uintptr_t)new;
+	node->rbt_info.parent = new_node;
 }
 
 static inline void
-subregion_rbtree_set_right(struct subregion_node* node, struct subregion_node* new)
+subregion_rbtree_set_left(struct subregion_node* node, struct subregion_node* new_node)
 {
-	node->right = (uintptr_t)new;
+	node->rbt_info.left = new_node;
+}
+
+static inline void
+subregion_rbtree_set_right(struct subregion_node* node, struct subregion_node* new_node)
+{
+	node->rbt_info.right = new_node;
 }
 
 static inline void subregion_rbtree_set_child(
-  struct subregion_node* node, struct subregion_node* new, enum rbtree_direction dir)
+  struct subregion_node* node, struct subregion_node* new_node, enum rbtree_direction dir)
 {
 	switch (dir)
 	{
 		case RBTREE_LEFT:
-			subregion_rbtree_set_left(node, new);
+			subregion_rbtree_set_left(node, new_node);
 			break;
 		case RBTREE_RIGHT:
-			subregion_rbtree_set_right(node, new);
+			subregion_rbtree_set_right(node, new_node);
 			break;
 		default:
 			unreachable();
@@ -318,42 +426,299 @@ static inline void subregion_rbtree_set_child(
 
 static inline void subregion_rbtree_set_color(struct subregion_node* node, enum rbtree_color color)
 {
-	node->color = color;
+	node->rbt_info.color = color;
 }
 
 static inline struct subregion_rbtree subregion_rbtree_new(struct subregion_node* node)
 {
+	subregion_set_free(node, true);
+	subregion_rbtree_set_parent(node, nullptr);
 	subregion_rbtree_set_left(node, nullptr);
 	subregion_rbtree_set_right(node, nullptr);
 	subregion_rbtree_set_color(node, RBTREE_BLACK);
 	return (struct subregion_rbtree){ .count = 1, .root = node };
 }
 
-static struct subregion_node* rotate_subtree(
-  struct subregion_rbtree* tree,
-  struct subregion_node*   sub,
-  struct subregion_node*   sub_parent,
-  enum rbtree_direction    dir)
+#undef RBTREE_SELF_DIRECTION
+#define RBTREE_SELF_DIRECTION(node) \
+	((node) == subregion_rbtree_right(subregion_rbtree_parent((node))) ? RBTREE_RIGHT : RBTREE_LEFT)
+
+#undef RBTREE_IS_BLACK
+#undef RBTREE_IS_RED
+#define RBTREE_IS_BLACK(node) ((node) == nullptr || subregion_rbtree_color((node)) == RBTREE_BLACK)
+#define RBTREE_IS_RED(node)   ((node) != nullptr && subregion_rbtree_color((node)) == RBTREE_RED)
+
+#undef RBTREE_HAS_CHILD
+#define RBTREE_HAS_CHILD(node, dir) \
+	(subregion_rbtree_child((node), PP_PASTE(RBTREE_, dir)) != nullptr)
+
+static struct subregion_node* subregion_rbtree_rotate_subtree(
+  struct subregion_rbtree* tree, struct subregion_node* sub, enum rbtree_direction dir)
 {
+	struct subregion_node* sub_parent = subregion_rbtree_parent(sub);
 	struct subregion_node* new_root =
 	  subregion_rbtree_child(sub, 1 - dir); // 1 - dir is the opposite direction
 	struct subregion_node* new_child = subregion_rbtree_child(new_root, dir);
 
 	subregion_rbtree_set_child(sub, new_child, 1 - dir);
 
-	// if (new_child)
-	//	new_child->parent = sub;
+	if (new_child)
+		subregion_rbtree_set_parent(new_child, sub);
 
 	subregion_rbtree_set_child(new_root, sub, dir);
 
-	// new_root->parent = sub_parent;
-	// sub->parent      = new_root;
+	subregion_rbtree_set_parent(new_root, sub_parent);
+	subregion_rbtree_set_parent(sub, new_root);
 	if (sub_parent)
 		subregion_rbtree_set_child(sub_parent, new_root, sub == subregion_rbtree_right(sub_parent));
 	else
 		tree->root = new_root;
 
 	return new_root;
+}
+
+static inline void
+subregion_rbtree_insert_root(struct subregion_rbtree* rbtree, struct subregion_node* node)
+{
+	*rbtree = subregion_rbtree_new(node);
+}
+
+struct insertion_point
+{
+	struct subregion_node* inspoint;
+	enum rbtree_direction  child_dir;
+};
+
+// # Prerequisites
+// - `rbtree->root` must not be `nullptr`
+static inline struct insertion_point subregion_rbtree_non_empty_find_insertion_point(
+  const struct subregion_rbtree* const rbtree, const struct subregion_node* const node)
+{
+	struct insertion_point ret = { .inspoint = rbtree->root };
+
+	while (true)
+	{
+		ret.child_dir = subregion_page_count(node) <= subregion_page_count(ret.inspoint)
+						? RBTREE_LEFT
+						: RBTREE_RIGHT;
+
+		struct subregion_node* child = subregion_rbtree_child(ret.inspoint, ret.child_dir);
+		if (!child)
+			// we got a leaf
+			break;
+
+		ret.inspoint = child;
+	}
+
+	return ret;
+}
+
+// TODO: rewrite the balancing part myself instead of just copy-pasting™ from Wikipedia
+static void subregion_rbtree_insert(struct subregion_rbtree* rbtree, struct subregion_node* node)
+{
+	// TODO: maybe prefetch nodes if it is a bottleneck
+
+	// NOTE: if `rbtree->count != 0`, then `rbtree->root == nullptr` is nearly impossible (normally,
+	// at least)
+	if (rbtree->count == 0 || unlikely(!rbtree->root))
+	{
+		subregion_rbtree_insert_root(rbtree, node);
+		return;
+	}
+
+	struct insertion_point location = subregion_rbtree_non_empty_find_insertion_point(rbtree, node);
+	struct subregion_node* parent   = location.inspoint;
+	enum rbtree_direction  dir      = location.child_dir;
+
+	subregion_set_free(node, true);
+	subregion_rbtree_set_color(node, RBTREE_RED);
+	subregion_rbtree_set_parent(node, parent);
+	subregion_rbtree_set_left(node, nullptr);
+	subregion_rbtree_set_right(node, nullptr);
+
+	subregion_rbtree_set_child(parent, node, dir);
+
+	// rebalance the tree
+	do
+	{
+		// Case #1
+		if (RBTREE_IS_BLACK(parent))
+			goto deferred;
+
+		struct subregion_node* grandparent = subregion_rbtree_parent(parent);
+		if (!grandparent)
+		{
+			// Case #4
+			subregion_rbtree_set_color(parent, RBTREE_BLACK);
+			goto deferred;
+		}
+
+		dir                          = RBTREE_SELF_DIRECTION(parent);
+		struct subregion_node* uncle = subregion_rbtree_child(grandparent, 1 - dir);
+		if (RBTREE_IS_BLACK(uncle))
+		{
+			if (node == subregion_rbtree_child(parent, 1 - dir))
+			{
+				// Case #5
+				subregion_rbtree_rotate_subtree(rbtree, parent, dir);
+				node   = parent;
+				parent = subregion_rbtree_child(grandparent, dir);
+			}
+
+			// Case #6
+			subregion_rbtree_rotate_subtree(rbtree, grandparent, 1 - dir);
+			subregion_rbtree_set_color(parent, RBTREE_BLACK);
+			subregion_rbtree_set_color(grandparent, RBTREE_RED);
+			goto deferred;
+		}
+
+		// Case #2
+		subregion_rbtree_set_color(parent, RBTREE_BLACK);
+		subregion_rbtree_set_color(uncle, RBTREE_BLACK);
+		subregion_rbtree_set_color(grandparent, RBTREE_RED);
+		node = grandparent;
+
+	} while (parent = subregion_rbtree_parent(node));
+
+deferred:
+	rbtree->count += 1;
+}
+
+static inline struct subregion_node*
+subregion_rbtree_get_leftmost_in_subtree(struct subregion_node* node)
+{
+	struct subregion_node* left;
+	while (left = subregion_rbtree_left(node))
+		node = left;
+	return node;
+}
+
+static void subregion_rbtree_replace(struct subregion_node* node, struct subregion_node* new_node)
+{
+	struct subregion_node* left;
+	struct subregion_node* right;
+	struct subregion_node* parent;
+	enum rbtree_direction  pdir;
+	enum rbtree_color      pcol;
+
+	*new_node = *node;
+
+	left   = subregion_rbtree_child(node, RBTREE_LEFT);
+	right  = subregion_rbtree_child(node, RBTREE_RIGHT);
+	parent = subregion_rbtree_parent(node);
+	pdir   = RBTREE_SELF_DIRECTION(node);
+
+	if (left)
+		subregion_rbtree_set_parent(left, new_node);
+	if (right)
+		subregion_rbtree_set_parent(right, new_node);
+	subregion_rbtree_set_child(parent, new_node, pdir);
+}
+
+// TODO: (same comment as for `subregion_rbtree_insert`) rewrite the balancing part myself instead
+// of just copy-pasting™ from Wikipedia
+// TODO: this function is straight-up wrong
+static void subregion_rbtree_remove(struct subregion_rbtree* rbtree, struct subregion_node* node)
+{
+	subregion_set_free(node, false);
+
+	const size_t child_count = subregion_rbtree_child_count(node);
+	switch (child_count)
+	{
+		case 0:
+			break;
+		case 1:
+			break;
+		case 2: {
+			struct subregion_node* replacement =
+			  subregion_rbtree_get_leftmost_in_subtree(subregion_rbtree_right(node));
+		}
+		default:
+			unreachable();
+			break;
+	}
+
+	// TODO: maybe prefetch nodes if it is a bottleneck
+	struct subregion_node* parent = subregion_rbtree_parent(node);
+
+	struct subregion_node* sibling;
+	struct subregion_node* close_nephew;
+	struct subregion_node* distant_nephew;
+
+	enum rbtree_direction dir = RBTREE_SELF_DIRECTION(node);
+
+	subregion_rbtree_set_child(parent, nullptr, dir);
+	goto start_balance;
+
+	do
+	{
+		dir = RBTREE_SELF_DIRECTION(node);
+	start_balance:
+		sibling        = subregion_rbtree_child(parent, 1 - dir);
+		distant_nephew = subregion_rbtree_child(sibling, 1 - dir);
+		close_nephew   = subregion_rbtree_child(sibling, dir);
+		if (RBTREE_IS_RED(sibling))
+		{
+			// Case #3
+			subregion_rbtree_rotate_subtree(rbtree, parent, dir);
+			subregion_rbtree_set_color(parent, RBTREE_RED);
+			subregion_rbtree_set_color(sibling, RBTREE_BLACK);
+			sibling = close_nephew;
+
+			distant_nephew = subregion_rbtree_child(sibling, 1 - dir);
+			if (RBTREE_IS_RED(distant_nephew))
+				goto case_6;
+			close_nephew = subregion_rbtree_child(sibling, dir);
+			if (RBTREE_IS_RED(close_nephew))
+				goto case_5;
+
+			// Case #4
+			subregion_rbtree_set_color(sibling, RBTREE_RED);
+			subregion_rbtree_set_color(parent, RBTREE_BLACK);
+			goto deferred;
+		}
+
+		if (RBTREE_IS_RED(distant_nephew))
+			goto case_6;
+
+		if (RBTREE_IS_RED(close_nephew))
+			goto case_5;
+
+		if (RBTREE_IS_RED(parent))
+		{
+			// Case #4
+			subregion_rbtree_set_color(sibling, RBTREE_RED);
+			subregion_rbtree_set_color(parent, RBTREE_BLACK);
+			goto deferred;
+		}
+
+		// Case #1
+		if (!parent)
+			goto deferred;
+
+		// Case #2
+		subregion_rbtree_set_color(sibling, RBTREE_RED);
+		node = parent;
+
+	} while (parent = subregion_rbtree_parent(node));
+
+case_5:
+
+	subregion_rbtree_rotate_subtree(rbtree, sibling, 1 - dir);
+	subregion_rbtree_set_color(sibling, RBTREE_RED);
+	subregion_rbtree_set_color(close_nephew, RBTREE_BLACK);
+	distant_nephew = sibling;
+	sibling        = close_nephew;
+
+case_6:
+
+	subregion_rbtree_rotate_subtree(rbtree, parent, dir);
+	subregion_rbtree_set_color(sibling, subregion_rbtree_color(parent));
+	subregion_rbtree_set_color(parent, RBTREE_BLACK);
+	subregion_rbtree_set_color(distant_nephew, RBTREE_BLACK);
+
+deferred:
+	rbtree->count -= 1;
 }
 
 struct zerOS_region_allocator
@@ -377,22 +742,19 @@ static constexpr unsigned MEMNODE_SIZE = sizeof(struct subregion_node);
 /**
  * @brief The size of a `struct subregion_node` when allocated
  */
-static constexpr unsigned MEMNODE_ALLOCATED_SIZE =
-  (2 * MAX_ADDRESS_LOG2 + 1 + MAX_ADDRESS_LOG2 - PAGE_SIZE_LOG2) / __CHAR_BIT__
-  + ((2 * MAX_ADDRESS_LOG2 + 1 + MAX_ADDRESS_LOG2 - PAGE_SIZE_LOG2) % __CHAR_BIT__ ? 1 : 0);
+static constexpr unsigned MEMNODE_ALLOCATED_SIZE = sizeof(struct subregion_node_persistent);
 
-static inline struct subregion_node* subregion_free(struct subregion_node* node)
+static void subregion_split(
+  struct zerOS_region_allocator* manager,
+  struct subregion_node*         node,
+  size_t                         new_page_offset,
+  size_t                         new_page_count)
 {
-	return on_page_start((struct subregion_node*)node->free);
-}
+	struct subregion_node* new_node = node_at((uintptr_t)node, new_page_offset, OFFSET_KIND_PAGE);
+	subregion_set_page_count(new_node, new_page_count);
 
-static bool subregion_split(
-  struct zerOS_region_allocator* manager, struct subregion_node* node, size_t page_count)
-{
-	(void)manager;
-	(void)node;
-	(void)page_count;
-	// TODO
+	subregion_list_insert_after(&manager->list, node, new_node);
+	subregion_rbtree_insert(&manager->rbtree, new_node);
 }
 
 union fast_divmod
@@ -441,15 +803,17 @@ libdivide_wrapper_calc(struct libdivide_wrapper* wrapper, size_t numer, size_t d
 		libdivide_wrapper_init(wrapper, denom);
 
 #if SIZE_WIDTH == 32
-	return libdivide_u32_branchfree_do(numer, wrapper->divider);
+	return libdivide_u32_branchfree_do(numer, &wrapper->divider);
 #elif SIZE_WIDTH == 64
-	return libdivide_u64_branchfree_do(numer, wrapper->divider);
+	return libdivide_u64_branchfree_do(numer, &wrapper->divider);
 #endif
 }
 
 static void fast_divmod(union fast_divmod* inout)
 {
 	// clang-format off
+	// NOTE: `fast_dividers[0]` corresponds to the divider for
+	//		 `denom == 1`
 	static struct libdivide_wrapper fast_dividers[(MAX_ALIGN - 1)] = {
 		[0 ... (MAX_ALIGN - 1) - 1] = { .initialized = false }
 	};
@@ -461,7 +825,7 @@ static void fast_divmod(union fast_divmod* inout)
 	struct libdivide_wrapper* divider = fast_dividers + denom - 1;
 
 	inout->out.div = libdivide_wrapper_calc(divider, numer, denom);
-	inout->out.mod = numer - inout->out.div;
+	inout->out.mod = numer - (inout->out.div * denom);
 }
 
 // TODO: align_up and align_down macros or functions
@@ -473,7 +837,7 @@ static inline uintptr_t align_up(uintptr_t ptr, size_t align)
 	union fast_divmod divmod = {
 		.in = { .numer = ptr, .denom = align }
 	};
-	fast_divmod(divmod);
+	fast_divmod(&divmod);
 	return ptr + divmod.out.mod;
 }
 
@@ -500,8 +864,7 @@ extern struct zerOS_region_allocator* zerOS_region_allocator_create(
 
 	struct subregion_node* first_node = on_page_start(region + PAGE_SIZE);
 
-	first_node->page_count = (region_size / PAGE_SIZE) - 1;
-	first_node->free       = true;
+	subregion_set_page_count(first_node, (region_size / PAGE_SIZE) - 1);
 
 	struct zerOS_region_allocator* ret = on_page_start(region);
 
@@ -545,29 +908,26 @@ extern struct zerOS_region_allocator* zerOS_region_allocator_create(
  * @retval `true`: If the function succeded.
  * @retval `false`: If the function failed.
  */
-static inline bool subregion_rbtree_inorder_traverse_from_until_impl(
+static inline struct subregion_node* subregion_rbtree_inorder_traverse_from_until_impl(
   const size_t from,
   const bool   lower_bound_included,
-  bool         (*const until_predicate)(const struct subregion_node*, size_t, size_t),
-  struct subregion_node** restrict node,
-  struct subregion_node** restrict parent,
-  struct subregion_node** restrict grand_parent,
-  const size_t size,
-  const size_t align)
+  bool         (*const until_predicate)(const struct subregion_node*, void*),
+  struct subregion_node* restrict node,
+  void* user_data)
 {
-	struct subregion_node* const current = *node;
-	struct subregion_node* const left    = subregion_rbtree_left(current);
-	struct subregion_node* const right   = subregion_rbtree_right(current);
+	struct subregion_node*       next_visited;
+	struct subregion_node* const left  = subregion_rbtree_left(node);
+	struct subregion_node* const right = subregion_rbtree_right(node);
 
 	assume_unaliasing_pointers(left, right);
-	assume_unaliasing_pointers(current, right);
-	assume_unaliasing_pointers(left, current);
+	assume_unaliasing_pointers(node, right);
+	assume_unaliasing_pointers(left, node);
 	prefetch_rw(left, 2);
 	prefetch_rw(right, 3);
 
 	const bool current_is_big_enough =
-	  from < current->page_count * PAGE_SIZE
-	  || (lower_bound_included && unlikely(from == current->page_count * PAGE_SIZE));
+	  from < subregion_page_count(node) * PAGE_SIZE
+	  || (lower_bound_included && unlikely(from == subregion_page_count(node) * PAGE_SIZE));
 
 	// NOTE: if the current node is already not enough to hold the required size, there is no point
 	// going through the left subtree. On the other hand, it might be okay to through the right one
@@ -575,77 +935,52 @@ static inline bool subregion_rbtree_inorder_traverse_from_until_impl(
 
 	if (left && current_is_big_enough)
 	{
-		if ((from < left->page_count * PAGE_SIZE
-			 || (lower_bound_included && unlikely(from == left->page_count * PAGE_SIZE))))
+		if ((from < subregion_page_count(left) * PAGE_SIZE
+			 || (lower_bound_included && unlikely(from == subregion_page_count(left) * PAGE_SIZE))))
 		{
-			struct subregion_node* new              = left;
-			struct subregion_node* new_parent       = *node;
-			struct subregion_node* new_grand_parent = *parent;
-			if (subregion_rbtree_inorder_traverse_from_until_impl(
-				  from, lower_bound_included, until_predicate, &new, &new_parent, &new_grand_parent,
-				  size, align))
-			{
-				*node         = new;
-				*parent       = new_parent;
-				*grand_parent = new_grand_parent;
-				return true;
-			}
+			next_visited = subregion_rbtree_inorder_traverse_from_until_impl(
+			  from, lower_bound_included, until_predicate, left, user_data);
+			if (next_visited)
+				return next_visited;
 		}
 	}
 
 	if (current_is_big_enough)
 	{
-		if (until_predicate(*node, size, align))
-			return true;
+		if (until_predicate(node, user_data))
+			return node;
 	}
 
 	if (right)
 	{
-		struct subregion_node* new              = right;
-		struct subregion_node* new_parent       = *node;
-		struct subregion_node* new_grand_parent = *parent;
-		if (subregion_rbtree_inorder_traverse_from_until_impl(
-			  from, lower_bound_included, until_predicate, &new, &new_parent, &new_grand_parent,
-			  size, align))
-		{
-			*node         = new;
-			*parent       = new_parent;
-			*grand_parent = new_grand_parent;
-			return true;
-		}
+		next_visited = subregion_rbtree_inorder_traverse_from_until_impl(
+		  from, lower_bound_included, until_predicate, right, user_data);
+		if (next_visited)
+			return next_visited;
 	}
+
+	return nullptr;
 }
 
-static bool subregion_rbtree_inorder_traverse_from_until(
+static struct subregion_node* subregion_rbtree_inorder_traverse_from_until(
   struct zerOS_region_allocator* allocator,
   const size_t                   from,
   const bool                     lower_bound_included,
-  bool (*const until_predicate)(const struct subregion_node*, size_t, size_t),
-  struct subregion_node** restrict node,
-  struct subregion_node** restrict parent,
-  struct subregion_node** restrict grand_parent,
-  const size_t size,
-  const size_t align)
+  bool                           (*const until_predicate)(const struct subregion_node*, void*),
+  void*                          user_data)
 {
 	prefetch_rw(allocator->rbtree.root, 2);
 
-	*node         = allocator->rbtree.root;
-	*parent       = nullptr;
-	*grand_parent = nullptr;
+	struct subregion_node* start = allocator->rbtree.root;
 
 	return subregion_rbtree_inorder_traverse_from_until_impl(
-	  from, lower_bound_included, until_predicate, node, parent, grand_parent, size, align);
+	  from, lower_bound_included, until_predicate, start, user_data);
 }
 
-static inline bool
-suitable_region_predicate(const struct subregion_node* node, size_t size, size_t align)
+static inline bool suitable_region_predicate(const struct subregion_node* node, void*)
 {
-	if (likely(node->free))
-	{
-		return true;
-	}
-	else
-		return false;
+	// should always be true if the rbtree contains it
+	return likely(subregion_free(node));
 }
 
 static inline size_t padding_for(size_t align)
@@ -657,19 +992,32 @@ static inline size_t padding_for(size_t align)
 static void*
 region_alloc_best_fit(struct zerOS_region_allocator* allocator, size_t size, size_t align)
 {
+	if (!allocator->rbtree.count || !allocator->rbtree.root)
+		return nullptr;
+
 	const size_t alignment_padding = padding_for(align);
-	const size_t absolute_minimum = MEMNODE_ALLOCATED_SIZE + alignment_padding + size;
+	const size_t absolute_minimum  = MEMNODE_ALLOCATED_SIZE + alignment_padding + size;
+	const size_t absolute_page_count_minimum =
+	  (absolute_minimum / PAGE_SIZE) + (absolute_minimum % PAGE_SIZE ? 1 : 0);
 
-	struct subregion_node* node;
-	struct subregion_node* parent;
-	struct subregion_node* grand_parent;
-
-	if (subregion_rbtree_inorder_traverse_from_until(
-		  allocator, absolute_minimum, true, &suitable_region_predicate, &node, &parent,
-		  &grand_parent, size, align))
+	struct subregion_node* node = subregion_rbtree_inorder_traverse_from_until(
+	  allocator, absolute_minimum, true, &suitable_region_predicate, nullptr);
+	if (node)
 	{
-		// all good
-		// process...
+		// we found a chunk
+		const size_t base_chunk_page_count = subregion_page_count(node);
+		const size_t unused_pages = absolute_page_count_minimum - subregion_page_count(node);
+
+		// this function already sets `node->persistent.free = false`
+		subregion_rbtree_remove(&allocator->rbtree, node);
+
+		if (unused_pages > 0)
+		{
+			subregion_set_page_count(node, absolute_page_count_minimum);
+			subregion_split(allocator, node, absolute_page_count_minimum, unused_pages);
+		}
+
+		return (zerOS_byte_t*)node + MEMNODE_ALLOCATED_SIZE;
 	}
 
 	// failed to get a suitable chunk
@@ -679,7 +1027,43 @@ region_alloc_best_fit(struct zerOS_region_allocator* allocator, size_t size, siz
 static void*
 region_alloc_first_fit(struct zerOS_region_allocator* allocator, size_t size, size_t align)
 {
+	if (!allocator->rbtree.count || !allocator->rbtree.root)
+		return nullptr;
+
+	const size_t alignment_padding = padding_for(align);
+	const size_t absolute_minimum  = MEMNODE_ALLOCATED_SIZE + alignment_padding + size;
+	const size_t absolute_page_count_minimum =
+	  (absolute_minimum / PAGE_SIZE) + (absolute_minimum % PAGE_SIZE ? 1 : 0);
+
+	// get rightmost leaf
+	struct subregion_node* node = allocator->rbtree.root;
+	while (node && subregion_page_count(node) < absolute_page_count_minimum)
+		node = subregion_rbtree_right(node);
+
+	if (node)
+	{
+		// we found a chunk
+		const size_t base_chunk_page_count = subregion_page_count(node);
+		const size_t unused_pages = absolute_page_count_minimum - subregion_page_count(node);
+
+		// this function already sets `node->persistent.free = false`
+		subregion_rbtree_remove(&allocator->rbtree, node);
+
+		if (unused_pages > 0)
+		{
+			subregion_set_page_count(node, absolute_page_count_minimum);
+			subregion_split(allocator, node, absolute_page_count_minimum, unused_pages);
+		}
+
+		return (zerOS_byte_t*)node + MEMNODE_ALLOCATED_SIZE;
+	}
+
 	return nullptr;
+}
+
+static inline bool layout_requirements_ok(size_t size, size_t align)
+{
+	return likely(align <= MAX_ALIGN) && likely(is_power_of_two(align)) && likely(size);
 }
 
 extern void* zerOS_region_allocator_alloc(
@@ -688,7 +1072,7 @@ extern void* zerOS_region_allocator_alloc(
   size_t                         align,
   enum zerOS_allocation_strategy strategy)
 {
-	if (unlikely(align > MAX_ALIGN) || unlikely(align == 0))
+	if (!layout_requirements_ok(size, align))
 		return nullptr;
 
 	prefetch_rw(allocator, 2);

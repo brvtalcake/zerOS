@@ -93,6 +93,10 @@ psm = "0.1"
 logos = { version = "0.15.0", default-features = false, features = [
     "export_derive",
 ] }
+indexmap = { version = "2.9.0", default-features = false }
+corosensei = { version = "0.2.1", default-features = false }
+futures = { version = "0.3", default-features = false }
+eager2 = "1.0.1"
 
 [dependencies.log]
 version = "0.4.27"
@@ -167,12 +171,14 @@ features = [
 #[target]
 
 [build-dependencies]
+bindgen = "0.71"
+regex = "*"
 cc = "1.2.18"
 toml = "*"
 strum = { version = "0.27", default-features = true, features = ["derive"] }
 serde = { version = "*", default-features = true, features = ["derive"] }
 autocfg = "1.4.0"
-#bindgen = "0.71.1"
+#cbindgen = "0.28.0"
 #jobserver = "0.1.33"
 #cpp = "0.5.10"
 #cpp_build = "0.5.10"

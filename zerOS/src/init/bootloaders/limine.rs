@@ -43,7 +43,7 @@ mod entry
 	};
 
 	#[unsafe(no_mangle)]
-	extern "C" fn zerOS_boot_setup() -> !
+	extern "sysv64" fn zerOS_boot_setup() -> !
 	{
 		// All limine requests must also be referenced in a called function, otherwise
 		// they may be removed by the linker.

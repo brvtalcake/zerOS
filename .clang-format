@@ -56,7 +56,7 @@ AlwaysBreakBeforeMultilineStrings: false
 
 AttributeMacros: []
 
-BinPackArguments: true
+BinPackArguments: true #false
 
 BinPackParameters: OnePerLine
 #BinPackParameters: BinPack

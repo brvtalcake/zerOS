@@ -31,19 +31,39 @@ macro_rules! from_cargo {
 	};
 }
 
-#[derive(Deserialize, Debug, Default)]
+#[derive(Deserialize, Debug)]
 #[serde(rename_all = "kebab-case")]
 struct KConfig
 {
-	boot: Option<KConfigBoot>
+	boot: KConfigBoot
 }
 
-#[derive(Deserialize, Debug, Default)]
+impl Default for KConfig
+{
+	fn default() -> Self
+	{
+		Self {
+			boot: KConfigBoot::default()
+		}
+	}
+}
+
+#[derive(Deserialize, Debug)]
 #[serde(rename_all = "kebab-case")]
 #[serde(rename = "boot")]
 struct KConfigBoot
 {
-	bootloader: Option<KConfigBootBootloader>
+	bootloader: KConfigBootBootloader
+}
+
+impl Default for KConfigBoot
+{
+	fn default() -> Self
+	{
+		Self {
+			bootloader: KConfigBootBootloader::Limine
+		}
+	}
 }
 
 #[derive(
@@ -90,7 +110,7 @@ fn get_outdir() -> Option<&'static String>
 		.as_ref()
 }
 
-fn compile_region_allocator()
+fn compile_region_allocator() -> Vec<PathBuf>
 {
 	// clang -march=x86-64 -O3 -ffreestanding -fno-builtin -nostdlib
 	// --target=x86_64-unknown-none-elf zerOS/src/kernel/memory/allocators/region.c
@@ -104,11 +124,82 @@ fn compile_region_allocator()
 	let outdir = get_outdir();
 	if outdir.is_none()
 	{
-		return;
+		return vec![];
 	}
 
-	Command::new("clang")
-		.args([
+	let files = vec![(
+		"./src/kernel/memory/allocators/region.c",
+		path::PathBuf::from(outdir.unwrap()).join("region.o")
+	)];
+
+	for (inf, outf) in &files
+	{
+		Command::new("clang")
+			.args([
+				"-I./include",
+				"--target=x86_64-unknown-none-elf",
+				"-xc",
+				"-std=gnu23",
+				"-O3",
+				"-Wall",
+				"-Wextra",
+				// "-flto",
+				"-ffreestanding",
+				"-fno-stack-protector",
+				"-fno-stack-check",
+				"-m64",
+				"-masm=att",
+				"-march=native",
+				"-mtune=native",
+				"-nodefaultlibs",
+				"-nostdlib",
+				//"-nostartfiles",
+				//"-m128bit-long-double",
+				//"-mfloat-abi=soft",
+				// "-msoft-float",
+				"-c"
+			])
+			.arg(inf)
+			.arg("-o")
+			.arg(outf)
+			.spawn()
+			.expect("couldn't spawn Clang !")
+			.wait()
+			.expect("couldn't compile C file !")
+			.exit_ok()
+			.expect("couldn't compile C file !");
+	}
+	bindgen::builder()
+		//.clang_args([
+		//	"-I./include",
+		//	"--target=x86_64-unknown-none-elf",
+		//	"-xc",
+		//	"-std=gnu23",
+		//	"-O3",
+		//	"-Wall",
+		//	"-Wextra",
+		//	"-flto",
+		//	"-ffreestanding",
+		//	"-fno-stack-protector",
+		//	"-fno-stack-check",
+		//	"-masm=att",
+		//	"-m64",
+		//	"-march=x86-64",
+		//	"-mno-mmx",
+		//	"-mno-sse",
+		//	"-mno-sse2",
+		//	"-mno-red-zone",
+		//	"-mno-avx",
+		//	"-mno-avx2",
+		//	"-mno-avx512f",
+		//	"-nodefaultlibs",
+		//	"-nostdlib",
+		//	//"-nostartfiles",
+		//	//"-m128bit-long-double",
+		//	//"-mfloat-abi=soft",
+		//	"-msoft-float"
+		//])
+		.clang_args([
 			"-I./include",
 			"--target=x86_64-unknown-none-elf",
 			"-xc",
@@ -116,36 +207,34 @@ fn compile_region_allocator()
 			"-O3",
 			"-Wall",
 			"-Wextra",
-			"-flto",
+			// "-flto",
 			"-ffreestanding",
 			"-fno-stack-protector",
 			"-fno-stack-check",
 			"-m64",
-			"-march=x86-64",
-			"-mno-mmx",
-			"-mno-sse",
-			"-mno-sse2",
-			"-mno-red-zone",
-			"-mno-avx",
-			"-mno-avx2",
-			"-mno-avx512f",
+			"-masm=att",
+			"-march=native",
+			"-mtune=native",
 			"-nodefaultlibs",
 			"-nostdlib",
 			//"-nostartfiles",
 			//"-m128bit-long-double",
 			//"-mfloat-abi=soft",
-			"-msoft-float",
-			"-c"
+			// "-msoft-float",
 		])
-		.arg("./src/kernel/memory/allocators/region.c")
-		.arg("-o")
-		.arg(path::PathBuf::from(outdir.unwrap()).join("region.o"))
-		.spawn()
-		.expect("couldn't swpan Clang !")
-		.wait()
-		.expect("couldn't compile C file !")
-		.exit_ok()
-		.expect("couldn't compile C file !");
+		.header("./include/region_allocator.h")
+		.opaque_type("zerOS_region_allocator")
+		.newtype_enum("zerOS_allocation_strategy")
+		.prepend_enum_name(false)
+		.allowlist_file(r"\./include/.+\.h")
+		.parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
+		.rustfmt_configuration_file(Some("./rustfmt.toml".into()))
+		.use_core()
+		.generate()
+		.unwrap()
+		.write_to_file("./src/kernel/memory/allocators/bindings/region.rs")
+		.unwrap();
+	files.iter().cloned().unzip::<_, _, Vec<_>, _>().1
 }
 
 macro_rules! custom_kcfg {
@@ -165,11 +254,76 @@ macro_rules! custom_kcfg {
 fn generate_kconfig_aliases()
 {
 	let kconfig = parse_kconfig();
-	if let Some(bootconf) = &kconfig.boot
+	let bootconf = &kconfig.boot;
+	let bootloader = bootconf.bootloader;
+	custom_kcfg!(bootloader: KConfigBootBootloader = bootloader.as_ref());
+}
+
+fn compile_c_init_code() -> Vec<PathBuf>
+{
+	let kconfig = parse_kconfig();
+	let defines = [format!(
+		"-DzerOS_INIT_BOOTLOADER_IS_{}=1",
+		kconfig
+			.boot
+			.bootloader
+			.as_ref()
+			.to_uppercase()
+			.replace("-", "_")
+	)];
+
+	let outdir = get_outdir();
+	if outdir.is_none()
 	{
-		let bootloader = bootconf.bootloader.unwrap_or_default();
-		custom_kcfg!(bootloader: KConfigBootBootloader = bootloader.as_ref());
+		return vec![];
 	}
+
+	let outf = path::PathBuf::from(outdir.unwrap()).join("entry-point.o");
+	Command::new("clang")
+		.args(&defines)
+		.args(&[
+			"-I./include",
+			"--target=x86_64-unknown-none-elf",
+			"-xc",
+			"-std=gnu23",
+			"-O3",
+			"-Wall",
+			"-Wextra",
+			// "-flto",
+			"-ffreestanding",
+			"-fno-stack-protector",
+			"-fno-stack-check",
+			"-m64",
+			"-masm=att",
+			"-march=x86-64",
+			"-mtune=x86-64",
+			"-nodefaultlibs",
+			"-nostdlib",
+			"-mgeneral-regs-only",
+			"-mno-mmx",
+			"-mno-sse",
+			"-mno-sse2",
+			"-mno-red-zone",
+			"-mno-avx",
+			"-mno-avx2",
+			"-mno-avx512f",
+			//"-nostartfiles",
+			//"-m128bit-long-double",
+			//"-mfloat-abi=soft",
+			"-mno-fp-ret-in-387",
+			"-msoft-float",
+			"-c"
+		])
+		.arg("./src/arch/amd64/entry-point.c")
+		.arg("-o")
+		.arg(&outf)
+		.spawn()
+		.expect("couldn't spawn Clang !")
+		.wait()
+		.expect("couldn't compile C file !")
+		.exit_ok()
+		.expect("couldn't compile C file !");
+	vec![outf]
 }
 
 fn generate_config_arch_aliases()
@@ -216,12 +370,39 @@ fn declare_c_source_code<T: AsRef<path::Path>>(paths: &[T])
 	}
 }
 
+fn declare_c_source_code_in<T: AsRef<path::Path>>(paths: &[T], recurse: bool)
+{
+	for path in paths
+	{
+		for in_dir in fs::read_dir(path).unwrap()
+		{
+			if let Ok(p) = in_dir
+			{
+				if p.file_type().map_or(false, |val| {
+					val.is_file()
+						&& p.file_name().into_string().map_or(false, |filename| {
+							filename.ends_with(".c") || filename.ends_with(".h")
+						})
+				})
+				{
+					to_cargo!(
+						"rerun-if-changed" => p.file_name().into_string().unwrap()
+					);
+				}
+				else if recurse && p.file_type().map_or(false, |val| val.is_dir())
+				{
+					declare_c_source_code_in(&[p.path()], recurse);
+				}
+			}
+		}
+	}
+}
+
 pub fn main()
 {
 	generate_config_arch_aliases();
 	generate_kconfig_aliases();
-	compile_region_allocator();
-	declare_c_source_code(&["./include", "./src/kernel/memory/allocators/region.c"]);
+	declare_c_source_code_in(&["./include", "./src"], true);
 
 	let relpath: &'static str = "../scripts/gensectioninfo.py";
 	let abspath = match realpath(relpath)
@@ -229,6 +410,7 @@ pub fn main()
 		Ok(path) => path,
 		Err(e) => panic!("can not find {relpath}: {}", e.to_string())
 	};
+	let out_dir = get_outdir();
 
 	to_cargo!("rerun-if-changed" => abspath
 		.clone()
@@ -237,6 +419,17 @@ pub fn main()
 		.expect("invalid path !"));
 	to_cargo!("rerun-if-changed" => "build.rs");
 	to_cargo!("rerun-if-changed" => "linker/linker-x86_64.ld.template");
+
+	let mut c_objs = vec![];
+	// TODO: change clang target based on target arch
+	c_objs.append(&mut compile_region_allocator());
+	// TODO: change clang target based on target arch
+	c_objs.append(&mut compile_c_init_code());
+
+	if let Some(odir) = out_dir
+	{
+		make_lib_with(&c_objs, &PathBuf::from(odir).join("libzerOS-c.a"));
+	}
 
 	let linker_script = update_linker_script_and_related(&abspath)
 		.into_os_string()
@@ -339,6 +532,34 @@ mod tests
 "#;
 	out.write_all(content.as_bytes())?;
 	Ok(())
+}
+
+fn make_lib_with(files: &Vec<PathBuf>, outlib: &PathBuf)
+{
+	let search_dir = outlib.parent().unwrap().to_str().unwrap();
+
+	let lib_name = outlib.file_name().unwrap().to_str().unwrap();
+	let lib_name = lib_name.strip_prefix("lib").unwrap_or(lib_name);
+	let lib_name = lib_name.strip_suffix(".a").unwrap_or(lib_name);
+
+	to_cargo!(
+		"rustc-link-search" => search_dir
+	);
+	to_cargo!(
+		"rustc-link-search" =>
+			"static=".to_owned() + lib_name
+	);
+
+	Command::new("ar")
+		.arg("-rcv")
+		.arg(outlib)
+		.args(files)
+		.spawn()
+		.expect("couldn't spawn ar !")
+		.wait()
+		.expect("couldn't create an archive !")
+		.exit_ok()
+		.expect("couldn't create an archive !");
 }
 
 fn update_linker_script_and_related(gensecinfo: &PathBuf) -> std::path::PathBuf
