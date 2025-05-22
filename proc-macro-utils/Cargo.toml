@@ -34,8 +34,9 @@ getrandom = "*"
 paste = "*"
 either = "*"
 num-traits = "*"
-#darling = "*"
+#darling = { version = "0.20", features = ["diagnostics", "suggestions"]}
 pathsearch = "*"
+heck = "0.5"
 
 [dev-dependencies]
 libc = "*"
