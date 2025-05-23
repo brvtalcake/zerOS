@@ -230,18 +230,18 @@ struct subregion_list
 	struct subregion_node* tail;
 };
 
-// TODO: maybe accessor functions could be `__attribute__((const))` or `__attribute__((pure))` ?
-
 [[gnu::pure]]
-static inline struct subregion_node*
-subregion_list_prev(const struct subregion_node* const restrict node, const struct subregion_node* const restrict next)
+static inline struct subregion_node* subregion_list_prev(
+  const struct subregion_node* const restrict node,
+  const struct subregion_node* const restrict next)
 {
 	return node_at(node->persistent.xored_prev_next ^ (uintptr_t)next);
 }
 
 [[gnu::pure]]
-static inline struct subregion_node*
-subregion_list_next(const struct subregion_node* const restrict node, const struct subregion_node* const restrict prev)
+static inline struct subregion_node* subregion_list_next(
+  const struct subregion_node* const restrict node,
+  const struct subregion_node* const restrict prev)
 {
 	return node_at(node->persistent.xored_prev_next ^ (uintptr_t)prev);
 }
@@ -335,7 +335,8 @@ struct subregion_rbtree
 };
 
 [[gnu::pure]]
-static inline size_t subregion_rbtree_max_height(const struct subregion_rbtree* const restrict rbtree)
+static inline size_t
+subregion_rbtree_max_height(const struct subregion_rbtree* const restrict rbtree)
 {
 	if (rbtree->count == 0)
 		return 1;
@@ -343,19 +344,22 @@ static inline size_t subregion_rbtree_max_height(const struct subregion_rbtree* 
 }
 
 [[gnu::pure]]
-static inline struct subregion_node* subregion_rbtree_parent(const struct subregion_node* const restrict node)
+static inline struct subregion_node*
+subregion_rbtree_parent(const struct subregion_node* const restrict node)
 {
 	return node_at(node->rbt_info.parent);
 }
 
 [[gnu::pure]]
-static inline struct subregion_node* subregion_rbtree_left(const struct subregion_node* const restrict node)
+static inline struct subregion_node*
+subregion_rbtree_left(const struct subregion_node* const restrict node)
 {
 	return node_at(node->rbt_info.left);
 }
 
 [[gnu::pure]]
-static inline struct subregion_node* subregion_rbtree_right(const struct subregion_node* const restrict node)
+static inline struct subregion_node*
+subregion_rbtree_right(const struct subregion_node* const restrict node)
 {
 	return node_at(node->rbt_info.right);
 }
@@ -384,7 +388,8 @@ static inline size_t subregion_rbtree_child_count(const struct subregion_node* c
 }
 
 [[gnu::pure]]
-static inline enum rbtree_color subregion_rbtree_color(const struct subregion_node* const restrict node)
+static inline enum rbtree_color
+subregion_rbtree_color(const struct subregion_node* const restrict node)
 {
 	return node->rbt_info.color;
 }
@@ -615,6 +620,157 @@ static void subregion_rbtree_replace(struct subregion_node* node, struct subregi
 	subregion_rbtree_set_child(parent, new_node, pdir);
 }
 
+static inline void subregion_rbtree_connect_maybe_null(
+  struct subregion_node* parent,
+  enum rbtree_direction  dir,
+  struct subregion_node* child,
+  enum rbtree_color      color)
+{
+	subregion_rbtree_set_child(parent, child, dir);
+	if (child)
+	{
+		subregion_rbtree_set_parent(child, parent);
+		subregion_rbtree_set_color(child, color);
+	}
+}
+
+static inline void subregion_rbtree_connect(
+  struct subregion_node* parent,
+  enum rbtree_direction  dir,
+  struct subregion_node* child,
+  enum rbtree_color      color)
+{
+#if 0
+	subregion_rbtree_set_child(parent, child, dir);
+	subregion_rbtree_set_parent(child, parent);
+	subregion_rbtree_set_color(child, color);
+#else
+	assume(child);
+	subregion_rbtree_connect_maybe_null(parent, dir, child, color);
+#endif
+}
+
+// see the comment for `subregion_rbtree_remove_noninternal`
+static void
+subregion_rbtree_rebalance_after_unlink(struct subregion_node* pnt, enum rbtree_direction pdir)
+{
+	struct subregion_node* gpnt;
+	struct subregion_node* sibling;
+	struct subregion_node* sleft;
+	struct subregion_node* sright;
+	struct subregion_node* sleftleft;
+	struct subregion_node* sleftright;
+	enum rbtree_direction  left;
+	enum rbtree_direction  right;
+	enum rbtree_direction  gdir;
+
+	if (!subregion_rbtree_parent(pnt))
+		return;
+
+	left    = pdir; // define "left" as the direction from parent to deleted node
+	right   = pdir != RBTREE_LEFT ? RBTREE_LEFT : RBTREE_RIGHT;
+	gpnt    = subregion_rbtree_parent(pnt);
+	gdir    = RBTREE_SELF_DIRECTION(pnt);
+	sibling = subregion_rbtree_child(pnt, right);
+	sleft   = subregion_rbtree_child(sibling, left);
+	sright  = subregion_rbtree_child(sibling, right);
+
+	if (RBTREE_IS_RED(sibling))
+	{
+		/* sibling is red */
+		subregion_rbtree_connect(pnt, right, sleft, RBTREE_BLACK);
+		subregion_rbtree_connect(sibling, left, pnt, RBTREE_RED);
+		subregion_rbtree_connect(gpnt, gdir, sibling, RBTREE_BLACK);
+		subregion_rbtree_rebalance_after_unlink(pnt, pdir);
+	}
+	else if (RBTREE_IS_RED(sright))
+	{
+		/* outer child of sibling is red */
+		enum rbtree_color pntcol = subregion_rbtree_color(pnt);
+		subregion_rbtree_connect_maybe_null(pnt, right, sleft, subregion_rbtree_color(sleft));
+		subregion_rbtree_connect(sibling, left, pnt, RBTREE_BLACK);
+		subregion_rbtree_connect(gpnt, gdir, sibling, pntcol);
+		rb3_set_black(sibling, right);
+	}
+	else if (rb3_is_red(sibling, left))
+	{
+		/* inner child of sibling is red */
+		sleftleft  = rb3_get_child(sleft, left);
+		sleftright = rb3_get_child(sleft, right);
+		rb3_connect_null(pnt, right, sleftleft, RBTREE_BLACK);
+		rb3_connect_null(sibling, left, sleftright, RBTREE_BLACK);
+		rb3_connect(sleft, left, pnt, RBTREE_BLACK);
+		rb3_connect(sleft, right, sibling, RBTREE_BLACK);
+		rb3_connect(gpnt, gdir, sleft, rb3_get_color_bit(gpnt, gdir));
+		if (augment)
+		{
+			augment(sibling);
+			rb3_update_augment(pnt, augment);
+		}
+	}
+	else if (rb3_is_red(gpnt, gdir))
+	{
+		/* parent is red */
+		rb3_set_red(pnt, right);
+		rb3_set_black(gpnt, gdir);
+		if (augment)
+			rb3_update_augment(pnt, augment);
+	}
+	else
+	{
+		/* all relevant nodes are black */
+		rb3_set_red(pnt, right);
+		if (augment)
+			augment(pnt);
+		subregion_rbtree_rebalance_after_unlink(gpnt, gdir, augment);
+	}
+}
+
+// copied from
+// https://github.com/jstimpfle/rb3ptr/blob/faf0b609b35a2183df28c62d28afb541c3c130fb/rb3ptr.c#L313
+static void
+subregion_rbtree_remove_noninternal(struct subregion_rbtree* rbtree, struct subregion_node* node)
+{
+	struct subregion_node* pnt;
+	struct subregion_node* cld;
+	enum rbtree_direction  pdir;
+	enum rbtree_direction  dir;
+
+	dir  = subregion_rbtree_child(node, RBTREE_RIGHT) ? RBTREE_RIGHT : RBTREE_LEFT;
+	pnt  = subregion_rbtree_parent(node);
+	cld  = subregion_rbtree_child(node, dir);
+	pdir = RBTREE_SELF_DIRECTION(node);
+
+	struct subregion_node* to_test1       = subregion_rbtree_child(pnt, pdir);
+	struct subregion_node* to_test2       = subregion_rbtree_child(node, dir);
+	bool                   must_rebalance = !RBTREE_IS_RED(to_test1) && !RBTREE_IS_RED(to_test2);
+
+	/* since we added the possibility for augmentation,
+	we need to remove `head` *before* the rebalancing that we do below.
+	(Otherwise the augmentation function would still see the to-be-deleted child). */
+	subregion_rbtree_connect_maybe_null(pnt, pdir, cld, RBTREE_BLACK);
+	// subregion_rbtree_set_child(pnt, cld, pdir);
+	// if (child)
+	//{
+	//	subregion_rbtree_set_parent(cld, pnt);
+	//	subregion_rbtree_set_color(cld, RBTREE_BLACK);
+	// }
+
+	if (must_rebalance)
+		/* To be deleted node is black (and child cannot be repainted)
+		 * => height decreased */
+		subregion_rbtree_rebalance_after_unlink(pnt, pdir);
+}
+
+static void
+subregion_rbtree_remove_internal(struct subregion_rbtree* rbtree, struct subregion_node* node)
+{
+	struct subregion_node* replacement =
+	  subregion_rbtree_get_leftmost_in_subtree(subregion_rbtree_right(node));
+	subregion_rbtree_remove_noninternal(rbtree, replacement);
+	subregion_rbtree_replace(node, replacement);
+}
+
 // TODO: (same comment as for `subregion_rbtree_insert`) rewrite the balancing part myself instead
 // of just copy-pasting™ from Wikipedia
 // TODO: this function is straight-up wrong
@@ -626,96 +782,17 @@ static void subregion_rbtree_remove(struct subregion_rbtree* rbtree, struct subr
 	switch (child_count)
 	{
 		case 0:
-			break;
+			[[__fallthrough__]];
 		case 1:
+			subregion_rbtree_remove_noninternal(rbtree, node);
 			break;
 		case 2: {
-			struct subregion_node* replacement =
-			  subregion_rbtree_get_leftmost_in_subtree(subregion_rbtree_right(node));
+			subregion_rbtree_remove_internal(rbtree, node);
 		}
 		default:
 			unreachable();
 			break;
 	}
-
-	// TODO: maybe prefetch nodes if it is a bottleneck
-	struct subregion_node* parent = subregion_rbtree_parent(node);
-
-	struct subregion_node* sibling;
-	struct subregion_node* close_nephew;
-	struct subregion_node* distant_nephew;
-
-	enum rbtree_direction dir = RBTREE_SELF_DIRECTION(node);
-
-	subregion_rbtree_set_child(parent, nullptr, dir);
-	goto start_balance;
-
-	do
-	{
-		dir = RBTREE_SELF_DIRECTION(node);
-	start_balance:
-		sibling        = subregion_rbtree_child(parent, 1 - dir);
-		distant_nephew = subregion_rbtree_child(sibling, 1 - dir);
-		close_nephew   = subregion_rbtree_child(sibling, dir);
-		if (RBTREE_IS_RED(sibling))
-		{
-			// Case #3
-			subregion_rbtree_rotate_subtree(rbtree, parent, dir);
-			subregion_rbtree_set_color(parent, RBTREE_RED);
-			subregion_rbtree_set_color(sibling, RBTREE_BLACK);
-			sibling = close_nephew;
-
-			distant_nephew = subregion_rbtree_child(sibling, 1 - dir);
-			if (RBTREE_IS_RED(distant_nephew))
-				goto case_6;
-			close_nephew = subregion_rbtree_child(sibling, dir);
-			if (RBTREE_IS_RED(close_nephew))
-				goto case_5;
-
-			// Case #4
-			subregion_rbtree_set_color(sibling, RBTREE_RED);
-			subregion_rbtree_set_color(parent, RBTREE_BLACK);
-			goto deferred;
-		}
-
-		if (RBTREE_IS_RED(distant_nephew))
-			goto case_6;
-
-		if (RBTREE_IS_RED(close_nephew))
-			goto case_5;
-
-		if (RBTREE_IS_RED(parent))
-		{
-			// Case #4
-			subregion_rbtree_set_color(sibling, RBTREE_RED);
-			subregion_rbtree_set_color(parent, RBTREE_BLACK);
-			goto deferred;
-		}
-
-		// Case #1
-		if (!parent)
-			goto deferred;
-
-		// Case #2
-		subregion_rbtree_set_color(sibling, RBTREE_RED);
-		node = parent;
-
-	} while (parent = subregion_rbtree_parent(node));
-
-case_5:
-
-	subregion_rbtree_rotate_subtree(rbtree, sibling, 1 - dir);
-	subregion_rbtree_set_color(sibling, RBTREE_RED);
-	subregion_rbtree_set_color(close_nephew, RBTREE_BLACK);
-	distant_nephew = sibling;
-	sibling        = close_nephew;
-
-case_6:
-
-	subregion_rbtree_rotate_subtree(rbtree, parent, dir);
-	subregion_rbtree_set_color(sibling, subregion_rbtree_color(parent));
-	subregion_rbtree_set_color(parent, RBTREE_BLACK);
-	subregion_rbtree_set_color(distant_nephew, RBTREE_BLACK);
 
 deferred:
 	rbtree->count -= 1;

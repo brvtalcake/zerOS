@@ -17,6 +17,8 @@ LOG_PERROR_START:   str = "  [ERROR]  "
 LOG_PERROR_END:     str = ""
 
 import io
+import string
+
 _debug: bool = False
 _logfile: io.TextIOWrapper | None = None
 
@@ -66,3 +68,7 @@ def perror(msg: str, end: str | None = '\n') -> None:
     print(f"{PERROR_START}{msg}{PERROR_END}", end=end)
     _handle_logfile(f"{LOG_PERROR_START}{msg}{LOG_PERROR_END}" + end if end is not None else "")
     return None
+
+def make_tty_link(text: str, url: str) -> str:
+    template = string.Template('\033]8;;${link}\033\\${text}\033]8;;\033\\\n')
+    return template.safe_substitute(link=url, text=text)

@@ -5,6 +5,8 @@ name = "pypi"
 
 [packages]
 python-gnupg = "*"
+gitpython = "*"
+landlock = "*"
 
 [dev-packages]
 

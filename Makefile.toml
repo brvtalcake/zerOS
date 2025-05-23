@@ -43,29 +43,39 @@ args = [
     "unstable-options",
     "--artifact-dir",
     "./bin",
-    "--profile=${ZEROS_PROFILE}"
+    "--profile=${ZEROS_PROFILE}",
 ]
+
+[tasks.zerOS-do-build.env]
+RUSTFLAGS = '--cfg getrandom_backend="rdrand" -Ctarget-cpu=${ZEROS_TARGET_CPU}'
 
 [tasks.zerOS-pre-build]
 cwd = "./zerOS"
 private = true
 
+# TODO: mk_iso.py
 [tasks.zerOS-post-build]
 cwd = "./zerOS"
 private = true
+command = "../scripts/mk_iso.py"
+args = [
+    "-o",
+    "./bin/zerOS.iso",
+    "--iso-root",
+    "./iso_root/",
+    "-b",
+    "limine",
+    "-a",
+    "${ZEROS_TARGET_ARCH}",
+    "-c",
+    "./config/limine.conf",
+    "./bin/zerOS",
+]
 
 [tasks.zerOS-build]
 cwd = "./zerOS"
 private = true
-dependencies = [
-    "zerOS-pre-build",
-    "zerOS-do-build",
-    "zerOS-post-build"
-]
-
-# TODO: environment variables for `cargo-build`
-[tasks.zerOS-build.env]
-RUSTFLAGS = '--cfg getrandom_backend=rdrand'
+dependencies = ["zerOS-pre-build", "zerOS-do-build", "zerOS-post-build"]
 
 [tasks.zerOS]
 dependencies = [
@@ -85,6 +95,7 @@ cm_run_task "zerOS-${subcommand}"
 dependencies = ["determine-target-architecture"]
 script_runner = "@duckscript"
 script = '''
+# when modifying this, don't forget to also modify the `generate-json-target-spec` task !!!
 valid_architectures = set_new "amd64" "x86" "aarch64" "riscv64"
 current_arch = get_env ZEROS_TARGET_ARCH
 
@@ -262,10 +273,17 @@ private = true
 dependencies = ["validate-target-architecture", "validate-target-cpu"]
 script_runner = "@duckscript"
 script = '''
-tmpfile = temp_file json
+arch = get_env ZEROS_TARGET_ARCH
+if eq amd64 ${arch}
+    arch_prefix = set x86_64
+else
+    arch_prefix = set ${arch}
+end
+
+tmpd = temp_dir
+tmpfile = join_path ${tmpd} "${arch_prefix}-unknown-kernel.json"
 set_env GENERATE_JSON_TARGET_SPEC ${tmpfile}
 
-arch = get_env ZEROS_TARGET_ARCH
 cm_run_task "generate-json-target-spec-${arch}"
 '''
 
@@ -282,7 +300,7 @@ args = [
     "--arch=amd64",
     "--cpu=${ZEROS_TARGET_CPU}",
     "--override=all",
-    "--rustc-abi=x86-sse2",
+    #"--rustc-abi=x86-sse2",
     "--frame-pointer=never",
     "${GENERATE_JSON_TARGET_SPEC}",
 ]

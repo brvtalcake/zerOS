@@ -266,8 +266,8 @@ lazy_static! {
 			json::object! {
 				"llvm-target": "x86_64-unknown-none",
 				"target-endian": "little",
-				"target-pointer-width": 64,
-				"target-c-int-width": 32,
+				"target-pointer-width": "64",
+				"target-c-int-width": "32",
 				"data-layout": "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128",
 				"arch": "x86_64",
 				"os": "none",
@@ -295,8 +295,8 @@ lazy_static! {
 			json::object! {
 				"llvm-target": "x86_64-unknown-none",
 				"target-endian": "little",
-				"target-pointer-width": 64,
-				"target-c-int-width": 32,
+				"target-pointer-width": "64",
+				"target-c-int-width": "32",
 				"data-layout": "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128",
 				"arch": "x86_64",
 				"os": "none",
@@ -459,11 +459,11 @@ impl ResultTargetSpec
 		}
 		if let Some(ptr_width) = opts.pointer_width
 		{
-			modif_count += self.maybe_update("target-pointer-width", &ptr_width.into()) as usize;
+			modif_count += self.maybe_update("target-pointer-width", &ptr_width.to_string().into()) as usize;
 		}
 		if let Some(int_width) = opts.int_width
 		{
-			modif_count += self.maybe_update("target-c-int-width", &int_width.into()) as usize;
+			modif_count += self.maybe_update("target-c-int-width", &int_width.to_string().into()) as usize;
 		}
 		if let Some(ref data_layout) = opts.data_layout
 		{

@@ -1,12 +1,102 @@
 #!/usr/bin/env -S pipenv run python3
 
+from typing import Any
 import sys
 import os
+import re
+import shutil
 import argparse
 import traceback
 import pathlib
 import subprocess
-from scripts.errprint import *
+import git
+import requests
+import json
+import landlock
+import tempfile
+from enum import StrEnum
+from errprint import *
+import semver
+import download
+
+class LazyFile:
+    def __init__(self, name: str, download_url: str) -> None:
+        self.name = name
+        self.url = download_url
+        return
+    
+    def materialize(self, at: str | pathlib.Path) -> str:
+        path = pathlib.Path(get_path_str(at))
+        exists = path.exists()
+        if path.is_dir() or not exists:
+            os.makedirs(path, exist_ok=True)
+            write_to = path / self.name
+        else:
+            write_to = path
+        pinfo(f'downloading {make_tty_link(self.name, self.url)} at {write_to}')
+        write_to.write_bytes(download.from_http(self.url))
+        return get_path_str(write_to)
+
+class LazyGithubDownloader:
+    def __init__(self, commit_url: str) -> None:
+        response = requests.get(commit_url)
+        if response.status_code != 200:
+            raise ValueError(f'failed to get release tags from {commit_url}: {response.status_code}')
+        self._json = json.loads(response.text)
+        return
+    
+    def __getitem__(self, file: str) -> LazyFile:
+        url = self.get_url_for(file)
+        return LazyFile(file, url)
+
+    def get_url_for(self, file: str) -> str:
+        if '/' in file:
+            raise NotImplementedError('searching into sub-directories is yet to be implemented')
+        for f in self._json['files']:
+            if f['filename'] == file:
+                return f['raw_url'] # or contents_url ?
+        raise LookupError(f'file or directory {file} does not exist')
+
+class ProgramArgError(ValueError):
+    def __init__(self, *args: object) -> None:
+        super().__init__(*args)
+
+class Arch(StrEnum):
+    AMD64       = "amd64"
+    X86         = "x86"
+    AARCH64     = "aarch64"
+    RISCV64     = "riscv64"
+    POWERPC64   = "ppc64"
+    SPARC64     = "sparc64"
+    MIPS64      = "mips64"
+    LOONGARCH64 = "loongarch64"
+
+class Bootloader(StrEnum):
+    LIMINE = "limine"
+    GRUB2  = "grub2"
+    UEFI   = "uefi"
+
+
+class IsoMaker:
+    def __init__(
+        self, root: str | pathlib.Path,
+        executable: str | pathlib.Path,
+        arch: Arch, bootloader: Bootloader,
+        output: str | pathlib.Path,
+        bootconf: str | pathlib.Path | None) -> None:
+        self.root = pathlib.Path(root)
+        self.executable = pathlib.Path(executable)
+        self.arch = arch
+        self.bootloader = bootloader
+        self.output = pathlib.Path(output)
+        if bootconf is not None:
+            self.bootconf = pathlib.Path(bootconf)
+        else:
+            self.bootconf = None
+        return
+    
+    def __call__(self) -> None:
+        return make_iso(self)
 
 class ProcessFailedError(Exception):
     def __init__(self, process: subprocess.CompletedProcess[str]) -> None:
@@ -131,219 +221,262 @@ def checkps(ps: subprocess.CompletedProcess[str]):
         raise ProcessFailedError(ps)
     return None
 
-def _zerOS_prebuild(features: list[str], profile: str):
-    return None
-
-def _zerOS_build(features: list[str], profile: str):
-    saved = os.getcwd()
-    try:
-        os.chdir('./zerOS')
-        ps = cargo('bamd64', '--artifact-dir', './build', features=features, profile=profile)
-        checkps(ps)
-        cp('./build/zerOS', './bin/')
-    except:
-        raise
-    finally:
-        os.chdir(saved)
-    return None
-
-def _zerOS_postbuild(features: list[str], profile: str):
-    saved = os.getcwd()
-    try:
-        os.chdir('./zerOS')
-        pairs = [('./bin/zerOS', './bin/zerOS.iso')]
-        pairs.append(('./bin/zerOS', cp_if_newer('./bin/zerOS', './iso_root/boot/')))
-        pairs.append(('./config/limine.conf', cp_if_newer('./config/limine.conf', './iso_root/boot/limine/')))
-        pairs.append(('/usr/share/limine/BOOTX64.EFI', cp_if_newer('/usr/share/limine/BOOTX64.EFI', './iso_root/EFI/BOOT/')))
-        for path in walk_files_in('/usr/share/limine'):
-            if path.endswith('.sys') or path.endswith('.bin'):
-                pairs.append((path, cp_if_newer(path, './iso_root/boot/limine/')))
-        ps = cmd_if_newer(
-            cmd=[
-                'xorriso', '-as', 'mkisofs', '-b', 'boot/limine/limine-bios-cd.bin',
-			    '-no-emul-boot', '-boot-load-size', '4', '-boot-info-table',
-			    '--efi-boot', 'boot/limine/limine-uefi-cd.bin', '-efi-boot-part',
-                '--efi-boot-image', '--protective-msdos-label', 'iso_root',
-                '-o', './bin/zerOS.iso'
-            ],
-            pairs=pairs
-        )
-        checkps(ps) if ps is not None else None
-    except:
-        raise
-    finally:
-        os.chdir(saved)
-    return None
-
-def _macro_utils_prebuild(features: list[str], profile: str):
-    return None
-def _macro_utils_build(features: list[str], profile: str):
-    if len(features) == 0:
-        _cmd = [ 'cargo', 'build' ]
+def get_path_str(path: str | pathlib.Path) -> str:
+    if isinstance(path, str):
+        p = os.path.realpath(path)
+    elif isinstance(path, pathlib.Path):
+        p = path.resolve()
     else:
-        _cmd = [ 'cargo', 'build', '--no-default-features', '--features', f'"{' '.join(features)}"']
-    saved = os.getcwd()
-    try:
-        os.chdir('./zerOS')
-        ps = cmd(_cmd)
-        checkps(ps)
-    except:
-        raise
-    finally:
-        os.chdir(saved)
-    return None
-def _macro_utils_postbuild(features: list[str], profile: str):
-    return None
+        raise TypeError(f'unknown type \'{type(path)}\' passed to \'get_path_str\'')
+    return os.fspath(p)
 
-def _proc_macro_utils_prebuild(features: list[str], profile: str):
-    return None
-def _proc_macro_utils_build(features: list[str], profile: str):
-    if len(features) == 0:
-        _cmd = [ 'cargo', 'build' ]
-    else:
-        _cmd = [ 'cargo', 'build', '--no-default-features', '--features', f'"{' '.join(features)}"']
-    saved = os.getcwd()
-    try:
-        os.chdir('./zerOS')
-        cmd(_cmd)
-    except:
-        raise
-    finally:
-        os.chdir(saved)
-    return None
-def _proc_macro_utils_postbuild(features: list[str], profile: str):
-    return None
+def clone_repo(url: str, path: str) -> git.Repo:
+    ps = cmd([
+        'git', 'clone', '--recurse-submodules',
+        '--progress', '--verbose', url, path
+    ])
+    checkps(ps)
+    return git.Repo(path)
 
-PACKAGE_LIST = {
-    pathlib.Path('zerOS'): {
-        'prebuild'  : _zerOS_prebuild,
-        'build': _zerOS_build,
-        'postbuild' : _zerOS_postbuild,
-    },
-    pathlib.Path('macro-utils'): {
-        'prebuild'  : _macro_utils_prebuild,
-        'build': _macro_utils_build,
-        'postbuild' : _macro_utils_postbuild,
-    },
-    pathlib.Path('proc-macro-utils'): {
-        'prebuild'  : _proc_macro_utils_prebuild,
-        'build': _proc_macro_utils_build,
-        'postbuild' : _proc_macro_utils_postbuild,
-    },
-}
+def get_git_releases(owner: str, repo: str, allow_draft: bool = False, allow_prerelease: bool = False) -> Any:
+    GH_API  = f"https://api.github.com/repos/{owner}/{repo}/releases"
+    response = requests.get(GH_API)
+    if response.status_code != 200:
+        raise ValueError(f"failed to get releases from {GH_API}")
+    releases = json.loads(response.text)
+    if not allow_draft:
+        releases = [release for release in releases if not release['draft']]
+    if not allow_prerelease:
+        releases = [release for release in releases if not release['prerelease']]
+    return releases
 
-def package_build(pkg: str, features: list[str], profile: str):
-    path = pathlib.Path(pkg)
-    if not path in PACKAGE_LIST.keys():
-        raise ValueError(f'Unknown package {pkg} !')
+def download_latest_limine_binaries(root: str | pathlib.Path) -> LazyGithubDownloader:
+    MIN_VERSION = '9'
+    MAX_VERSION = '10'
 
-    fn = PACKAGE_LIST[path]['prebuild']
-    if fn is not None:
-        fn(features, profile)
+    def _match_in_bounds_stable_binary_release_tag(tag: str) -> re.Match[str] | None:
+        regex = r'v(\d+.\d+(.\d+)?)-binary'
+        matched = re.match(regex, tag)
+        if matched:
+            is_greater = semver.comp(MIN_VERSION, matched.groups()[0]) <= 0
+            is_less = semver.comp(MAX_VERSION, matched.groups()[0]) >= 0
+            return matched if is_greater and is_less else None
+        else:
+            return None
+    def _find_greatest(versions: list[tuple[int, str]]) -> tuple[int, str]:
+        greatest = 0
+        length = len(versions)
+        for i in range(1, length):
+            curr = versions[greatest][1]
+            other = versions[i][1]
+            if semver.comp(other, curr) > 0:
+                greatest = i
+        return versions[greatest]
+
+    #tmpdir = tempfile.TemporaryDirectory(prefix='mk_iso_limine_')
     
-    fn = PACKAGE_LIST[path]['build']
-    if fn is not None:
-        fn(features, profile)
+    GH_API = 'https://api.github.com/repos/limine-bootloader/limine'
+    response = requests.get(f'{GH_API}/tags')
+    if response.status_code != 200:
+        raise ValueError(f'failed to get release tags from {GH_API}/tags: {response.status_code}')
     
-    fn = PACKAGE_LIST[path]['postbuild']
-    if fn is not None:
-        fn(features, profile)
-    
-    return None
+    tags = json.loads(response.text)
+    latest = _find_greatest(
+        [
+            (index, matched.groups()[0]) for (index, matched) in map(
+                lambda tp: (tp[0] , _match_in_bounds_stable_binary_release_tag(tp[1]['name'])),
+                enumerate(tags)
+            ) if bool(matched)
+        ]
+    )
+    pinfo(f'greatest available Limine version is {latest[1]}')
+    commit_url = tags[latest[0]]['commit']['url']
+    return LazyGithubDownloader(commit_url)
 
-def make_profile_string(profile: str, want_lto: bool) -> str:
-    if want_lto:
-        return f'{profile.strip().strip('-')}-lto'
-    return profile.strip().strip('-')
+def make_iso(args: IsoMaker):
+    match args.bootloader:
+        case Bootloader.LIMINE:
+            assert args.bootconf is not None
+            UEFI_BOOT_SUFFIXES = {
+                Arch.AMD64: 'X64',
+                Arch.X86: 'IA32',
+                Arch.LOONGARCH64: 'LOONGARCH64',
+                Arch.AARCH64 : 'AA64',
+                Arch.RISCV64: 'RISCV64'
+            }
+            downloader = download_latest_limine_binaries(args.root)
+            cp(get_path_str(args.executable), f'{get_path_str(args.root)}/boot/')
+            cp(get_path_str(args.bootconf), f'{get_path_str(args.root)}/boot/limine/')
+            downloader[f'BOOT{UEFI_BOOT_SUFFIXES[args.arch]}.EFI'].materialize(f'{get_path_str(args.root)}/EFI/BOOT/')
+            match args.arch:
+                case Arch.AMD64 | Arch.X86:
+                    downloader['limine-bios-cd.bin'].materialize(f'{get_path_str(args.root)}/boot/limine/')
+                    downloader['limine-uefi-cd.bin'].materialize(f'{get_path_str(args.root)}/boot/limine/')
+                    ps = cmd(
+                        [
+                            'xorriso', '-as', 'mkisofs', '-b', 'boot/limine/limine-bios-cd.bin',
+                            '-no-emul-boot', '-boot-load-size', '4', '-boot-info-table',
+                            '--efi-boot', 'boot/limine/limine-uefi-cd.bin', '-efi-boot-part',
+                            '--efi-boot-image', '--protective-msdos-label', get_path_str(args.root),
+                            '-o', get_path_str(args.output)
+                        ]
+                    )
+                    checkps(ps)
+                case Arch.AARCH64:
+                    raise NotImplementedError()
+                case Arch.RISCV64:
+                    raise NotImplementedError()
+                case Arch.LOONGARCH64:
+                    raise NotImplementedError()
+                case _:
+                    raise ValueError(f'invalid architecture or not supported by Limine: \'{args.arch}\'')
+        case Bootloader.GRUB2:
+            raise NotImplementedError()
+        case Bootloader.UEFI:
+            raise NotImplementedError()
+        case _:
+            raise ValueError(f'invalid bootloader: \'{bootloader}\'')
 
 def parse_cmdline():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        'project-name',
-        type=str,
-        nargs='+',
-        help='Projects to build'
+        'executable',
+        type=pathlib.Path,
+        help='The name of the ELF executable'
     )
     parser.add_argument(
-        '-f', '--feature',
-        action='append',
-        help='Features to use. Optionally per-package with \'<pkg>:<feature>\' syntax'
+        '-r', '--iso-root',
+        type=pathlib.Path,
+        required=True,
+        help='The directory for the ISO root'
     )
     parser.add_argument(
-        '-o', '--order',
-        type=str,
+        '-o', '--output',
+        type=pathlib.Path,
         default=None,
-        help='Order of package compilation'
+        required=True,
+        help='The output ISO file'
     )
     parser.add_argument(
-        '-p' '--profile',
+        '-b', '--bootloader',
         type=str,
-        default='dev',
-        help='The base profile to use: release, dev, test, bench, etc...'
+        default='limine',
+        help='The bootloader to use'
     )
     parser.add_argument(
-        '--lto',
-        action='store_true',
-        default=False,
-        help='Whether or not we want to compile using lto'
+        '-c', '--bootloader-config',
+        type=pathlib.Path,
+        default=None,
+        help='The path for the bootloader configuration (for example: limine.conf)'
+    )
+    parser.add_argument(
+        '-a', '--arch',
+        type=str,
+        default='amd64',
+        help='The target architecture'
     )
     return parser.parse_args()
 
-def make_feature_dicts(pkgs: list[str], feats: list[str] | None) -> dict[str, list[str]]:
-    ret: dict[str, list[str]] = { }
-    def do_foreach_pkg(fn):
-        for pkg in pkgs:
-            ret[pkg] = fn(ret.get(pkg, []))
-        return None
-    do_foreach_pkg(lambda _: [])
-    if feats is not None:
-        for feat in feats:
-            if ':' not in feat:
-                do_foreach_pkg(lambda old: [*old, feat])
-                continue
-            [pkg, actual_feat] = feat.split(':', 2)
-            ret[pkg].append(actual_feat)
-    return ret
+def validate_arch(parsed: argparse.Namespace) -> Arch:
+    got: str = parsed.arch.lower()
+    got = got.replace(
+        'powerpc', 'ppc'
+    ).replace(
+        'arm64', 'aarch64'
+    ).replace(
+        'x86-64', 'amd64'
+    ).replace(
+        'x86_64', 'amd64'
+    )
+    if not got in Arch:
+        raise ProgramArgError(f'{got} is not a known architecture')
+    try:
+        result = Arch(got)
+        return result
+    except:
+        raise
+
+def validate_bootloader(parsed: argparse.Namespace, arch: Arch) -> Bootloader:
+    got: str = parsed.bootloader.lower()
+    if not got in Bootloader:
+        raise ProgramArgError(f'{got} is not a known bootloader')
+    try:
+        result = Bootloader(got)
+    except:
+        raise
+    match (result, arch):
+        case (
+            Bootloader.LIMINE,
+            Arch.AMD64       |
+            Arch.X86         |
+            Arch.LOONGARCH64 |
+            Arch.RISCV64     |
+            Arch.AARCH64
+        ): return result
+        case (Bootloader.LIMINE, _):
+            raise ProgramArgError(f'arch {arch} is not supported by Limine')
+        case (Bootloader.GRUB2, _):
+            raise NotImplementedError()
+        case (Bootloader.UEFI, _):
+            raise NotImplementedError()
+        case _:
+            # should not be reachable
+            raise ProgramArgError(f'unknown bootloader: {result}')
+    
+
+def validate_executable(parsed: argparse.Namespace) -> pathlib.Path:
+    ELF_MAGIC = b'\x7fELF'
+    exe: pathlib.Path = parsed.executable
+    if not exe.exists():
+        raise ProgramArgError(f'provided executable named {exe} doesn\'t exist')
+    if not exe.is_file():
+        raise ProgramArgError(f'provided executable named {exe} isn\'t a regular file')
+    with open(exe, 'rb') as f:
+        if f.read(len(ELF_MAGIC)) != ELF_MAGIC:
+            raise ProgramArgError(f'provided executable named {exe} isn\'t an ELF executable')
+    return exe.resolve()
+
+def validate_iso_root(parsed: argparse.Namespace) -> pathlib.Path:
+    root: pathlib.Path = parsed.iso_root
+    shutil.rmtree(root, ignore_errors=True)
+    return root.resolve()
+
+def validate_output(parsed: argparse.Namespace) -> pathlib.Path:
+    out: pathlib.Path = parsed.output
+    shutil.rmtree(out, ignore_errors=True)
+    return out.resolve()
+
+def validate_bootloader_config(parsed: argparse.Namespace, bootloader: Bootloader) -> pathlib.Path | None:
+    match bootloader:
+        case Bootloader.LIMINE:
+            bootconf: pathlib.Path | None = parsed.bootloader_config
+            if bootconf is None:
+                raise ProgramArgError(
+                    'you must provide a bootloader configuration file when ' +
+                    'using Limine, but none was provided'
+                )
+            if not bootconf.exists():
+                raise ProgramArgError(f'provided bootloader configuration path {bootconf} doesn\'t exist')
+            if not bootconf.is_file():
+                raise ProgramArgError(f'provided bootloader configuration path {bootconf} isn\'t a regular file')
+        case Bootloader.GRUB2:
+            raise NotImplementedError()
+        case Bootloader.UEFI:
+            raise NotImplementedError()
+        case _:
+            raise ProgramArgError(f'invalid bootloader {bootloader}')
+    return bootconf.resolve() if bootconf is not None else None
 
 def main() -> int:
     try:
         parsed = parse_cmdline()
-        PROJECTS = getattr(parsed, 'project-name')
-        FEATURES = getattr(parsed, 'feature') or []
-        ORDER    = getattr(parsed, 'order') or PROJECTS
-        PROFILE  = getattr(parsed, 'p__profile')
-        LTO      = getattr(parsed, 'lto')
-        PROJECTS_len = len(PROJECTS)
-        ORDER_len    = None
-        
-        # Round 1 checks
-        if not isinstance(PROJECTS, list) or PROJECTS_len == 0:
-            raise ValueError('no value provided for project names')
-        if isinstance(ORDER, str):
-            ORDER = ORDER.split(',')
-            ORDER_len = len(ORDER)
-        elif isinstance(ORDER, list):
-            ORDER_len = len(ORDER)
-        else:
-            raise RuntimeError('Internal error !')
-        
-        if ORDER_len != PROJECTS_len:
-            raise ValueError('Mismatch of specified projects count in order list')
-        
-        # Round 2 checks
-        for i, obj in enumerate(PROJECTS):
-            for j in range(i + 1, PROJECTS_len):
-                if PROJECTS[j] == obj:
-                    raise ValueError(f'Project name {obj} specified more than one time !')
-        for i, obj in enumerate(ORDER):
-            for j in range(i + 1, ORDER_len):
-                if ORDER[j] == obj:
-                    raise ValueError(f'{obj} specified more than one time (in order-list) !')
-        
-        feat_dict = make_feature_dicts(PROJECTS, FEATURES)
-        profile = make_profile_string(PROFILE, LTO)
-        for pkg in ORDER:
-            package_build(pkg, feat_dict[pkg], profile)
+        root = validate_iso_root(parsed)
+        exe = validate_executable(parsed)
+        out = validate_output(parsed)
+        arch = validate_arch(parsed)
+        bootloader = validate_bootloader(parsed, arch)
+        bootconf = validate_bootloader_config(parsed, bootloader)
+        IsoMaker(root, exe, arch, bootloader, out, bootconf)()
     except ProcessFailedError as e:
         perror(f'command \'{' '.join(e.proc.args)}\' exited with error code {e.proc.returncode}')
         perror("terminating...")
@@ -353,5 +486,6 @@ def main() -> int:
         return 1
     return 0
 
+# TODO: try to use `landlock`
 if __name__ == '__main__':
     sys.exit(main())
