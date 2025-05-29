@@ -1,31 +1,7 @@
-#ifndef zerOS_REGION_ALLOCATOR_H_INCLUDED
-#define zerOS_REGION_ALLOCATOR_H_INCLUDED
+#ifndef zerOS_REGION_ALLOCATOR_H_INCLUDED_
+#define zerOS_REGION_ALLOCATOR_H_INCLUDED_ 1
 
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdint.h>
-
-#ifdef __INTELLISENSE__
-	#ifndef constexpr
-		#define constexpr const
-	#endif
-	#ifndef nullptr
-		#define nullptr NULL
-	#endif
-	#ifndef static_assert
-		#define static_assert(...) _Static_assert(__VA_ARGS__)
-	#endif
-	#ifndef alignas
-		#define alignas _Alignas
-	#endif
-	#ifndef alignof
-		#define alignof _Alignof
-	#endif
-#endif
-
-typedef uint8_t __attribute__((__may_alias__)) zerOS_byte_t;
-static_assert(sizeof(zerOS_byte_t) == 1);
-static_assert(alignof(zerOS_byte_t) == 1);
+#include <zerOS/common.h>
 
 enum zerOS_allocation_strategy
 #ifndef __INTELLISENSE__
@@ -61,10 +37,40 @@ extern void* zerOS_region_allocator_alloc(
 
 extern void* zerOS_region_allocator_realloc(
   struct zerOS_region_allocator* allocator,
+  void*                          ptr,
+  size_t                         old_size,
+  size_t                         old_align,
   size_t                         size,
   size_t                         align,
   enum zerOS_allocation_strategy strategy);
 
 extern void zerOS_region_allocator_dealloc(struct zerOS_region_allocator* allocator, void* ptr);
+
+extern bool zerOS_region_allocator_is_static_region(struct zerOS_region_allocator* allocator);
+
+extern bool zerOS_region_allocator_reclaim(struct zerOS_region_allocator* allocator);
+
+#if 0
+extern struct zerOS_region_allocator*
+zerOS_region_allocator_prev(struct zerOS_region_allocator* allocator);
+
+extern struct zerOS_region_allocator*
+zerOS_region_allocator_next(struct zerOS_region_allocator* allocator);
+
+extern void zerOS_region_allocator_set_prev(
+  struct zerOS_region_allocator* allocator, struct zerOS_region_allocator* prev);
+
+extern void zerOS_region_allocator_set_next(
+  struct zerOS_region_allocator* allocator, struct zerOS_region_allocator* next);
+#endif
+
+struct zerOS_region_allocator_additional_space_info
+{
+	zerOS_byte_t* addr;
+	size_t        size;
+};
+
+extern struct zerOS_region_allocator_additional_space_info
+zerOS_region_allocator_additional_space(struct zerOS_region_allocator* allocator);
 
 #endif

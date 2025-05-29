@@ -18,6 +18,7 @@
 #![feature(ptr_as_ref_unchecked)]
 #![feature(phantom_variance_markers)]
 #![feature(slice_ptr_get)]
+#![feature(likely_unlikely)]
 
 // TODO: change the compile flags to use vector extensions IN-KERNEL
 

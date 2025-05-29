@@ -1,3 +1,8 @@
+# TODO: bench profile
+# TODO: profiling profile, maybe with some kind of in-qemu perf ???
+# TODO: kernel test framework
+# TODO: what are e.g. Redox or Linux "`alternatives`"
+
 [config]
 additional_profiles = ["dev", "dev-lto", "release", "release-lto"]
 #time_summary = true
@@ -77,12 +82,19 @@ cwd = "./zerOS"
 private = true
 dependencies = ["zerOS-pre-build", "zerOS-do-build", "zerOS-post-build"]
 
+[tasks.zerOS-expand]
+cwd = "./zerOS"
+private = true
+command = "cargo"
+args = ["expand", "--profile=${ZEROS_PROFILE}", "@@split(ZEROS_SUBCMD_ARGS,;)"]
+
 [tasks.zerOS]
 dependencies = [
     "validate-target-architecture",
     "validate-target-cpu",
     "validate-profile",
     "validate-subcommand",
+    "determine-subcommand-args",
     "generate-json-target-spec",
 ]
 script_runner = "@duckscript"
@@ -124,6 +136,16 @@ output = exec --fail-on-error ./scripts/get_valid_profiles.py ./zerOS/Cargo.toml
 valid_profiles_array = split ${output.stdout} ":"
 valid_profiles = set_from_array ${valid_profiles_array}
 current_profile = get_env ZEROS_PROFILE
+
+if eq ${current_profile} development
+    current_profile = set dev
+    set_env ZEROS_PROFILE dev
+end
+
+if eq ${current_profile} production
+    current_profile = set release
+    set_env ZEROS_PROFILE release
+end
 
 if not set_contains ${valid_profiles} ${current_profile}
     as_array = set_to_array ${valid_profiles}
@@ -243,6 +265,41 @@ release ${profile}
 
 '''
 
+[tasks.determine-subcommand-args]
+private = true
+script_runner = "@duckscript"
+script = '''
+
+args = set %{@}
+
+unset subcmd_args
+subcmd_args = array
+
+arg_count = array_length ${subcmd_args}
+assert_eq ${arg_count} 0
+
+for arg in ${args}
+    if not contains ${arg} "="
+        array_push ${subcmd_args} ${arg}
+    end
+end
+
+release ${args}
+
+arg_count = array_length ${subcmd_args}
+if greater_than ${arg_count} 0
+    array_remove ${subcmd_args} 0
+end
+
+joined = array_join ${subcmd_args} ";"
+
+set_env ZEROS_SUBCMD_ARGS ${joined}
+
+release ${subcmd_args}
+release ${joined}
+
+'''
+
 [tasks.determine-subcommand]
 private = true
 script_runner = "@duckscript"
@@ -254,8 +311,11 @@ unset subcmd
 for arg in ${args}
     if not contains ${arg} "="
         subcmd = set ${arg}
+        goto :end_loop
     end
 end
+:end_loop
+
 release ${args}
 
 if not is_defined subcmd

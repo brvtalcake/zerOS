@@ -1,3 +1,5 @@
+//! TODO: what about string versions ? (`ins` and `outs`)
+
 use core::arch::asm;
 
 #[inline]

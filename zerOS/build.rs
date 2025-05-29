@@ -8,7 +8,7 @@ use std::{
 	ffi::OsString,
 	fs,
 	io::{self, Write},
-	path::{self, PathBuf},
+	path::{self, Path, PathBuf},
 	process::{Command, exit},
 	sync::OnceLock
 };
@@ -110,6 +110,158 @@ fn get_outdir() -> Option<&'static String>
 		.as_ref()
 }
 
+/// returns target triple
+fn get_target_arch() -> &'static String
+{
+	static TARGET: OnceLock<String> = OnceLock::new();
+	TARGET.get_or_init(|| {
+		from_cargo!("TARGET")
+			.map(|val| val.into_string().unwrap())
+			.unwrap()
+	})
+}
+
+fn get_opt_lvl() -> &'static isize
+{
+	static OPTLVL: OnceLock<isize> = OnceLock::new();
+	OPTLVL.get_or_init(|| {
+		from_cargo!("OPT_LEVEL")
+			.map(|val| val.into_string().unwrap().parse().unwrap())
+			.unwrap()
+	})
+}
+
+fn get_profile() -> &'static String
+{
+	static PROFILE: OnceLock<String> = OnceLock::new();
+	PROFILE.get_or_init(|| {
+		from_cargo!("PROFILE")
+			.map(|val| val.into_string().unwrap())
+			.unwrap()
+	})
+}
+
+fn get_target_cpu() -> &'static String
+{
+	static TARGET_CPU: OnceLock<String> = OnceLock::new();
+	TARGET_CPU.get_or_init(|| {
+		from_cargo!("ZEROS_TARGET_CPU")
+			.map(|val| val.into_string().unwrap())
+			.unwrap()
+	})
+}
+
+fn get_target_ptr_width() -> &'static usize
+{
+	static TARGET_POINTER_WIDTH: OnceLock<usize> = OnceLock::new();
+	TARGET_POINTER_WIDTH.get_or_init(|| {
+		from_cargo!("CARGO_CFG_TARGET_POINTER_WIDTH")
+			.map(|val| val.into_string().unwrap().parse().unwrap())
+			.unwrap()
+	})
+}
+
+enum COptsConfig
+{
+	InitCode,
+	Normal
+}
+
+fn compile_c_code(infile: &str, outfile: impl AsRef<Path>, config: COptsConfig, additional_params: &[String])
+{
+	let mut target_triple = get_target_arch().to_owned();
+	if target_triple.ends_with("-none")
+	{
+		target_triple.push_str("-elf");
+	}
+	let target_cpu = get_target_cpu();
+	let maybe_lto = if get_profile().contains("lto") || *get_opt_lvl() != 0
+	{
+		vec!["-flto"]
+	}
+	else
+	{
+		vec![]
+	};
+	let target_ptr_width = get_target_ptr_width();
+	let opts = match config
+	{
+		COptsConfig::InitCode =>
+		{
+			let default_cpu = if target_triple.starts_with("x86_64")
+			{
+				"x86-64"
+			}
+			else
+			{
+				"generic"
+			};
+			// TODO: "-msoft-float" vs "-mfloat-abi=soft"
+			//       is dependent on the target arch
+			vec![
+				format!("-march={default_cpu}"),
+				format!("-mtune={default_cpu}"),
+				"-mgeneral-regs-only".into(),
+				"-mno-mmx".into(),
+				"-mno-sse".into(),
+				"-mno-sse2".into(),
+				"-mno-red-zone".into(),
+				"-mno-avx".into(),
+				"-mno-avx2".into(),
+				"-mno-avx512f".into(),
+				//"-nostartfiles",
+				//"-m128bit-long-double",
+				//"-mfloat-abi=soft",
+				"-mno-fp-ret-in-387".into(),
+				"-msoft-float".into(),
+			]
+		},
+		COptsConfig::Normal =>
+		{
+			vec![
+				format!("-march={target_cpu}"),
+				format!("-mtune={target_cpu}"),
+			]
+		}
+	};
+	Command::new("clang")
+		.args(maybe_lto)
+		.args(opts)
+		.args(additional_params)
+		.args([
+			"-I./include",
+			format!("--target={target_triple}").as_ref(),
+			"-xc",
+			"-std=gnu23",
+			"-O3",
+			"-Wall",
+			"-Wextra",
+			"-Werror",
+			"-ffreestanding",
+			"-fno-stack-protector",
+			"-fno-stack-check",
+			"-fcolor-diagnostics",
+			format!("-m{target_ptr_width}").as_ref(),
+			"-masm=att",
+			"-nodefaultlibs",
+			"-nostdlib",
+			//"-nostartfiles",
+			//"-m128bit-long-double",
+			//"-mfloat-abi=soft",
+			// "-msoft-float",
+			"-c"
+		])
+		.arg(infile)
+		.arg("-o")
+		.arg(outfile.as_ref())
+		.spawn()
+		.expect("couldn't spawn Clang !")
+		.wait()
+		.expect("couldn't compile C file !")
+		.exit_ok()
+		.expect("couldn't compile C file !");
+}
+
 fn compile_region_allocator() -> Vec<PathBuf>
 {
 	// clang -march=x86-64 -O3 -ffreestanding -fno-builtin -nostdlib
@@ -127,81 +279,32 @@ fn compile_region_allocator() -> Vec<PathBuf>
 		return vec![];
 	}
 
-	let files = vec![(
-		"./src/kernel/memory/allocators/region.c",
-		path::PathBuf::from(outdir.unwrap()).join("region.o")
-	)];
+	let files = vec![
+		(
+			"./src/utils/rbtree.c",
+			path::PathBuf::from(outdir.unwrap()).join("rbtree.o")
+		),
+		(
+			"./src/kernel/memory/allocators/region.c",
+			path::PathBuf::from(outdir.unwrap()).join("region.o")
+		),
+	];
 
 	for (inf, outf) in &files
 	{
-		Command::new("clang")
-			.args([
-				"-I./include",
-				"--target=x86_64-unknown-none-elf",
-				"-xc",
-				"-std=gnu23",
-				"-O3",
-				"-Wall",
-				"-Wextra",
-				// "-flto",
-				"-ffreestanding",
-				"-fno-stack-protector",
-				"-fno-stack-check",
-				"-m64",
-				"-masm=att",
-				"-march=native",
-				"-mtune=native",
-				"-nodefaultlibs",
-				"-nostdlib",
-				//"-nostartfiles",
-				//"-m128bit-long-double",
-				//"-mfloat-abi=soft",
-				// "-msoft-float",
-				"-c"
-			])
-			.arg(inf)
-			.arg("-o")
-			.arg(outf)
-			.spawn()
-			.expect("couldn't spawn Clang !")
-			.wait()
-			.expect("couldn't compile C file !")
-			.exit_ok()
-			.expect("couldn't compile C file !");
+		compile_c_code(&inf, &outf, COptsConfig::Normal, &[]);
 	}
+
+	let mut target_triple = get_target_arch().to_owned();
+	if target_triple.ends_with("-none")
+	{
+		target_triple.push_str("-elf");
+	}
+	let target_ptr_width = get_target_ptr_width();
 	bindgen::builder()
-		//.clang_args([
-		//	"-I./include",
-		//	"--target=x86_64-unknown-none-elf",
-		//	"-xc",
-		//	"-std=gnu23",
-		//	"-O3",
-		//	"-Wall",
-		//	"-Wextra",
-		//	"-flto",
-		//	"-ffreestanding",
-		//	"-fno-stack-protector",
-		//	"-fno-stack-check",
-		//	"-masm=att",
-		//	"-m64",
-		//	"-march=x86-64",
-		//	"-mno-mmx",
-		//	"-mno-sse",
-		//	"-mno-sse2",
-		//	"-mno-red-zone",
-		//	"-mno-avx",
-		//	"-mno-avx2",
-		//	"-mno-avx512f",
-		//	"-nodefaultlibs",
-		//	"-nostdlib",
-		//	//"-nostartfiles",
-		//	//"-m128bit-long-double",
-		//	//"-mfloat-abi=soft",
-		//	"-msoft-float"
-		//])
 		.clang_args([
 			"-I./include",
-			"--target=x86_64-unknown-none-elf",
+			format!("--target={target_triple}").as_ref(),
 			"-xc",
 			"-std=gnu23",
 			"-O3",
@@ -211,22 +314,17 @@ fn compile_region_allocator() -> Vec<PathBuf>
 			"-ffreestanding",
 			"-fno-stack-protector",
 			"-fno-stack-check",
-			"-m64",
+			format!("-m{target_ptr_width}").as_ref(),
 			"-masm=att",
-			"-march=native",
-			"-mtune=native",
 			"-nodefaultlibs",
-			"-nostdlib",
-			//"-nostartfiles",
-			//"-m128bit-long-double",
-			//"-mfloat-abi=soft",
-			// "-msoft-float",
+			"-nostdlib"
 		])
-		.header("./include/region_allocator.h")
+		.header("./include/zerOS/region_allocator.h")
 		.opaque_type("zerOS_region_allocator")
 		.newtype_enum("zerOS_allocation_strategy")
 		.prepend_enum_name(false)
 		.allowlist_file(r"\./include/.+\.h")
+		.blocklist_function(r"mem(cpy|move|set)")
 		.parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
 		.rustfmt_configuration_file(Some("./rustfmt.toml".into()))
 		.use_core()
@@ -278,51 +376,18 @@ fn compile_c_init_code() -> Vec<PathBuf>
 		return vec![];
 	}
 
+	let arch_dir = get_target_arch().split('-').collect::<Vec<_>>()[0]
+		.replace("x86-64", "amd64")
+		.replace("x86_64", "amd64")
+		.replace("arm64", "aarch64");
+
 	let outf = path::PathBuf::from(outdir.unwrap()).join("entry-point.o");
-	Command::new("clang")
-		.args(&defines)
-		.args(&[
-			"-I./include",
-			"--target=x86_64-unknown-none-elf",
-			"-xc",
-			"-std=gnu23",
-			"-O3",
-			"-Wall",
-			"-Wextra",
-			// "-flto",
-			"-ffreestanding",
-			"-fno-stack-protector",
-			"-fno-stack-check",
-			"-m64",
-			"-masm=att",
-			"-march=x86-64",
-			"-mtune=x86-64",
-			"-nodefaultlibs",
-			"-nostdlib",
-			"-mgeneral-regs-only",
-			"-mno-mmx",
-			"-mno-sse",
-			"-mno-sse2",
-			"-mno-red-zone",
-			"-mno-avx",
-			"-mno-avx2",
-			"-mno-avx512f",
-			//"-nostartfiles",
-			//"-m128bit-long-double",
-			//"-mfloat-abi=soft",
-			"-mno-fp-ret-in-387",
-			"-msoft-float",
-			"-c"
-		])
-		.arg("./src/arch/amd64/entry-point.c")
-		.arg("-o")
-		.arg(&outf)
-		.spawn()
-		.expect("couldn't spawn Clang !")
-		.wait()
-		.expect("couldn't compile C file !")
-		.exit_ok()
-		.expect("couldn't compile C file !");
+	compile_c_code(
+		format!("./src/arch/{arch_dir}/entry-point.c").as_ref(),
+		&outf,
+		COptsConfig::InitCode,
+		&defines
+	);
 	vec![outf]
 }
 
@@ -340,7 +405,9 @@ fn generate_config_arch_aliases()
 			target_arch = "mips64r6") },
 		ppc_alike: { any(target_arch = "powerpc", target_arch = "powerpc64") },
 		riscv_alike: { any(target_arch = "riscv32", target_arch = "riscv64") },
-		arm_alike: { any(target_arch = "aarch64", target_arch = "arm", target_arch = "arm64ec") }
+		arm_alike: { any(target_arch = "aarch64", target_arch = "arm", target_arch = "arm64ec") },
+		zarch_alike: { any(target_arch = "s390", target_arch = "s390x") }
+		// TODO: IA64, Alpha DEC, SuperH, OpenRISC (?), C-Sky, HPPA (?)
 	};
 }
 

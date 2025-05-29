@@ -147,18 +147,24 @@ IncludeCategories:
     Priority: -1
   - Regex: '^<map/map\.h>$'
     Priority: -1
-  # Klibc
-  - Regex: '^<klibc/.+>$'
+  # zerOS
+  - Regex: '^<zerOS/[^\/]+\.h>$'
     Priority: 1
-  # Kernel headers
-  - Regex: '^<kernel/.+>$'
+  # zerOS subdirs
+  - Regex: '^<zerOS/\.+>$'
     Priority: 2
-  # Machine-specific headers
-  - Regex: '^<machine/.+>$'
-    Priority: 3
-  # Miscellaneous headers
-  - Regex: '^<misc/.+>$'
-    Priority: 4
+#  # Klibc
+#  - Regex: '^<klibc/.+>$'
+#    Priority: 1
+#  # Kernel headers
+#  - Regex: '^<kernel/.+>$'
+#    Priority: 2
+#  # Machine-specific headers
+#  - Regex: '^<machine/.+>$'
+#    Priority: 3
+#  # Miscellaneous headers
+#  - Regex: '^<misc/.+>$'
+#    Priority: 4
   # Standard C headers
   - Regex: '^<.+>$'
     Priority: -10

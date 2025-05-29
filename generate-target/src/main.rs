@@ -107,15 +107,27 @@ enum SupportedArch
 	#[default]
 	#[value(alias("x86-64"), alias("x86_64"))]
 	Amd64,
+	#[value(alias("i386"), alias("i486"), alias("i586"), alias("i686"))]
 	X86,
 	#[value(alias("arm64"))]
 	AArch64,
+	#[value(alias("arm"))]
+	Arm32,
+	Riscv32,
 	Riscv64,
-	#[value(alias("ppc64"))]
+	#[value(alias("ppc32"))]
+	PowerPC32,
+	#[value(alias("ppc64"), alias("ppc"))]
 	PowerPC64,
+	Sparc32,
 	Sparc64,
+	Mips32,
 	Mips64,
-	LoongArch64
+	#[value(alias("avr"))]
+	Avr32,
+	LoongArch64,
+	#[value(alias("s390x"))]
+	ZArch,
 }
 
 #[derive(Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Hash)]

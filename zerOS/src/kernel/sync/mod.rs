@@ -1,13 +1,15 @@
-use core::sync::atomic::{AtomicBool, Ordering};
+use core::sync::atomic::Ordering;
 
 use lock_api::{GuardSend, RawMutex};
+use portable_atomic::AtomicBool;
 
 /// TODO: also store cpu core id:
 /// - see [this thread](https://stackoverflow.com/questions/22310028/is-there-an-x86-instruction-to-tell-which-core-the-instruction-is-being-run-on)
 /// - see `IA32_TSC_AUX` MSR and `RDCPUID` instruction
+/// TODO: maybe we should rather store some kind of thread ID
 pub struct BasicMutexRaw
 {
-	flag: AtomicBool
+	locked: AtomicBool
 }
 
 impl Default for BasicMutexRaw
@@ -22,9 +24,16 @@ impl BasicMutexRaw
 {
 	pub const fn new() -> Self
 	{
+		debug_assert!(AtomicBool::is_always_lock_free());
 		Self {
-			flag: AtomicBool::new(false)
+			locked: AtomicBool::new(false)
 		}
+	}
+
+	#[inline(always)]
+	fn relaxed_load(&self) -> bool
+	{
+		self.locked.load(Ordering::Relaxed)
 	}
 }
 
@@ -36,36 +45,34 @@ unsafe impl RawMutex for BasicMutexRaw
 
 	fn is_locked(&self) -> bool
 	{
-		self.flag.load(Ordering::Acquire)
+		self.locked.load(Ordering::Acquire)
 	}
 
 	fn lock(&self)
 	{
-		while self
-			.flag
-			.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
-			.is_err()
+		// Test and test-and-set
+		loop
 		{
-			core::hint::spin_loop();
+			while self.relaxed_load()
+			{
+				core::hint::spin_loop();
+			}
+
+			if self.try_lock()
+			{
+				return;
+			}
 		}
 	}
 
 	fn try_lock(&self) -> bool
 	{
-		match self
-			.flag
-			.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
-		{
-			Ok(false) => true,
-			Ok(true) => unreachable!(),
-			Err(true) => false,
-			Err(false) => unreachable!()
-		}
+		self.locked.swap(true, Ordering::AcqRel) == false
 	}
 
 	unsafe fn unlock(&self)
 	{
-		self.flag.store(false, Ordering::Release);
+		self.locked.store(false, Ordering::Release);
 	}
 }
 

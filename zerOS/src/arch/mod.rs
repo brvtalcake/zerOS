@@ -32,8 +32,8 @@ cfg_if! {
 		pub use self::amd64 as target;
 		pub use core::arch::x86_64 as core_target;
 	} else if #[cfg(target_arch = "aarch64")] {
-		pub mod arm64;
-		pub use self::arm64 as target;
+		pub mod aarch64;
+		pub use self::aarch64 as target;
 		pub use core::arch::aarch64 as core_target;
 	}
 }
