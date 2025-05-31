@@ -85,10 +85,6 @@ use syn::{
 	token::{Brace, Paren}
 };
 
-use crate::ctor::CtorInput;
-
-mod ctor;
-
 #[proc_macro]
 pub fn array_size(tt: TokenStreamClassic) -> TokenStreamClassic
 {
@@ -140,21 +136,6 @@ pub fn random_ident(_input: TokenStreamClassic) -> TokenStreamClassic
 	}
 	.into()
 }
-
-// #[proc_macro]
-// pub fn ctor(input: TokenStreamClassic) -> TokenStreamClassic
-// {
-// 	if !input.is_empty()
-// 	{
-// 		let parsed = parse_macro_input!(input as CtorInput);
-// 		println!("SUCCESSED AT PARSING");
-// 		parsed.into_token_stream().into()
-// 	}
-// 	else
-// 	{
-// 		quote! {}.into()
-// 	}
-// }
 
 mod kw
 {
