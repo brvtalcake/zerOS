@@ -120,9 +120,8 @@ zerOS_${section}_end = LOADADDR(.${section}) + SIZEOF(.${section});
                   +  "{\n"                                                                              \
                   +  "    #![allow(dead_code)]\n"                                                       \
                   +  "    #![allow(non_upper_case_globals)]\n"                                          \
-                  +  "    use core::ffi::c_void;\n"                                                     \
                   +  "    use lazy_static::lazy_static;\n"                                              \
-                  +  "    pub type LinkerSym = *const c_void;\n"                                        \
+                  +  "    use super::super::LinkerSym;\n"                                               \
                   + f"    pub const zerOS_section_count: usize = {section_count};\n"                    \
                   +  rs_ksyms.replace('\n', '\n    ', rs_ksyms.count('\n') - 1)                         \
                   +  todump_rssyms.replace('\n', '\n    ', todump_rssyms.count('\n') - 1)               \

@@ -5,10 +5,9 @@ pub mod __linker_symbols
 {
 	#![allow(dead_code)]
 	#![allow(non_upper_case_globals)]
-	use core::ffi::c_void;
-
 	use lazy_static::lazy_static;
-	pub type LinkerSym = *const c_void;
+
+	use super::super::LinkerSym;
 	pub const zerOS_section_count: usize = 6;
 
 	unsafe extern "C" {

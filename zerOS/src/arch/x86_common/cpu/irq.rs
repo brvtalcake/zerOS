@@ -10,6 +10,7 @@ pub fn enable()
 		}
 	}
 }
+
 #[inline]
 pub fn disable()
 {

@@ -70,6 +70,7 @@ use syn::{
 	Lit,
 	LitStr,
 	StaticMutability,
+	Stmt,
 	Token,
 	Type,
 	TypeArray,
@@ -83,6 +84,10 @@ use syn::{
 	spanned::Spanned,
 	token::{Brace, Paren}
 };
+
+use crate::ctor::CtorInput;
+
+mod ctor;
 
 #[proc_macro]
 pub fn array_size(tt: TokenStreamClassic) -> TokenStreamClassic
@@ -105,41 +110,51 @@ pub fn array_size(tt: TokenStreamClassic) -> TokenStreamClassic
 }
 
 #[proc_macro]
-pub fn ctor(input: TokenStreamClassic) -> TokenStreamClassic
+pub fn random_number(_input: TokenStreamClassic) -> TokenStreamClassic
 {
-	if !input.is_empty()
+	if let Ok(rand) = getrandom::u32().map(|num| syn::Index::from(num as usize))
 	{
-		let real_input: TokenStreamClassic = Group::new(Delimiter::Brace, input.into())
-			.into_token_stream()
-			.into();
-		let body = parse_macro_input!(real_input as syn::Block);
-		if let Ok(rnd) = getrandom::u64()
-		{
-			let modident = format_ident!("__local_ctors__{}", rnd);
-			let exported_fn = format_ident!("__local_ctors_fn_exported__{}", rnd);
-			quote! {
-				mod #modident
-				{
-					use super::*;
-
-					#[unsafe(no_mangle)]
-					#[unsafe(link_section = ".ctors_init_array")]
-					unsafe extern "C" fn #exported_fn ()
-					#body
-				}
-			}
-			.into()
-		}
-		else
-		{
-			quote! { compile_error!("unable to get random number") }.into()
-		}
+		quote! { #rand }
 	}
 	else
 	{
-		quote! {}.into()
+		quote! {
+			compile_error!("random_number: unable to get random number");
+		}
 	}
+	.into()
 }
+
+#[proc_macro]
+pub fn random_ident(_input: TokenStreamClassic) -> TokenStreamClassic
+{
+	if let Ok(rand) = getrandom::u32().map(|num| format_ident!("randomly_generated_ident_{}", num))
+	{
+		quote! { #rand }
+	}
+	else
+	{
+		quote! {
+			compile_error!("random_ident: unable to get random number");
+		}
+	}
+	.into()
+}
+
+// #[proc_macro]
+// pub fn ctor(input: TokenStreamClassic) -> TokenStreamClassic
+// {
+// 	if !input.is_empty()
+// 	{
+// 		let parsed = parse_macro_input!(input as CtorInput);
+// 		println!("SUCCESSED AT PARSING");
+// 		parsed.into_token_stream().into()
+// 	}
+// 	else
+// 	{
+// 		quote! {}.into()
+// 	}
+// }
 
 mod kw
 {
@@ -1333,7 +1348,8 @@ impl ToTokens for ConstInitArrayArgs
 /// extern crate proc_macro_utils;
 /// use proc_macro_utils::constinit_array_with;
 ///
-/// static ATOMIC_ARRAY: [AtomicBool; 42] = constinit_array_with!(AtomicBool::new(false));
+/// static ATOMIC_ARRAY: [AtomicBool; 42] =
+/// 	constinit_array!([AtomicBool; 42] with AtomicBool::new(false));
 /// # fn main() {}
 /// ```
 #[proc_macro]

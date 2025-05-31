@@ -8,9 +8,24 @@ pub fn inb(port: u16) -> u8
 	let ret: u8;
 	unsafe {
 		asm! {
-			"inb {inport:x}, {outval}",
-			inport = in(reg) port,
-			outval = out(reg_byte) ret,
+			"inb %dx, %al",
+			in("dx") port,
+			out("al") ret,
+			options(att_syntax, nomem, nostack)
+		};
+	}
+	ret
+}
+
+#[inline]
+pub fn immediate_inb<const PORT: u8>() -> u8
+{
+	let ret: u8;
+	unsafe {
+		asm! {
+			"inb {inport}, %al",
+			inport = const PORT,
+			out("al") ret,
 			options(att_syntax, nomem, nostack)
 		};
 	}
@@ -22,9 +37,22 @@ pub fn outb(port: u16, value: u8)
 {
 	unsafe {
 		asm! {
-			"outb {inport:x}, {inval}",
-			inport = in(reg) port,
-			inval  = in(reg_byte) value,
+			"outb %al, %dx",
+			in("dx") port,
+			in("al") value,
+			options(att_syntax, nomem, nostack)
+		}
+	}
+}
+
+#[inline]
+pub fn immediate_outb<const PORT: u8>(value: u8)
+{
+	unsafe {
+		asm! {
+			"outb %al, ${inport}",
+			inport = const PORT,
+			in("al") value,
 			options(att_syntax, nomem, nostack)
 		}
 	}
@@ -36,9 +64,9 @@ pub fn inw(port: u16) -> u16
 	let ret: u16;
 	unsafe {
 		asm! {
-			"inw {inport:x}, {outval:x}",
-			inport = in(reg) port,
-			outval = out(reg) ret,
+			"inw %dx, %ax",
+			in("dx") port,
+			out("ax") ret,
 			options(att_syntax, nomem, nostack)
 		};
 	}
@@ -50,9 +78,9 @@ pub fn outw(port: u16, value: u16)
 {
 	unsafe {
 		asm! {
-			"outw {inport:x}, {inval:x}",
-			inport = in(reg) port,
-			inval  = in(reg) value,
+			"outw %ax, %dx",
+			in("dx") port,
+			in("ax") value,
 			options(att_syntax, nomem, nostack)
 		}
 	}
@@ -64,9 +92,9 @@ pub fn inl(port: u16) -> u32
 	let ret: u32;
 	unsafe {
 		asm! {
-			"inl {inport:x}, {outval:e}",
-			inport = in(reg) port,
-			outval = out(reg) ret,
+			"inl %dx, %eax",
+			in("dx") port,
+			out("eax") ret,
 			options(att_syntax, nomem, nostack)
 		};
 	}
@@ -78,9 +106,9 @@ pub fn outl(port: u16, value: u32)
 {
 	unsafe {
 		asm! {
-			"outw {inport:x}, {inval:e}",
-			inport = in(reg) port,
-			inval  = in(reg) value,
+			"outl %eax, %dx",
+			in("dx") port,
+			in("eax") value,
 			options(att_syntax, nomem, nostack)
 		}
 	}

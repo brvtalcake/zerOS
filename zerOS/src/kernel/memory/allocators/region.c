@@ -341,10 +341,11 @@ static inline void subregion_list_set_prev_next(
 	  ((uintptr_t)prev >> PAGE_SIZE_LOG2) ^ ((uintptr_t)next >> PAGE_SIZE_LOG2);
 }
 
-static inline struct subregion_list subregion_list_new(struct subregion_node* node)
+static inline void subregion_list_new(struct subregion_list* list, struct subregion_node* node)
 {
 	subregion_list_set_prev_next(node, nullptr, nullptr);
-	return (struct subregion_list){ .head = node, .tail = node };
+	list->head = node;
+	list->tail = node;
 }
 
 [[maybe_unused]]
@@ -634,12 +635,10 @@ static inline struct subregion_node* subregion_rbtree_extract_first_lower_bounde
 	return head ? subregion_rbtree_take_from_bucket_or_unlink(head) : nullptr;
 }
 
-static inline struct zerOS_rbtree subregion_rbtree_new(struct subregion_node* node)
+static inline void subregion_rbtree_new(struct zerOS_rbtree* rbtree, struct subregion_node* node)
 {
-	struct zerOS_rbtree rbtree;
-	zerOS_rbtree_reset_tree(&rbtree);
-	subregion_rbtree_insert(&rbtree, node);
-	return rbtree;
+	zerOS_rbtree_reset_tree(rbtree);
+	subregion_rbtree_insert(rbtree, node);
 }
 
 struct zerOS_region_allocator
@@ -812,9 +811,11 @@ extern struct zerOS_region_allocator* zerOS_region_allocator_create(
 	struct subregion_node* first_node = on_page_start(region + PAGE_SIZE);
 
 	subregion_set_page_count(first_node, (region_size / PAGE_SIZE) - 1);
+	subregion_set_free(first_node, true);
 
-	ret->list   = subregion_list_new(first_node);
-	ret->rbtree = subregion_rbtree_new(first_node);
+	subregion_list_new(&ret->list, first_node);
+	subregion_rbtree_new(&ret->rbtree, first_node);
+
 #if zerOS_REGION_ALLOCATOR_USE_FREELIST
 	ret->free_list = subregion_free_list_new(first_node);
 #endif
@@ -946,8 +947,10 @@ extern void* zerOS_region_allocator_alloc(
 	{
 		case zerOS_ALLOC_STRAT_BEST_FIT:
 			returned = region_alloc_best_fit(allocator, size, align);
+			break;
 		case zerOS_ALLOC_STRAT_FIRST_FIT:
 			returned = region_alloc_first_fit(allocator, size, align);
+			break;
 		default:
 			unreachable();
 			break;
@@ -956,6 +959,12 @@ extern void* zerOS_region_allocator_alloc(
 	zerOS_spin_unlock(&allocator->spinlock);
 
 	return returned;
+}
+
+extern bool zerOS_region_allocator_contains(struct zerOS_region_allocator* allocator, void* ptr)
+{
+	return (uintptr_t)ptr >= (uintptr_t)allocator->region
+		&& (uintptr_t)ptr <= (uintptr_t)allocator->region + allocator->region_page_count;
 }
 
 extern void zerOS_region_allocator_dealloc(struct zerOS_region_allocator* allocator, void* ptr)

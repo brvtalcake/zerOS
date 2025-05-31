@@ -7,7 +7,7 @@
 additional_profiles = ["dev", "dev-lto", "release", "release-lto"]
 #time_summary = true
 reduce_output = true
-end_task = "cleanup"
+#end_task = "cleanup"
 
 [env]
 CARGO_MAKE_RUST_SCRIPT_PROVIDER = "cargo-script"
@@ -52,7 +52,7 @@ args = [
 ]
 
 [tasks.zerOS-do-build.env]
-RUSTFLAGS = '--cfg getrandom_backend="rdrand" -Ctarget-cpu=${ZEROS_TARGET_CPU}'
+RUSTFLAGS = '--cfg getrandom_backend="rdrand" -Ctarget-cpu=${ZEROS_TARGET_CPU} -Z macro-backtrace'
 
 [tasks.zerOS-pre-build]
 cwd = "./zerOS"
@@ -82,7 +82,127 @@ cwd = "./zerOS"
 private = true
 dependencies = ["zerOS-pre-build", "zerOS-do-build", "zerOS-post-build"]
 
+[tasks.run-qemu-amd64]
+private = true
+dependencies = ["compute-qemu-cpu-name", "validate-qemu-accel"]
+run_task = [
+    { name = "run-qemu-amd64-with-accelerator", condition = { env_set = [
+        "ZEROS_QEMU_ACCELERATOR",
+    ] } },
+    { name = "run-qemu-amd64-without-accelerator", condition = { env_not_set = [
+        "ZEROS_QEMU_ACCELERATOR",
+    ] } },
+]
+
+[tasks.run-qemu-amd64-without-accelerator]
+private = true
+command = "qemu-system-x86_64"
+args = [
+    "-m",
+    "1500M",
+    "-smp",
+    "8",
+    "-cpu",
+    "${ZEROS_QEMU_CPU}",
+    "-smbios",
+    "type=0,uefi=on",
+    "-debugcon",
+    "file:debugcon.log",
+    "-serial",
+    "stdio",
+    "-S",
+    "-bios",
+    "zerOS/vendor/OVMF.fd",
+    "-cdrom",
+    "./zerOS/bin/zerOS.iso",
+    "-s",
+]
+
+[tasks.run-qemu-amd64-with-accelerator]
+private = true
+command = "qemu-system-x86_64"
+args = [
+    "-m",
+    "1500M",
+    "-smp",
+    "8",
+    "-accel",
+    "${ZEROS_QEMU_ACCELERATOR}",
+    "-cpu",
+    "${ZEROS_QEMU_CPU}",
+    "-smbios",
+    "type=0,uefi=on",
+    "-debugcon",
+    "file:debugcon.log",
+    "-serial",
+    "stdio",
+    "-S",
+    "-bios",
+    "zerOS/vendor/OVMF.fd",
+    "-cdrom",
+    "./zerOS/bin/zerOS.iso",
+    "-s",
+]
+
+[tasks.validate-qemu-accel]
+private = true
+script_runner = "@duckscript"
+script = '''
+args = set %{@}
+
+unset accel
+for arg in ${args}
+    if starts_with ${arg} "accel="
+        if is_defined accel
+            trigger_error "accel is defined multiple times"
+        end
+        tmp = replace ${arg} "accel=" ""
+        accel = set ${tmp}
+    end
+end
+release ${args}
+
+unset_env ZEROS_QEMU_ACCELERATOR
+if is_defined accel
+    set_env ZEROS_QEMU_ACCELERATOR ${accel}
+end
+
+'''
+
+[tasks.compute-qemu-cpu-name]
+private = true
+dependencies = ["validate-target-cpu"]
+script_runner = "@duckscript"
+script = '''
+mapped = map
+
+map_put ${mapped} native host
+map_put ${mapped} skylake "Skylake-Client-v4"
+map_put ${mapped} haswell "Haswell-v4"
+# TODO: add more
+
+target_cpu = get_env ZEROS_TARGET_CPU
+
+if map_contains_key ${mapped} ${target_cpu}
+    cpu_name = map_get ${mapped} ${target_cpu}
+else
+    cpu_name = set ${target_cpu}
+end
+
+set_env ZEROS_QEMU_CPU ${cpu_name}
+'''
+
+[tasks.zerOS-run]
+dependencies = ["validate-target-architecture"]
+private = true
+script_runner = "@duckscript"
+script = '''
+arch = get_env ZEROS_TARGET_ARCH
+cm_run_task "run-qemu-${arch}"
+'''
+
 [tasks.zerOS-expand]
+env = { RUSTFLAGS = "-Z macro-backtrace" }
 cwd = "./zerOS"
 private = true
 command = "cargo"

@@ -36,9 +36,9 @@ mod entry
 {
 	use super::*;
 	use crate::{
-		arch::target::cpu::misc::hcf,
+		info,
 		init::{self, ctors::CtorIter},
-		kernel::{self, linker::map::zerOS_kernel_start},
+		kernel::linker::map::zerOS_kernel_start,
 		kmain
 	};
 
@@ -48,17 +48,18 @@ mod entry
 		// All limine requests must also be referenced in a called function, otherwise
 		// they may be removed by the linker.
 		assert!(BASE_REVISION.is_supported());
-		assert_eq!(unsafe { zerOS_kernel_start as usize }, 0xffffffff80000000_usize);
+		assert_eq!(
+			&raw const zerOS_kernel_start as usize,
+			0xffffffff80000000_usize
+		);
 
 		CtorIter::new().for_each(|ctor| unsafe { ctor() });
 
-		let under_qemu = kernel::hypervisor::under_qemu();
-		if under_qemu.is_err() || !under_qemu.expect("unreachable")
-		{
-			hcf();
-		}
+		log::set_max_level(log::LevelFilter::Trace);
 
+		info!("initializing GDT...");
 		init::memory::gdt::init();
+		info!("GDT initialized");
 
 		kmain()
 	}

@@ -21,15 +21,3 @@ pub use super::__generated::__linker_symbols::{
 	zerOS_text_size,
 	zerOS_text_start
 };
-
-#[cfg(test)]
-mod tests
-{
-	use super::zerOS_bss_size;
-
-	#[test]
-	fn compiles()
-	{
-		let _test = *zerOS_bss_size;
-	}
-}

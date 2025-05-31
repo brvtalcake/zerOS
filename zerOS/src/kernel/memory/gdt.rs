@@ -6,8 +6,6 @@ use core::{
 use num_traits::AsPrimitive;
 use zerocopy::{FromBytes, IntoBytes};
 
-use crate::kernel;
-
 #[repr(C, packed)]
 #[derive(Debug, Clone, Copy)]
 pub struct GDTDescriptor

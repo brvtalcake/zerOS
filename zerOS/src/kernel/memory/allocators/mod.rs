@@ -122,6 +122,12 @@ impl RegionAllocator
 		}
 	}
 
+	pub fn contains(&self, ptr: NonNull<u8>) -> bool
+	{
+		use bindings::region::zerOS_region_allocator_contains;
+		unsafe { zerOS_region_allocator_contains(self.inner, ptr.as_ptr().cast()) }
+	}
+
 	pub unsafe fn new_extended<T>(
 		region: &'static mut [u8],
 		static_memory: bool,

@@ -1,4 +1,14 @@
-use crate::kernel::linker::LinkerSym;
+use crate::{
+	func_at,
+	kernel::linker::{
+		LinkerSym,
+		map::{zerOS_ctors_init_array_end, zerOS_ctors_init_array_start}
+	}
+};
+
+#[unsafe(link_section = ".ctors_init_array")]
+#[used(linker)]
+static _SECTION_PLACE_HOLDER: [LinkerSym; 0] = [];
 
 unsafe extern "C" {
 	unsafe static __ctor_init_array_start: LinkerSym;
@@ -9,7 +19,7 @@ pub type Ctor = unsafe extern "C" fn();
 
 const CTOR_SIZE: usize = size_of::<Ctor>();
 
-fn ctor_count(start: LinkerSym, end: LinkerSym) -> usize
+fn ctor_count(start: *const LinkerSym, end: *const LinkerSym) -> usize
 {
 	let usize_start = start as usize;
 	let usize_end = end as usize;
@@ -18,7 +28,7 @@ fn ctor_count(start: LinkerSym, end: LinkerSym) -> usize
 
 pub struct CtorIter
 {
-	start: LinkerSym,
+	start: *const LinkerSym,
 	cur:   usize,
 	count: usize
 }
@@ -26,21 +36,24 @@ pub struct CtorIter
 #[overloadf::overload]
 impl CtorIter
 {
-	pub const fn new(start: LinkerSym, end: LinkerSym) -> Self
+	pub const fn new(start: *const LinkerSym, end: *const LinkerSym) -> Self
 	{
 		Self {
 			start,
 			cur: 0,
-			count: unsafe { ctor_count(start, end) }
+			count: ctor_count(start, end)
 		}
 	}
 
 	pub const fn new() -> Self
 	{
 		Self {
-			start: unsafe { __ctor_init_array_start },
+			start: &raw const zerOS_ctors_init_array_start,
 			cur:   0,
-			count: unsafe { ctor_count(__ctor_init_array_start, __ctor_init_array_end) }
+			count: ctor_count(
+				&raw const zerOS_ctors_init_array_start,
+				&raw const zerOS_ctors_init_array_end
+			)
 		}
 	}
 
@@ -52,11 +65,12 @@ impl CtorIter
 		}
 		else
 		{
-			Some(unsafe {
-				core::mem::transmute::<_, Ctor>(
-					((self.start as usize) + (self.cur * CTOR_SIZE)) as LinkerSym
-				)
-			})
+			unsafe {
+				let func = func_at!(
+					*(self.start.byte_add(self.cur * CTOR_SIZE) as *const *const ()) as Ctor
+				);
+				Some(func)
+			}
 		}
 	}
 }
@@ -67,7 +81,11 @@ impl Iterator for CtorIter
 
 	fn next(&mut self) -> Option<Self::Item>
 	{
-		self.count += 1;
-		self.get_at_cur()
+		let res = self.get_at_cur();
+		if res.is_some()
+		{
+			self.cur += 1;
+		}
+		res
 	}
 }

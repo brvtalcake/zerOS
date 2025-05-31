@@ -3,12 +3,19 @@ use core::{
 	sync::atomic::{self, AtomicBool}
 };
 
+use lazy_static::lazy_static;
+
 use crate::{
 	arch::x86_common::cpu::{
 		io::{inb, outb},
 		misc::hcf
 	},
-	kernel::{hypervisor, serial::SerialIO}
+	kernel::{
+		hypervisor,
+		serial::{SerialKernelOutput, SerialInput, SerialOutput},
+		sync::BasicMutex
+	},
+	logging::{self, ZEROS_GLOBAL_LOGGER}
 };
 
 static mut SERIAL_INIT_STATES: [AtomicBool; variant_count::<SerialPortId>() as usize] = constinit_array!([AtomicBool; variant_count::<SerialPortId>() as usize] with AtomicBool::new(false));
@@ -123,43 +130,7 @@ impl SerialPort
 	}
 }
 
-// Old C Code:
-// BOOT_FUNC
-// static bool is_transmit_empty(enum zerOS_serial_port port) { return
-// zerOS_inb(port + 5) & 0x20; }
-//
-// BOOT_FUNC
-// static void write_serial(enum zerOS_serial_port port, char a)
-// {
-// if (unlikely(!inited))
-// {
-// in_qemu = zerOS_in_qemu();
-// inited  = true;
-// }
-//
-// if (!in_qemu || !zerOS_CONFIG_UNDER_QEMU)
-// return;
-//
-// while (is_transmit_empty(port) == 0)
-// ;
-//
-// zerOS_outb(port, a);
-// }
-//
-// BOOT_FUNC
-// static void write_debugcon(char a)
-// {
-// if (unlikely(!inited))
-// {
-// in_qemu = zerOS_in_qemu();
-// inited  = true;
-// }
-//
-// if (in_qemu && zerOS_CONFIG_UNDER_QEMU)
-// zerOS_outb(0xe9, a);
-// }
-
-impl SerialIO for SerialPort
+impl SerialOutput for SerialPort
 {
 	fn supports_ansi_escape_codes(&self) -> bool
 	{
@@ -174,7 +145,10 @@ impl SerialIO for SerialPort
 		}
 		outb(self.id as u16, byte)
 	}
+}
 
+impl SerialInput for SerialPort
+{
 	fn serial_read_byte(&self) -> u8
 	{
 		while !self.serial_received()
@@ -184,4 +158,24 @@ impl SerialIO for SerialPort
 
 		inb(self.id as u16)
 	}
+}
+
+lazy_static! {
+	static ref ZEROS_COM1_SERIAL_LOGGER: BasicMutex<SerialKernelOutput<SerialPort>> = BasicMutex::new(
+		SerialKernelOutput::new(SerialPort::new(SerialPortId::COM1).unwrap())
+	);
+}
+
+ctor! {
+	@name(zerOS_init_serial_loggers);
+	@priority(100);
+	if hypervisor::under_qemu().unwrap_or_else(|_| hcf())
+	{
+		ZEROS_GLOBAL_LOGGER.add_logger(
+			&*ZEROS_COM1_SERIAL_LOGGER,
+			None,
+			logging::LoggingBackend::Serial
+		).unwrap();
+	}
+	logging::set_global_backend_state(logging::LoggingBackend::Serial, true);
 }

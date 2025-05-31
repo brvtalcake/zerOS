@@ -4,7 +4,6 @@
 
 use core::panic;
 use std::{
-	cell::OnceCell,
 	ffi::OsString,
 	fs,
 	io::{self, Write},
@@ -111,54 +110,49 @@ fn get_outdir() -> Option<&'static String>
 }
 
 /// returns target triple
-fn get_target_arch() -> &'static String
+fn get_target_arch() -> Option<&'static String>
 {
-	static TARGET: OnceLock<String> = OnceLock::new();
-	TARGET.get_or_init(|| {
-		from_cargo!("TARGET")
-			.map(|val| val.into_string().unwrap())
-			.unwrap()
-	})
+	static TARGET: OnceLock<Option<String>> = OnceLock::new();
+	TARGET
+		.get_or_init(|| from_cargo!("TARGET").map(|val| val.into_string().unwrap()))
+		.as_ref()
 }
 
-fn get_opt_lvl() -> &'static isize
+fn get_opt_lvl() -> Option<&'static isize>
 {
-	static OPTLVL: OnceLock<isize> = OnceLock::new();
-	OPTLVL.get_or_init(|| {
-		from_cargo!("OPT_LEVEL")
-			.map(|val| val.into_string().unwrap().parse().unwrap())
-			.unwrap()
-	})
+	static OPTLVL: OnceLock<Option<isize>> = OnceLock::new();
+	OPTLVL
+		.get_or_init(|| {
+			from_cargo!("OPT_LEVEL").map(|val| val.into_string().unwrap().parse().unwrap())
+		})
+		.as_ref()
 }
 
-fn get_profile() -> &'static String
+fn get_profile() -> Option<&'static String>
 {
-	static PROFILE: OnceLock<String> = OnceLock::new();
-	PROFILE.get_or_init(|| {
-		from_cargo!("PROFILE")
-			.map(|val| val.into_string().unwrap())
-			.unwrap()
-	})
+	static PROFILE: OnceLock<Option<String>> = OnceLock::new();
+	PROFILE
+		.get_or_init(|| from_cargo!("PROFILE").map(|val| val.into_string().unwrap()))
+		.as_ref()
 }
 
-fn get_target_cpu() -> &'static String
+fn get_target_cpu() -> Option<&'static String>
 {
-	static TARGET_CPU: OnceLock<String> = OnceLock::new();
-	TARGET_CPU.get_or_init(|| {
-		from_cargo!("ZEROS_TARGET_CPU")
-			.map(|val| val.into_string().unwrap())
-			.unwrap()
-	})
+	static TARGET_CPU: OnceLock<Option<String>> = OnceLock::new();
+	TARGET_CPU
+		.get_or_init(|| from_cargo!("ZEROS_TARGET_CPU").map(|val| val.into_string().unwrap()))
+		.as_ref()
 }
 
-fn get_target_ptr_width() -> &'static usize
+fn get_target_ptr_width() -> Option<&'static usize>
 {
-	static TARGET_POINTER_WIDTH: OnceLock<usize> = OnceLock::new();
-	TARGET_POINTER_WIDTH.get_or_init(|| {
-		from_cargo!("CARGO_CFG_TARGET_POINTER_WIDTH")
-			.map(|val| val.into_string().unwrap().parse().unwrap())
-			.unwrap()
-	})
+	static TARGET_POINTER_WIDTH: OnceLock<Option<usize>> = OnceLock::new();
+	TARGET_POINTER_WIDTH
+		.get_or_init(|| {
+			from_cargo!("CARGO_CFG_TARGET_POINTER_WIDTH")
+				.map(|val| val.into_string().unwrap().parse().unwrap())
+		})
+		.as_ref()
 }
 
 enum COptsConfig
@@ -167,23 +161,28 @@ enum COptsConfig
 	Normal
 }
 
-fn compile_c_code(infile: &str, outfile: impl AsRef<Path>, config: COptsConfig, additional_params: &[String])
+fn compile_c_code(
+	infile: &str,
+	outfile: impl AsRef<Path>,
+	config: COptsConfig,
+	additional_params: &[String]
+)
 {
-	let mut target_triple = get_target_arch().to_owned();
+	let mut target_triple = get_target_arch().unwrap().to_owned();
 	if target_triple.ends_with("-none")
 	{
 		target_triple.push_str("-elf");
 	}
-	let target_cpu = get_target_cpu();
-	let maybe_lto = if get_profile().contains("lto") || *get_opt_lvl() != 0
+	let target_cpu = get_target_cpu().unwrap();
+	let optimizations = if get_profile().unwrap().contains("lto") || *get_opt_lvl().unwrap() != 0
 	{
-		vec!["-flto"]
+		vec!["-flto", "-O3"]
 	}
 	else
 	{
-		vec![]
+		vec!["-ggdb3", "-Og"]
 	};
-	let target_ptr_width = get_target_ptr_width();
+	let target_ptr_width = get_target_ptr_width().unwrap();
 	let opts = match config
 	{
 		COptsConfig::InitCode =>
@@ -225,7 +224,7 @@ fn compile_c_code(infile: &str, outfile: impl AsRef<Path>, config: COptsConfig, 
 		}
 	};
 	Command::new("clang")
-		.args(maybe_lto)
+		.args(optimizations)
 		.args(opts)
 		.args(additional_params)
 		.args([
@@ -233,7 +232,6 @@ fn compile_c_code(infile: &str, outfile: impl AsRef<Path>, config: COptsConfig, 
 			format!("--target={target_triple}").as_ref(),
 			"-xc",
 			"-std=gnu23",
-			"-O3",
 			"-Wall",
 			"-Wextra",
 			"-Werror",
@@ -243,6 +241,7 @@ fn compile_c_code(infile: &str, outfile: impl AsRef<Path>, config: COptsConfig, 
 			"-fcolor-diagnostics",
 			format!("-m{target_ptr_width}").as_ref(),
 			"-masm=att",
+			"-mcmodel=kernel",
 			"-nodefaultlibs",
 			"-nostdlib",
 			//"-nostartfiles",
@@ -295,12 +294,12 @@ fn compile_region_allocator() -> Vec<PathBuf>
 		compile_c_code(&inf, &outf, COptsConfig::Normal, &[]);
 	}
 
-	let mut target_triple = get_target_arch().to_owned();
+	let mut target_triple = get_target_arch().unwrap().to_owned();
 	if target_triple.ends_with("-none")
 	{
 		target_triple.push_str("-elf");
 	}
-	let target_ptr_width = get_target_ptr_width();
+	let target_ptr_width = get_target_ptr_width().unwrap();
 	bindgen::builder()
 		.clang_args([
 			"-I./include",
@@ -376,7 +375,7 @@ fn compile_c_init_code() -> Vec<PathBuf>
 		return vec![];
 	}
 
-	let arch_dir = get_target_arch().split('-').collect::<Vec<_>>()[0]
+	let arch_dir = get_target_arch().unwrap().split('-').collect::<Vec<_>>()[0]
 		.replace("x86-64", "amd64")
 		.replace("x86_64", "amd64")
 		.replace("arm64", "aarch64");
@@ -409,32 +408,6 @@ fn generate_config_arch_aliases()
 		zarch_alike: { any(target_arch = "s390", target_arch = "s390x") }
 		// TODO: IA64, Alpha DEC, SuperH, OpenRISC (?), C-Sky, HPPA (?)
 	};
-}
-
-fn declare_c_source_code<T: AsRef<path::Path>>(paths: &[T])
-{
-	for path in paths.iter().filter(|path| path.as_ref().is_dir())
-	{
-		for in_dir in fs::read_dir(path).unwrap()
-		{
-			if let Ok(p) = in_dir
-			{
-				if p.file_type().map_or(false, |val| val.is_file())
-				{
-					to_cargo!(
-						"rerun-if-changed" => p.file_name().into_string().unwrap()
-					);
-				}
-			}
-		}
-	}
-
-	for path in paths.iter().filter(|path| path.as_ref().is_file())
-	{
-		to_cargo!(
-			"rerun-if-changed" => path.as_ref().file_name().unwrap().to_string_lossy()
-		);
-	}
 }
 
 fn declare_c_source_code_in<T: AsRef<path::Path>>(paths: &[T], recurse: bool)
@@ -584,19 +557,6 @@ pub use super::__generated::__linker_symbols::zerOS_kernel_end;
 		)
 		.as_str();
 	}
-	content += r#"
-#[cfg(test)]
-mod tests
-{
-    use super::zerOS_bss_size;
-
-    #[test]
-    fn compiles()
-    {
-        let _test = *zerOS_bss_size;
-    }
-}
-"#;
 	out.write_all(content.as_bytes())?;
 	Ok(())
 }
@@ -613,7 +573,7 @@ fn make_lib_with(files: &Vec<PathBuf>, outlib: &PathBuf)
 		"rustc-link-search" => search_dir
 	);
 	to_cargo!(
-		"rustc-link-search" =>
+		"rustc-link-lib" =>
 			"static=".to_owned() + lib_name
 	);
 

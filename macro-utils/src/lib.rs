@@ -1,8 +1,91 @@
 #![feature(concat_idents)]
 #![feature(decl_macro)]
-
 #![no_std]
 #![recursion_limit = "1024"]
+
+use eager2::eager_macro;
+pub use eager2::{eager, lazy};
+
+#[macro_export]
+#[eager_macro]
+macro_rules! concat_idents {
+    ($($e:ident),+ $(,)?) => {
+		eager2::unstringify!(
+			::eager2::concat!(
+        		$(
+					::eager2::stringify!($e)
+				),*
+			)
+		)
+	};
+}
+
+#[macro_export]
+#[doc(hidden)]
+#[eager_macro]
+macro_rules! __ctor_impl {
+    (
+        @NAME_IMPL[$($name:tt)*];
+        @PRIO_IMPL[$($prio:tt)*];
+        @name($($new_name:tt)*);
+        $($rest:tt)*
+    ) => {
+        __ctor_impl!{
+            @NAME_IMPL[$($new_name)*];
+            @PRIO_IMPL[$($prio)*];
+            $($rest)*
+        }
+    };
+
+    (
+        @NAME_IMPL[$($name:tt)*];
+        @PRIO_IMPL[$($prio:tt)*];
+        @priority($($new_prio:tt)*);
+        $($rest:tt)*
+    ) => {
+        __ctor_impl!{
+            @NAME_IMPL[$($name)*];
+            @PRIO_IMPL[$($new_prio)*];
+            $($rest)*
+        }
+    };
+
+    (
+        @NAME_IMPL[$name:ident];
+        @PRIO_IMPL[$prio:literal];
+        $($body:stmt)*
+    ) => {
+        ::eager2::eager! {
+            mod concat_idents!($name, _generated_module)
+            {
+                use super::*;
+
+                #[unsafe(link_section = ".bootcode")]
+                unsafe extern "C" fn concat_idents!($name, _generated_function) ()
+                {
+                    $($body)*
+                }
+
+                #[unsafe(link_section = ::eager2::concat!(".ctors_init_array.", ::eager2::stringify!($prio)))]
+                #[used(linker)]
+                #[allow(non_upper_case_globals)]
+                static concat_idents!($name, _generated_ctor): crate::init::ctors::Ctor = concat_idents!($name, _generated_function);
+            }
+        }
+    };
+}
+
+#[macro_export]
+#[eager_macro]
+macro_rules! ctor {
+    ($($tokens:tt)*) => {
+        __ctor_impl! {
+            @NAME_IMPL[];
+            @PRIO_IMPL[];
+            $($tokens)*
+        }
+    };
+}
 
 /// Stolen from `core::intrinsics::const_eval_select!`.
 ///
@@ -17,13 +100,14 @@
 ///     }
 /// )
 /// ```
-/// The `@capture` block declares which surrounding variables / expressions can be
-/// used inside the `if const`.
-/// Note that the two arms of this `if` really each become their own function, which is why the
-/// macro supports setting attributes for those functions. The runtime function is always
-/// markes as `#[inline]`.
+/// The `@capture` block declares which surrounding variables / expressions can
+/// be used inside the `if const`.
+/// Note that the two arms of this `if` really each become their own function,
+/// which is why the macro supports setting attributes for those functions. The
+/// runtime function is always markes as `#[inline]`.
 ///
-/// See [`const_eval_select()`] for the rules and requirements around that intrinsic.
+/// See [`const_eval_select()`] for the rules and requirements around that
+/// intrinsic.
 pub macro const_eval_select {
     (
         @capture$([$($binders:tt)*])? { $($arg:ident : $ty:ty = $val:expr),* $(,)? } $( -> $ret:ty )? :

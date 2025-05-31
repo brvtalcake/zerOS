@@ -9,7 +9,7 @@ use core::{
 use anyhow::anyhow;
 use lazy_static::lazy_static;
 
-use crate::kernel::{self, io::KernelIO, sync::BasicMutex};
+use crate::kernel::{io::KernelOutput, sync::BasicMutex};
 
 /// copied and adapted from `log` crate source code
 #[macro_export]
@@ -242,13 +242,19 @@ macro_rules! trace {
     });
 }
 
-static mut ZEROS_GLOBAL_LOGGER: MultiLogger = MultiLogger::new();
+pub static ZEROS_GLOBAL_LOGGER: MultiLogger = MultiLogger::new();
 
 ctor! {
+	@name(zerOS_initialize_global_logger);
+	@priority(1);
+
 	crate::arch::target::cpu::irq::disable();
 	unsafe {
 		log::set_logger_racy(&ZEROS_GLOBAL_LOGGER).unwrap_or_else(
-			|_| crate::arch::target::cpu::misc::hcf()
+			|_| {
+				crate::arch::target::cpu::irq::enable();
+				crate::arch::target::cpu::misc::hcf()
+			}
 		);
 	}
 	crate::arch::target::cpu::irq::enable();
@@ -262,7 +268,7 @@ pub enum LoggingBackend
 {
 	Serial = 0,
 	FrameBuffer,
-	QemuDebugCon
+	DebugCon
 }
 
 static mut ENABLED_LOGGING_BACKENDS: [AtomicBool; core::mem::variant_count::<LoggingBackend>()] =
@@ -275,12 +281,12 @@ pub fn set_global_backend_state(backend: LoggingBackend, enabled: bool)
 	}
 }
 
-pub trait LoggingEventFilter = for<'a> FnMut(&'a str) -> bool;
+pub trait LoggingEventFilter = for<'a> Fn(&'a str) -> bool;
 
 struct Logger
 {
-	logger:       SyncUnsafeCell<&'static mut (dyn KernelIO + Sync + Send)>,
-	event_filter: SyncUnsafeCell<Option<&'static mut (dyn LoggingEventFilter + Sync + Send)>>,
+	logger:       &'static BasicMutex<dyn KernelOutput + Sync + Send>,
+	event_filter: Option<&'static (dyn LoggingEventFilter + Sync + Send)>,
 	backend:      LoggingBackend
 }
 
@@ -305,24 +311,18 @@ lazy_static! {
 
 impl Logger
 {
-	/// # SAFETY
-	/// The caller must ensure there is no live reference to the `event_filter`
-	/// field before calling this function
-	unsafe fn log_event(&self, event: &str) -> bool
+	fn log_event(&self, event: &str) -> bool
 	{
-		match unsafe { &mut *self.event_filter.get() }
+		match self.event_filter
 		{
 			Some(filter) => filter(event),
 			_ => true
 		}
 	}
 
-	/// # SAFETY
-	/// The caller must ensure there is no live reference to the `logger`
-	/// field before calling this function
-	unsafe fn level_style(&self, lvl: log::Level) -> anstyle::Style
+	fn level_style(&self, lvl: log::Level) -> anstyle::Style
 	{
-		if !unsafe { &mut *self.logger.get() }.supports_ansi_escape_codes()
+		if !self.logger.lock().supports_ansi_escape_codes()
 		{
 			return anstyle::Style::new();
 		}
@@ -355,12 +355,12 @@ impl log::Log for Logger
 	{
 		(unsafe { ENABLED_LOGGING_BACKENDS[self.backend as usize].load(atomic::Ordering::Acquire) })
 			&& metadata.level().to_level_filter() <= log::max_level()
-			&& (unsafe { self.log_event(metadata.target()) })
+			&& self.log_event(metadata.target())
 	}
 
 	fn flush(&self)
 	{
-		let logger: &'static mut (dyn KernelIO + Sync + Send) = unsafe { *self.logger.get() };
+		let mut logger = self.logger.lock();
 		logger
 			.flush()
 			.expect("error while flushing: this shouldn't happen !")
@@ -373,11 +373,11 @@ impl log::Log for Logger
 			return;
 		}
 
-		let lvl_style = unsafe { self.level_style(record.level()) };
+		let lvl_style = self.level_style(record.level());
 
 		// SAFETY: loggers are Sync + Send, and should implement writing
 		// to the underlying resource in a race-free maner
-		let logger: &'static mut (dyn KernelIO + Sync + Send) = unsafe { *self.logger.get() };
+		let mut logger = self.logger.lock();
 
 		let lvl_string = record.level().as_str();
 		let args = record.args();
@@ -450,18 +450,18 @@ impl MultiLogger
 	pub const fn new() -> Self
 	{
 		Self {
-			loggers: BasicMutex::new(
-				constinit_array!([Option<Logger>; MAX_LOGGER_COUNT] with None)
-			)
+			loggers: BasicMutex::new(constinit_array!(
+				[Option<Logger>; MAX_LOGGER_COUNT] with None
+			))
 		}
 	}
 
 	pub fn add_logger(
-		&mut self,
-		logger: &'static mut (dyn KernelIO + Sync + Send),
-		event_filter: Option<&'static mut (dyn LoggingEventFilter + Sync + Send)>,
+		&self,
+		logger: &'static BasicMutex<dyn KernelOutput + Sync + Send>,
+		event_filter: Option<&'static (dyn LoggingEventFilter + Sync + Send)>,
 		backend: LoggingBackend
-	) -> anyhow::Result<&mut Self>
+	) -> anyhow::Result<&Self>
 	{
 		let res = self
 			.loggers
@@ -472,8 +472,8 @@ impl MultiLogger
 				Err(anyhow!("couldn't find any available logger slot")),
 				|el| {
 					el.replace(Logger {
-						logger: SyncUnsafeCell::new(logger),
-						event_filter: SyncUnsafeCell::new(event_filter),
+						logger,
+						event_filter,
 						backend
 					});
 					anyhow::Ok(())

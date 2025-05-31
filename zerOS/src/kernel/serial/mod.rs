@@ -1,24 +1,11 @@
 use core::fmt;
 
-use super::io::{KernelIO, KernelIOExt};
+use crate::kernel::io::{KernelOutput, KernelOutputExt};
 
-pub trait SerialIO
+pub trait SerialInput
 {
-	fn supports_ansi_escape_codes(&self) -> bool
-	{
-		false
-	}
-
-	fn serial_write_byte(&self, byte: u8);
 	fn serial_read_byte(&self) -> u8;
 
-	fn serial_write_bytes(&self, bytes: &[u8])
-	{
-		for b in bytes
-		{
-			self.serial_write_byte(*b);
-		}
-	}
 	fn serial_read_bytes(&self, bytes: &mut [u8], max: Option<usize>)
 	{
 		if let Some(max_written) = max
@@ -67,21 +54,49 @@ pub trait SerialIO
 	}
 }
 
-pub struct SerialIOWriter<T: SerialIO>
+pub trait SerialOutput
 {
-	serial_writer: T
+	fn supports_ansi_escape_codes(&self) -> bool
+	{
+		false
+	}
+
+	fn serial_write_byte(&self, byte: u8);
+
+	fn serial_write_bytes(&self, bytes: &[u8])
+	{
+		for b in bytes
+		{
+			self.serial_write_byte(*b);
+		}
+	}
 }
 
-impl<T: SerialIO> fmt::Write for SerialIOWriter<T>
+pub trait SerialIO = SerialInput + SerialOutput;
+
+pub struct SerialKernelOutput<T: SerialOutput>
+{
+	inner: T
+}
+
+impl<T: SerialOutput> SerialKernelOutput<T>
+{
+	pub const fn new(inner: T) -> Self
+	{
+		Self { inner }
+	}
+}
+
+impl<T: SerialOutput> fmt::Write for SerialKernelOutput<T>
 {
 	fn write_str(&mut self, s: &str) -> fmt::Result
 	{
-		self.serial_writer.serial_write_bytes(s.as_bytes());
+		self.inner.serial_write_bytes(s.as_bytes());
 		Ok(())
 	}
 }
 
-impl<T: SerialIO> KernelIO for SerialIOWriter<T>
+impl<T: SerialOutput> KernelOutput for SerialKernelOutput<T>
 {
 	fn flush(&mut self) -> fmt::Result
 	{
@@ -90,19 +105,18 @@ impl<T: SerialIO> KernelIO for SerialIOWriter<T>
 
 	fn supports_ansi_escape_codes(&self) -> bool
 	{
-		self.serial_writer.supports_ansi_escape_codes()
+		self.inner.supports_ansi_escape_codes()
 	}
 
-	fn read_byte(&self) -> u8 {
-		self.serial_writer.serial_read_byte()
+	fn write_byte(&self, byte: u8)
+	{
+		self.inner.serial_write_byte(byte);
 	}
 
-	fn write_byte(&self, byte: u8) {
-		self.serial_writer.serial_write_byte(byte);
+	fn write_bytes(&self, bytes: &[u8])
+	{
+		self.inner.serial_write_bytes(bytes);
 	}
 }
 
-impl<T: SerialIO> KernelIOExt for SerialIOWriter<T>
-{
-
-}
+impl<T: SerialOutput> KernelOutputExt for SerialKernelOutput<T> {}

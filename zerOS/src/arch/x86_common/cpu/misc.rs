@@ -1,7 +1,6 @@
 use core::arch::asm;
 
-use super::irq;
-use super::io::outw;
+use super::{io::outw, irq};
 
 pub fn halt()
 {

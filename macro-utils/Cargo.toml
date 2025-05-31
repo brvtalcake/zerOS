@@ -21,6 +21,7 @@ doc = true
 test = true
 
 [dependencies]
+eager2 = "1.0.1"
 lazy_static = { version = "1.5", features = [ "spin_no_std" ]}
 zerOS-proc-macro-utils = { path = "../proc-macro-utils" }
 

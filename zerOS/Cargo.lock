@@ -1649,6 +1649,7 @@ dependencies = [
  "cc",
  "cpp",
  "cpp_build",
+ "eager2",
  "jobserver",
  "lazy_static",
  "zerOS-proc-macro-utils",

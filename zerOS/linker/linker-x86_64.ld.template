@@ -13,11 +13,13 @@ ENTRY(zerOS_entry_point)
 PHDRS
 {
     headers   PT_PHDR PHDRS;
-    text      PT_LOAD FILEHDR PHDRS;
-    othertext PT_LOAD;
-    rodata    PT_LOAD;
-    percpu    PT_LOAD;
-    data      PT_LOAD;
+    text      PT_LOAD FILEHDR PHDRS FLAGS(5);
+    initcode  PT_LOAD FLAGS(5);
+    percpu    PT_LOAD FLAGS(6);
+    data      PT_LOAD FLAGS(6);
+    rodata    PT_LOAD FLAGS(4);
+    ehro      PT_LOAD FLAGS(4);
+    ehrw      PT_LOAD FLAGS(6);
     /* dynamic   PT_DYNAMIC; */
 }
 
@@ -35,53 +37,53 @@ SECTIONS
 
     /* Emit zerOS_<section_name>_start and zerOS_<section_name>_end symbols for each section. */
 
-    .text : {
+    .text : ALIGN(CONSTANT(MAXPAGESIZE)) {
         *(.text .text.*)
     } :text
 
-    .bootcode : {
+    .bootcode : ALIGN(CONSTANT(MAXPAGESIZE)) {
         *(.bootcode .bootcode.*)
-    } :othertext
+    } :initcode
 
-    . = ALIGN(16);
-    PROVIDE(__ctor_init_array_start = .);
-    .ctors_init_array : {
-        KEEP(*(.ctors_init_array))
-        KEEP(*(.ctors_init_array.*))
-    } :othertext
-    PROVIDE(__ctor_init_array_end = .);
-
-    /* Inserting these two lines */
-    . = ALIGN(8);
-    PROVIDE(__eh_frame = .);
-    /* before .eh_frame rule */
-    .eh_frame : {
-        KEEP (*(.eh_frame)) *(.eh_frame.*)
-    } :data
-
-    /* Move to the next memory page for .rodata */
-    . = ALIGN(CONSTANT(MAXPAGESIZE));
-
-    .rodata : {
+    .rodata : ALIGN(CONSTANT(MAXPAGESIZE)) {
         *(.rodata .rodata.*)
     } :rodata
 
-    . = ALIGN(CONSTANT(MAXPAGESIZE));
+    PROVIDE(__ctor_init_array_start = .);
+    .ctors_init_array : ALIGN(CONSTANT(MAXPAGESIZE)) {
+        KEEP(*(SORT_BY_INIT_PRIORITY(.ctors_init_array.*)))
+    } :rodata
+    PROVIDE(__ctor_init_array_end = .);
 
-    .zerOS_section_info : {
+    .zerOS_section_info : ALIGN(CONSTANT(MAXPAGESIZE)) {
         !!!__GENSECTION_FILL__!!!
     } :rodata
 
-    . = ALIGN(CONSTANT(MAXPAGESIZE));
+    .eh_frame_hdr : ALIGN(CONSTANT(MAXPAGESIZE)) {
+        *(.eh_frame_hdr) *(.eh_frame_entry .eh_frame_entry.*)
+    } :ehro
 
-    .percpu : {
+    .eh_frame : ALIGN(CONSTANT(MAXPAGESIZE)) ONLY_IF_RO {
+        KEEP (*(.eh_frame)) *(.eh_frame.*)
+    } :ehro
+    
+    .eh_frame : ALIGN(CONSTANT(MAXPAGESIZE)) ONLY_IF_RW {
+        KEEP (*(.eh_frame)) *(.eh_frame.*)
+    } :ehrw
+
+    PROVIDE(__eh_frame = LOADADDR(.eh_frame));
+
+    /* PROVIDE(__eh_frame = .); */
+    /* .eh_frame : { */
+    /*     KEEP (*(*.eh_frame)) */
+    /*     KEEP (*(*.eh_frame.*)) */
+    /* } :eh */
+
+    .percpu : ALIGN(CONSTANT(MAXPAGESIZE)) {
         *(.percpu .percpu.*)
     } :percpu
 
-    /* Move to the next memory page for .data */
-    . = ALIGN(CONSTANT(MAXPAGESIZE));
-
-    .data : {
+    .data : ALIGN(CONSTANT(MAXPAGESIZE)) {
         *(.data .data.*)
 
         /* Place the sections that contain the Limine requests as part of the .data */
@@ -91,13 +93,11 @@ SECTIONS
         KEEP(*(.requests_end_marker))
     } :data
 
-    . = ALIGN(CONSTANT(MAXPAGESIZE));
-
     /* NOTE: .bss needs to be the last thing mapped to :data, otherwise lots of */
     /* unnecessary zeros will be written to the binary. */
     /* If you need, for example, .init_array and .fini_array, those should be placed */
     /* above this. */
-    .bss : {
+    .bss : ALIGN(CONSTANT(MAXPAGESIZE)) {
         *(.bss .bss.*)
         *(COMMON)
     } :data
@@ -120,6 +120,6 @@ SECTIONS
     }
 }
 
-NOCROSSREFS_TO(.text, .bootcode)
+/* NOCROSSREFS_TO(.text, .bootcode) */
 
 ASSERT(zerOS_kernel_start == 0xffffffff80000000, "zerOS_kernel_start is not at the correct address")

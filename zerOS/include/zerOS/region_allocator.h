@@ -46,6 +46,8 @@ extern void* zerOS_region_allocator_realloc(
 
 extern void zerOS_region_allocator_dealloc(struct zerOS_region_allocator* allocator, void* ptr);
 
+extern bool zerOS_region_allocator_contains(struct zerOS_region_allocator* allocator, void* ptr);
+
 extern bool zerOS_region_allocator_is_static_region(struct zerOS_region_allocator* allocator);
 
 extern bool zerOS_region_allocator_reclaim(struct zerOS_region_allocator* allocator);

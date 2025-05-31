@@ -149,5 +149,9 @@
     "rust-analyzer.rustfmt.extraArgs": [
         "--config-path",
         "${workspaceFolder}/zerOS/rustfmt.toml",
-    ]
+    ],
+    "rust-analyzer.cargo.target": "/home/axel/tmp/x86_64-unknown-kernel.json",
+    "rust-analyzer.cargo.extraEnv": {
+        "ZEROS_TARGET_CPU": "skylake"
+    }
 }

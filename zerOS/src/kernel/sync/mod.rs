@@ -12,6 +12,9 @@ pub struct BasicMutexRaw
 	locked: AtomicBool
 }
 
+unsafe impl Send for BasicMutexRaw {}
+unsafe impl Sync for BasicMutexRaw {}
+
 impl Default for BasicMutexRaw
 {
 	fn default() -> Self

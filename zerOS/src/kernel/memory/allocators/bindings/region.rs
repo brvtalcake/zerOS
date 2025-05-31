@@ -63,6 +63,12 @@ unsafe extern "C" {
 	);
 }
 unsafe extern "C" {
+	pub fn zerOS_region_allocator_contains(
+		allocator: *mut zerOS_region_allocator,
+		ptr: *mut ::core::ffi::c_void
+	) -> bool;
+}
+unsafe extern "C" {
 	pub fn zerOS_region_allocator_is_static_region(allocator: *mut zerOS_region_allocator) -> bool;
 }
 unsafe extern "C" {

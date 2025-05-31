@@ -19,7 +19,8 @@
 #![feature(phantom_variance_markers)]
 #![feature(slice_ptr_get)]
 #![feature(likely_unlikely)]
-
+#![feature(used_with_arg)]
+#![recursion_limit = "512"]
 // TODO: change the compile flags to use vector extensions IN-KERNEL
 
 extern crate alloc;
