@@ -4,63 +4,16 @@ on:
   push:
     branches:
       - "main"
-      - "**/dev/**"
-      - "release/**"
   pull_request:
     branches: 
       - "main"
-      - "**/dev/**"
-      - "release/**"
     types:
       - opened
+      - edited
       - synchronize
       - reopened
       - ready_for_review
-  workflow_dispatch:
-    inputs:
-      # Associated to `allow-licenses` or `deny-licenses` workflow options
-      license-selection:
-        description: 'Select the licenses to deny or allow'
-        required: true
-        type: string
-        default: 'GPL-1.0-or-later, LGPL-2.0-or-later'
-      # Describes what the previous selection will do
-      license-action:
-        description: 'Select the action to take on the selected licenses'
-        required: true
-        type: choice
-        default: deny
-        options:
-          - deny
-          - allow
-      # Associated to `fail-on-severity` workflow option
-      severity-selection:
-        description: 'Select the severity level to fail on'
-        required: true
-        type: choice
-        default: low
-        options:
-          - low
-          - moderate
-          - high
-          - critical
-      # Associated to `warn-only` workflow option
-      warn-only:
-        description: 'Only warn about the issues without failing the workflow'
-        required: true
-        type: boolean
-        default: false
-      # Associated to `fail-on-scopes` workflow option
-      scopes:
-        description: 'Select the scopes to run the action on'
-        required: true
-        type: choice
-        options:
-          - runtime
-          - development
-          - unknown
-        default: runtime
-
+  
 permissions:
   contents: read
   # Write permissions for pull-requests are required for using the `comment-summary-in-pr` option, comment out if you aren't using this option
@@ -71,7 +24,6 @@ env:
   BASE_REF: ${{ (github.event.base_ref != null) && github.event.base_ref || github.event.ref }}
   IS_PR: ${{ contains(github.event_name, 'pull_request') }}
   IS_PUSH: ${{ contains(github.event_name, 'push') }}
-  IS_MANUAL: ${{ contains(github.event_name, 'workflow_dispatch') }}
 
 jobs:
   dependency-review-on-pr:
@@ -85,7 +37,7 @@ jobs:
         with:
           comment-summary-in-pr: always
           fail-on-severity: low
-          deny-licenses: GPL-1.0-or-later, LGPL-2.0-or-later
+          deny-licenses: GPL-2.0-only
   dependency-review-on-push:
     runs-on: ubuntu-latest
     if: ${{ contains(github.event_name, 'push') }}
@@ -96,36 +48,6 @@ jobs:
         uses: actions/dependency-review-action@v4
         with:
           fail-on-severity: low
-          deny-licenses: GPL-1.0-or-later, LGPL-2.0-or-later
-          base-ref: ${{ env.BASE_REF }}
-          head-ref: ${{ env.HEAD_REF }}
-  dependency-review-manual-with-allow-licenses:
-    runs-on: ubuntu-latest
-    if: ${{ (contains(github.event_name, 'workflow_dispatch') && inputs['license-action'] == 'allow') }}
-    steps:
-      - name: 'Checkout repository'
-        uses: actions/checkout@v4
-      - name: 'Dependency Review'
-        uses: actions/dependency-review-action@v4
-        with:
-          fail-on-severity: ${{ inputs['severity-selection'] }}
-          allow-licenses: ${{ inputs['license-selection'] }}
-          warn-only: ${{ inputs['warn-only'] }}
-          fail-on-scopes: ${{ inputs['scopes'] }}
-          base-ref: ${{ env.BASE_REF }}
-          head-ref: ${{ env.HEAD_REF }}
-  dependency-review-manual-with-deny-licenses:
-    runs-on: ubuntu-latest
-    if: ${{ (contains(github.event_name, 'workflow_dispatch') && inputs['license-action'] == 'deny') }}
-    steps:
-      - name: 'Checkout repository'
-        uses: actions/checkout@v4
-      - name: 'Dependency Review'
-        uses: actions/dependency-review-action@v4
-        with:
-          fail-on-severity: ${{ inputs['severity-selection'] }}
-          deny-licenses: ${{ inputs['license-selection'] }}
-          warn-only: ${{ inputs['warn-only'] }}
-          fail-on-scopes: ${{ inputs['scopes'] }}
+          deny-licenses: GPL-2.0-only
           base-ref: ${{ env.BASE_REF }}
           head-ref: ${{ env.HEAD_REF }}

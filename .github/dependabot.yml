@@ -3,38 +3,64 @@
 version: 2
 updates:
   - package-ecosystem: "cargo"
-    directories:
-      - "*"
-      - "**"
+    directory: "/zerOS
     schedule:
       interval: "daily"
-      day: "friday"
       time: "10:00"
       timezone: "Europe/Paris"
     allow:
       - dependency-name: "*"
         dependency-type: "all"
     rebase-strategy: "disabled"
+  
+  - package-ecosystem: "cargo"
+    directories:
+      - "/proc-macro-utils
+      - "/macro-utils"
+      - "/generate-target"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "10:00"
+      timezone: "Europe/Paris"
+    allow:
+      - dependency-name: "*"
+        dependency-type: "all"
+    rebase-strategy: "disabled"
+  
   - package-ecosystem: "gitsubmodule"
     directories:
       - "*"
       - "**"
     schedule:
-      interval: "daily"
-      day: "friday"
+      interval: "monthly"
+      day: "monday"
       time: "10:00"
       timezone: "Europe/Paris"
     allow:
       - dependency-name: "*"
         dependency-type: "all"
     rebase-strategy: "disabled"
-  - package-ecosystem: "github-actions"
+
+  - package-ecosystem: "pip"
     directories:
-      - "*"
-      - "**"
+      - "/"
+      - "/scripts"
     schedule:
-      interval: "daily"
-      day: "friday"
+      interval: "monthly"
+      day: "monday"
+      time: "10:00"
+      timezone: "Europe/Paris"
+    allow:
+      - dependency-name: "*"
+        dependency-type: "all"
+    rebase-strategy: "disabled"
+  
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
       time: "10:00"
       timezone: "Europe/Paris"
     allow:
