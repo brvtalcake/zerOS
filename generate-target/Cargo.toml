@@ -1,0 +1,19 @@
+[package]
+name = "generate-target"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+clap = { version = "4.5.37", features = ["derive"] }
+#target-spec-json = "0.1"
+#serde_json = "*"
+#serde = { version = "*", features = ["derive"] }
+anyhow = "*"
+strum = {version = "*", features = ["derive"]}
+lazy_static = "*"
+json = "0.12"
+
+[dependencies.bitflags]
+version = "*"
+features = ["std", "serde"]
+#rustc_target = "0"

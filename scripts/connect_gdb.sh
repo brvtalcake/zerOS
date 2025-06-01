@@ -43,7 +43,7 @@ function launch_gdb()
     local gdb_script_default="${script_dir}/../zerOS/.gdbinit"
     local gdb_script=$(default $gdb_script_default $1)
     gdb_script=$(readlink -f $gdb_script)
-    
+
     if [ ! -f $gdb_script ]; then
         die "Error: gdb script not found at $gdb_script"
     fi

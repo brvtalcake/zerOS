@@ -1,9 +1,16 @@
+import semantic_version
 
 def comp(v1: str, v2: str) -> int:
     """Compare two semantic versions."""
-    def cmp(a, b) -> int:
-        return (a > b) - (a < b)
-    import semantic_version
+    def cmp(a: semantic_version.Version, b: semantic_version.Version) -> int:
+        #return (a > b) - (a < b)
+        if a < b:
+            return -1
+        elif a == b:
+            return 0
+        else:
+            assert a > b
+            return 1
     _v1 = semantic_version.Version.coerce(v1)
     _v2 = semantic_version.Version.coerce(v2)
     return cmp(_v1, _v2)

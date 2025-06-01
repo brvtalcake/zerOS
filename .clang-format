@@ -1,6 +1,6 @@
 AccessModifierOffset: 0
 
-AlignAfterOpenBracket: BlockIndent
+AlignAfterOpenBracket: AlwaysBreak #BlockIndent
 
 AlignArrayOfStructures: Right
 
@@ -9,7 +9,7 @@ AlignConsecutiveAssignments:
   AcrossEmptyLines: false
   AcrossComments: false
   AlignCompound: true
-  PadOperators: false
+  PadOperators: true
 
 AlignConsecutiveBitFields: Consecutive
 
@@ -46,7 +46,7 @@ AllowShortCaseLabelsOnASingleLine: false
 
 AllowShortEnumsOnASingleLine: false
 
-AllowShortFunctionsOnASingleLine: All
+AllowShortFunctionsOnASingleLine: Empty #All
 
 AllowShortIfStatementsOnASingleLine: Never
 
@@ -56,9 +56,10 @@ AlwaysBreakBeforeMultilineStrings: false
 
 AttributeMacros: []
 
-BinPackArguments: true
+BinPackArguments: true #false
 
-BinPackParameters: BinPack
+BinPackParameters: OnePerLine
+#BinPackParameters: BinPack
 #BinPackParameters: true
 
 BitFieldColonSpacing: Both
@@ -88,19 +89,21 @@ BreakAfterAttributes: Leave
 
 BreakAfterReturnType: ExceptShortType
 
-BreakBeforeBinaryOperators: None # or maybe 'All' ?
+BreakBeforeBinaryOperators: NonAssignment # or maybe 'All' ?
 
 BreakBeforeBraces: Custom
 
 BreakBeforeInlineASMColon: Always # fixme: 'OnlyMultiLine' not recognised
 
-BreakBeforeTernaryOperators: false # todo: try true
+BreakBeforeTernaryOperators: true # todo: try true
 
 BreakBinaryOperations: RespectPrecedence
 
 BreakFunctionDefinitionParameters: false
 
 BreakStringLiterals: true
+
+Cpp11BracedListStyle: false
 
 ColumnLimit: 100 # todo: try smaller values
 
@@ -144,18 +147,24 @@ IncludeCategories:
     Priority: -1
   - Regex: '^<map/map\.h>$'
     Priority: -1
-  # Klibc
-  - Regex: '^<klibc/.+>$'
+  # zerOS
+  - Regex: '^<zerOS/[^\/]+\.h>$'
     Priority: 1
-  # Kernel headers
-  - Regex: '^<kernel/.+>$'
+  # zerOS subdirs
+  - Regex: '^<zerOS/\.+>$'
     Priority: 2
-  # Machine-specific headers
-  - Regex: '^<machine/.+>$'
-    Priority: 3
-  # Miscellaneous headers
-  - Regex: '^<misc/.+>$'
-    Priority: 4
+#  # Klibc
+#  - Regex: '^<klibc/.+>$'
+#    Priority: 1
+#  # Kernel headers
+#  - Regex: '^<kernel/.+>$'
+#    Priority: 2
+#  # Machine-specific headers
+#  - Regex: '^<machine/.+>$'
+#    Priority: 3
+#  # Miscellaneous headers
+#  - Regex: '^<misc/.+>$'
+#    Priority: 4
   # Standard C headers
   - Regex: '^<.+>$'
     Priority: -10
@@ -171,7 +180,7 @@ IndentCaseBlocks: false
 
 IndentCaseLabels: true
 
-IndentExternBlock: Indent
+IndentExternBlock: NoIndent #Indent
 
 IndentGotoLabels: true
 
@@ -287,6 +296,7 @@ TypeNames: [ ]
 
 TypenameMacros: [ ]
 
-UseTab: Never
+#UseTab: Never
+UseTab: ForContinuationAndIndentation
 
 WhitespaceSensitiveMacros: [ ]

@@ -1,0 +1,66 @@
+use limine::{
+	BaseRevision,
+	request::{FramebufferRequest, HhdmRequest, MemoryMapRequest}
+};
+
+macro_rules! requests {
+    {$($it:item)*} => {
+        $(
+            #[used]
+            #[unsafe(link_section = ".requests")]
+            $it
+        )*
+    };
+}
+
+requests! {
+	pub static BASE_REVISION: BaseRevision = BaseRevision::new();
+	pub static HHDM_REQUEST: HhdmRequest = HhdmRequest::new();
+	pub static FRAMEBUFFER_REQUEST: FramebufferRequest = FramebufferRequest::new();
+	pub static MEMMAP_REQUEST: MemoryMapRequest = MemoryMapRequest::new();
+}
+
+mod __markers
+{
+	use limine::request::{RequestsEndMarker, RequestsStartMarker};
+
+	#[used]
+	#[unsafe(link_section = ".requests_start_marker")]
+	pub static _START_MARKER: RequestsStartMarker = RequestsStartMarker::new();
+	#[used]
+	#[unsafe(link_section = ".requests_end_marker")]
+	pub static _END_MARKER: RequestsEndMarker = RequestsEndMarker::new();
+}
+
+mod entry
+{
+	use super::*;
+	use crate::{
+		info,
+		init::{self, ctors::CtorIter},
+		kernel::linker::map::zerOS_kernel_start,
+		kmain
+	};
+
+	#[unsafe(no_mangle)]
+	extern "sysv64" fn zerOS_boot_setup() -> !
+	{
+		// All limine requests must also be referenced in a called function, otherwise
+		// they may be removed by the linker.
+		assert!(BASE_REVISION.is_supported());
+		assert_eq!(
+			&raw const zerOS_kernel_start as usize,
+			0xffffffff80000000_usize
+		);
+
+		CtorIter::new().for_each(|ctor| unsafe { ctor() });
+
+		log::set_max_level(log::LevelFilter::Trace);
+
+		info!("initializing GDT...");
+		init::memory::gdt::init();
+		info!("GDT initialized");
+
+		kmain()
+	}
+}

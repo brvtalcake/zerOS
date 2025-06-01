@@ -1,0 +1,496 @@
+# TODO: bench profile
+# TODO: profiling profile, maybe with some kind of in-qemu perf ???
+# TODO: kernel test framework
+# TODO: what are e.g. Redox or Linux "`alternatives`"
+
+[config]
+additional_profiles = ["dev", "dev-lto", "release", "release-lto"]
+#time_summary = true
+reduce_output = true
+#end_task = "cleanup"
+
+[env]
+CARGO_MAKE_RUST_SCRIPT_PROVIDER = "cargo-script"
+
+#[tasks.zerOS-dev]
+#cwd = "./zerOS"
+#private = true
+#
+#[tasks.zerOS-dev-lto]
+#cwd = "./zerOS"
+#private = true
+#
+#[tasks.zerOS-release]
+#cwd = "./zerOS"
+#private = true
+#
+#[tasks.zerOS-release-lto]
+#cwd = "./zerOS"
+#private = true
+#
+#[tasks.zerOS]
+#run_task = [
+#    { name = "zerOS-dev", condition = { profile = "dev" } },
+#    { name = "zerOS-dev-lto", condition = { profile = "dev-lto" } },
+#    { name = "zerOS-release", condition = { profile = "release" } },
+#    { name = "zerOS-release-lto", condition = { profile = "release-lto" } },
+#]
+##cargo bamd64 -Z unstable-options --artifact-dir ./build --profile dev
+
+[tasks.zerOS-do-build]
+cwd = "./zerOS"
+private = true
+command = "cargo"
+args = [
+    "build",
+    "--target=${GENERATE_JSON_TARGET_SPEC}",
+    "-Z",
+    "unstable-options",
+    "--artifact-dir",
+    "./bin",
+    "--profile=${ZEROS_PROFILE}",
+]
+
+[tasks.zerOS-do-build.env]
+RUSTFLAGS = '--cfg getrandom_backend="rdrand" -Ctarget-cpu=${ZEROS_TARGET_CPU} -Z macro-backtrace'
+
+[tasks.zerOS-pre-build]
+cwd = "./zerOS"
+private = true
+
+# TODO: mk_iso.py
+[tasks.zerOS-post-build]
+cwd = "./zerOS"
+private = true
+command = "../scripts/mk_iso.py"
+args = [
+    "-o",
+    "./bin/zerOS.iso",
+    "--iso-root",
+    "./iso_root/",
+    "-b",
+    "limine",
+    "-a",
+    "${ZEROS_TARGET_ARCH}",
+    "-c",
+    "./config/limine.conf",
+    "./bin/zerOS",
+]
+
+[tasks.zerOS-build]
+cwd = "./zerOS"
+private = true
+dependencies = ["zerOS-pre-build", "zerOS-do-build", "zerOS-post-build"]
+
+[tasks.run-qemu-amd64]
+private = true
+dependencies = ["compute-qemu-cpu-name", "validate-qemu-accel"]
+run_task = [
+    { name = "run-qemu-amd64-with-accelerator", condition = { env_set = [
+        "ZEROS_QEMU_ACCELERATOR",
+    ] } },
+    { name = "run-qemu-amd64-without-accelerator", condition = { env_not_set = [
+        "ZEROS_QEMU_ACCELERATOR",
+    ] } },
+]
+
+[tasks.run-qemu-amd64-without-accelerator]
+private = true
+command = "qemu-system-x86_64"
+args = [
+    "-m",
+    "1500M",
+    "-smp",
+    "8",
+    "-cpu",
+    "${ZEROS_QEMU_CPU}",
+    "-smbios",
+    "type=0,uefi=on",
+    "-debugcon",
+    "file:debugcon.log",
+    "-serial",
+    "stdio",
+    "-S",
+    "-bios",
+    "zerOS/vendor/OVMF.fd",
+    "-cdrom",
+    "./zerOS/bin/zerOS.iso",
+    "-s",
+]
+
+[tasks.run-qemu-amd64-with-accelerator]
+private = true
+command = "qemu-system-x86_64"
+args = [
+    "-m",
+    "1500M",
+    "-smp",
+    "8",
+    "-accel",
+    "${ZEROS_QEMU_ACCELERATOR}",
+    "-cpu",
+    "${ZEROS_QEMU_CPU}",
+    "-smbios",
+    "type=0,uefi=on",
+    "-debugcon",
+    "file:debugcon.log",
+    "-serial",
+    "stdio",
+    "-S",
+    "-bios",
+    "zerOS/vendor/OVMF.fd",
+    "-cdrom",
+    "./zerOS/bin/zerOS.iso",
+    "-s",
+]
+
+[tasks.validate-qemu-accel]
+private = true
+script_runner = "@duckscript"
+script = '''
+args = set %{@}
+
+unset accel
+for arg in ${args}
+    if starts_with ${arg} "accel="
+        if is_defined accel
+            trigger_error "accel is defined multiple times"
+        end
+        tmp = replace ${arg} "accel=" ""
+        accel = set ${tmp}
+    end
+end
+release ${args}
+
+unset_env ZEROS_QEMU_ACCELERATOR
+if is_defined accel
+    set_env ZEROS_QEMU_ACCELERATOR ${accel}
+end
+
+'''
+
+[tasks.compute-qemu-cpu-name]
+private = true
+dependencies = ["validate-target-cpu"]
+script_runner = "@duckscript"
+script = '''
+mapped = map
+
+map_put ${mapped} native host
+map_put ${mapped} skylake "Skylake-Client-v4"
+map_put ${mapped} haswell "Haswell-v4"
+# TODO: add more
+
+target_cpu = get_env ZEROS_TARGET_CPU
+
+if map_contains_key ${mapped} ${target_cpu}
+    cpu_name = map_get ${mapped} ${target_cpu}
+else
+    cpu_name = set ${target_cpu}
+end
+
+set_env ZEROS_QEMU_CPU ${cpu_name}
+'''
+
+[tasks.zerOS-run]
+dependencies = ["validate-target-architecture"]
+private = true
+script_runner = "@duckscript"
+script = '''
+arch = get_env ZEROS_TARGET_ARCH
+cm_run_task "run-qemu-${arch}"
+'''
+
+[tasks.zerOS-expand]
+env = { RUSTFLAGS = "-Z macro-backtrace" }
+cwd = "./zerOS"
+private = true
+command = "cargo"
+args = ["expand", "--profile=${ZEROS_PROFILE}", "@@split(ZEROS_SUBCMD_ARGS,;)"]
+
+[tasks.zerOS]
+dependencies = [
+    "validate-target-architecture",
+    "validate-target-cpu",
+    "validate-profile",
+    "validate-subcommand",
+    "determine-subcommand-args",
+    "generate-json-target-spec",
+]
+script_runner = "@duckscript"
+script = '''
+subcommand = get_env ZEROS_SUBCMD
+cm_run_task "zerOS-${subcommand}"
+'''
+
+[tasks.validate-target-architecture]
+dependencies = ["determine-target-architecture"]
+script_runner = "@duckscript"
+script = '''
+# when modifying this, don't forget to also modify the `generate-json-target-spec` task !!!
+valid_architectures = set_new "amd64" "x86" "aarch64" "riscv64"
+current_arch = get_env ZEROS_TARGET_ARCH
+
+if not set_contains ${valid_architectures} ${current_arch}
+    as_array = set_to_array ${valid_architectures}
+    valid_string = array_join ${as_array} ", "
+    errstring = set "${current_arch} is not a valid target architecture. valid options are ${valid_string}"
+    trigger_error "${errstring}"
+end
+
+release ${valid_architectures}
+'''
+
+[tasks.validate-target-cpu]
+dependencies = ["validate-target-architecture", "determine-target-cpu"]
+script_runner = "@duckscript"
+script = '''
+# TODO: get valid cpu names from rustc, for the given ${ZEROS_TARGET_ARCH}
+'''
+
+[tasks.validate-profile]
+dependencies = ["determine-profile"]
+script_runner = "@duckscript"
+script = '''
+output = exec --fail-on-error ./scripts/get_valid_profiles.py ./zerOS/Cargo.toml
+valid_profiles_array = split ${output.stdout} ":"
+valid_profiles = set_from_array ${valid_profiles_array}
+current_profile = get_env ZEROS_PROFILE
+
+if eq ${current_profile} development
+    current_profile = set dev
+    set_env ZEROS_PROFILE dev
+end
+
+if eq ${current_profile} production
+    current_profile = set release
+    set_env ZEROS_PROFILE release
+end
+
+if not set_contains ${valid_profiles} ${current_profile}
+    as_array = set_to_array ${valid_profiles}
+    valid_string = array_join ${as_array} ", "
+    errstring = set "${current_profile} is not a valid profile. valid options are ${valid_string}"
+    trigger_error "${errstring}"
+end
+
+release ${valid_profiles}
+'''
+
+[tasks.validate-subcommand]
+dependencies = ["determine-subcommand"]
+script_runner = "@duckscript"
+script = '''
+valid_subcommands = set_new "build" "run" "expand" "format" "tidy" "clippy"
+current_subcommand = get_env ZEROS_SUBCMD
+
+if not set_contains ${valid_subcommands} ${current_subcommand}
+    as_array = set_to_array ${valid_subcommands}
+    valid_string = array_join ${as_array} ", "
+    errstring = set "${current_profile} is not a valid subcommand. valid options are ${valid_string}"
+    trigger_error "${errstring}"
+end
+
+release ${valid_subcommands}
+'''
+
+[tasks.determine-target-architecture]
+private = true
+script_runner = "@duckscript"
+script = '''
+
+args = set %{@}
+
+unset arch
+for arg in ${args}
+    if starts_with ${arg} "arch="
+        if is_defined arch
+            trigger_error "arch is defined multiple times"
+        end
+        tmp = replace ${arg} "arch=" ""
+        arch = set ${tmp}
+    end
+end
+release ${args}
+
+if not is_defined arch
+    arch = set amd64
+end
+
+set_env ZEROS_TARGET_ARCH ${arch}
+release ${arch}
+
+'''
+
+[tasks.determine-target-cpu]
+private = true
+dependencies = ["determine-target-architecture"]
+script_runner = "@duckscript"
+script = '''
+
+args = set %{@}
+
+unset cpu
+for arg in ${args}
+    if starts_with ${arg} "cpu="
+        if is_defined cpu
+            trigger_error "cpu is defined multiple times"
+        end
+        tmp = replace ${arg} "cpu=" ""
+        cpu = set ${tmp}
+    end
+end
+release ${args}
+
+if not is_defined cpu
+    arch = get_env ZEROS_TARGET_ARCH
+    if eq amd64 ${arch}
+        cpu = set x86-64
+    else
+        cpu = set generic
+    end
+end
+
+set_env ZEROS_TARGET_CPU ${cpu}
+release ${cpu}
+
+'''
+
+[tasks.determine-profile]
+private = true
+script_runner = "@duckscript"
+script = '''
+
+args = set %{@}
+
+unset profile
+for arg in ${args}
+    if starts_with ${arg} "profile="
+        if is_defined profile
+            trigger_error "profile is defined multiple times"
+        end
+        tmp = replace ${arg} "profile=" ""
+        profile = set ${tmp}
+    end
+end
+release ${args}
+
+if not is_defined profile
+    current_profile = get_env CARGO_MAKE_PROFILE
+    profile = set ${current_profile}
+end
+
+set_env ZEROS_PROFILE ${profile}
+release ${profile}
+
+'''
+
+[tasks.determine-subcommand-args]
+private = true
+script_runner = "@duckscript"
+script = '''
+
+args = set %{@}
+
+unset subcmd_args
+subcmd_args = array
+
+arg_count = array_length ${subcmd_args}
+assert_eq ${arg_count} 0
+
+for arg in ${args}
+    if not contains ${arg} "="
+        array_push ${subcmd_args} ${arg}
+    end
+end
+
+release ${args}
+
+arg_count = array_length ${subcmd_args}
+if greater_than ${arg_count} 0
+    array_remove ${subcmd_args} 0
+end
+
+joined = array_join ${subcmd_args} ";"
+
+set_env ZEROS_SUBCMD_ARGS ${joined}
+
+release ${subcmd_args}
+release ${joined}
+
+'''
+
+[tasks.determine-subcommand]
+private = true
+script_runner = "@duckscript"
+script = '''
+
+args = set %{@}
+
+unset subcmd
+for arg in ${args}
+    if not contains ${arg} "="
+        subcmd = set ${arg}
+        goto :end_loop
+    end
+end
+:end_loop
+
+release ${args}
+
+if not is_defined subcmd
+    subcmd = set build
+end
+
+set_env ZEROS_SUBCMD ${subcmd}
+release ${subcmd}
+
+'''
+
+
+[tasks.generate-json-target-spec]
+private = true
+dependencies = ["validate-target-architecture", "validate-target-cpu"]
+script_runner = "@duckscript"
+script = '''
+arch = get_env ZEROS_TARGET_ARCH
+if eq amd64 ${arch}
+    arch_prefix = set x86_64
+else
+    arch_prefix = set ${arch}
+end
+
+tmpd = temp_dir
+tmpfile = join_path ${tmpd} "${arch_prefix}-unknown-kernel.json"
+set_env GENERATE_JSON_TARGET_SPEC ${tmpfile}
+
+cm_run_task "generate-json-target-spec-${arch}"
+'''
+
+[tasks.generate-json-target-spec-amd64]
+private = true
+cwd = "./generate-target"
+env = { RUSTFLAGS = "-Ctarget-cpu=native" }
+command = "cargo"
+args = [
+    "run",
+    "--release",
+    "--",
+    "--debug",
+    "--arch=amd64",
+    "--cpu=${ZEROS_TARGET_CPU}",
+    "--override=all",
+    #"--rustc-abi=x86-sse2",
+    "--frame-pointer=never",
+    "${GENERATE_JSON_TARGET_SPEC}",
+]
+
+[tasks.cleanup]
+private = true
+script_runner = "bash"
+script = '''
+if [ -f "$GENERATE_JSON_TARGET_SPEC" ]
+then
+    rm -vf "$GENERATE_JSON_TARGET_SPEC"
+fi
+'''
