@@ -1,4 +1,0 @@
-#!/usr/bin/env -S pipenv run python3
-
-#qemu-system-x86_64 -m 1500M -smp `nproc` -cpu Skylake-Client-v4 -smbios type=0,uefi=on -debugcon file:debugcon.log -serial stdio -S -bios vendor/OVMF.fd -cdrom ./bin/zerOS.iso -s
-

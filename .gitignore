@@ -21,3 +21,8 @@ config-temp/**
 
 target/
 **/target/
+zerOS/iso_root
+zerOS/bin
+zerOS/build
+zerOS/llvm-targets
+zerOS/vendor
