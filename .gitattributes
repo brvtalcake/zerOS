@@ -1,6 +1,8 @@
 toolchain/** linguist-vendored
 
 *.i linguist-language=c
+*.h linguist-language=c
+*.hh linguist-language=c++
 
 *.mk linguist-language=makefile
 *.mak linguist-language=makefile
@@ -8,12 +10,6 @@ toolchain/** linguist-vendored
 *.mkf linguist-language=makefile
 **/GNUmakefile linguist-language=makefile
 **/GNUMakefile linguist-language=makefile
-
-#*.conf linguist-language=conf
-#*.cfg linguist-language=conf
-
-# Supdef preprocessor
-*.sd linguist-language=c
 
 *.ld.template linguist-language=linker-script
 
@@ -31,6 +27,3 @@ scripts/pickled/* -linguist-detectable
 *.pickle -linguist-detectable
 *.dill -linguist-detectable
 *.marshal -linguist-detectable
-
-zerOS/gnumake/*gmsl* linguist-vendored
-zerOS/gnumake/*gmsl*/** linguist-vendored
