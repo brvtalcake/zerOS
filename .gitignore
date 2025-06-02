@@ -26,3 +26,6 @@ zerOS/bin
 zerOS/build
 zerOS/llvm-targets
 zerOS/vendor
+
+intel-manual.pdf
+amd-manual.pdf
