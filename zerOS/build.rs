@@ -494,6 +494,8 @@ macro_rules! KERNEL_SECTION_LIST {
 			"bootcode",
 			"ctors_init_array",
 			"rodata",
+			"eh_frame_hdr",
+			"eh_frame",
 			"data",
 			"bss" // dynamic
 		]))

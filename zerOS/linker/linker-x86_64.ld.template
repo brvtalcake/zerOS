@@ -59,6 +59,15 @@ SECTIONS
         !!!__GENSECTION_FILL__!!!
     } :rodata
 
+    __eh_frame_hdr_start = ADDR(.eh_frame_hdr);
+    __eh_frame_hdr_end = ADDR(.eh_frame_hdr) + SIZEOF(.eh_frame_hdr);
+    __eh_frame_start = ADDR(.eh_frame);
+    __eh_frame_end = ADDR(.eh_frame) + SIZEOF(.eh_frame);
+
+    /*
+     * TODO: is a .gcc_except_table generated ?
+     */
+
     .eh_frame_hdr : ALIGN(CONSTANT(MAXPAGESIZE)) {
         *(.eh_frame_hdr) *(.eh_frame_entry .eh_frame_entry.*)
     } :ehro
@@ -114,7 +123,7 @@ SECTIONS
         *(.note .note.*)
         *(.interp)
         *(.comment*)
-        *(.gcc_except_table*)
+        /* *(.gcc_except_table*) */
         *(.note*)
         /* *(.rel.eh_frame*) */
     }

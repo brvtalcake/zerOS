@@ -12,10 +12,10 @@ use crate::{
 	},
 	kernel::{
 		hypervisor,
-		serial::{SerialKernelOutput, SerialInput, SerialOutput},
+		logging::{self, ZEROS_GLOBAL_LOGGER},
+		serial::{SerialInput, SerialKernelOutput, SerialOutput},
 		sync::BasicMutex
-	},
-	logging::{self, ZEROS_GLOBAL_LOGGER}
+	}
 };
 
 static mut SERIAL_INIT_STATES: [AtomicBool; variant_count::<SerialPortId>() as usize] = constinit_array!([AtomicBool; variant_count::<SerialPortId>() as usize] with AtomicBool::new(false));
@@ -161,9 +161,10 @@ impl SerialInput for SerialPort
 }
 
 lazy_static! {
-	static ref ZEROS_COM1_SERIAL_LOGGER: BasicMutex<SerialKernelOutput<SerialPort>> = BasicMutex::new(
-		SerialKernelOutput::new(SerialPort::new(SerialPortId::COM1).unwrap())
-	);
+	static ref ZEROS_COM1_SERIAL_LOGGER: BasicMutex<SerialKernelOutput<SerialPort>> =
+		BasicMutex::new(SerialKernelOutput::new(
+			SerialPort::new(SerialPortId::COM1).unwrap()
+		));
 }
 
 ctor! {

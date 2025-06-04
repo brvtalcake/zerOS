@@ -1,5 +1,7 @@
 use core::mem::{self, Assume, TransmuteFrom};
 
+pub use rustc_demangle::{demangle, try_demangle};
+
 #[macro_export]
 macro_rules! alignment_of {
 	(    ) => {

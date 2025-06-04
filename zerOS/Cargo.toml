@@ -59,7 +59,7 @@ lru = "0.14.0"
 raw-cpuid = "11.5.0"
 #ctor_bare = "0.2.1"
 goblin = { version = "0.9", default-features = false }
-gimli = { version = "0.31", default-features = false }
+gimli = { version = "0.31", default-features = false, features = ["read"] }
 either = { version = "1.15.0", default-features = false }
 lazy_static = { version = "1.5", features = ["spin_no_std"] }
 multiboot2 = "0.23"
@@ -97,6 +97,11 @@ indexmap = { version = "2.9.0", default-features = false }
 corosensei = { version = "0.2.1", default-features = false }
 futures = { version = "0.3", default-features = false }
 eager2 = "1.0.1"
+unicode-normalization = { version = "0.1.24", default-features = false }
+fontdue = "0.9.3"
+bumpalo = { version = "3", features = ["allocator_api", "boxed"] }
+object = { version = "0.37.0", default-features = false, features = ["read"] }
+fallible-iterator = { version = "0.3.0", default-features = false, features = ["alloc"] }
 
 [dependencies.log]
 version = "0.4.27"
@@ -154,17 +159,19 @@ features = ["portable-atomic-critical-section"]
 version = "1.11"
 features = ["critical-section"]
 
-[dependencies.unwinding]
-version = "0"
-default-features = false
-features = [
-    "unwinder",
-    "fde-static",
-    "personality",
-    "panic",
-    "dwarf-expr",
-    "hide-trace",
-]
+#[dependencies.unwinding]
+#version = "0"
+#default-features = false
+#features = [
+#    "unwinder",
+#    "fde-static",
+#    "personality",
+#    "panic",
+#    "dwarf-expr",
+#    "hide-trace",
+#]
+
+# TODO: maybe framehop or mini-backtrace ?
 
 [dev-dependencies]
 
@@ -202,15 +209,17 @@ rpath = false
 
 [profile.release]
 opt-level = 3
-debug = false
-split-debuginfo = "packed"
+debug = "full"
+# split-debuginfo = "packed"
+split-debuginfo = "off"
+# TODO: strip manually
 strip = "none"
 debug-assertions = false
 overflow-checks = false
 lto = false
 panic = "abort"
 incremental = false
-#codegen-units = 16
+codegen-units = 1
 rpath = false
 
 [profile.release-lto]

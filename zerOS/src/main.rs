@@ -1,6 +1,7 @@
 #![allow(non_snake_case)]
 #![no_std]
 #![no_main]
+#![feature(link_llvm_intrinsics)]
 #![feature(decl_macro)]
 #![feature(unboxed_closures, fn_traits)] // for crate 'overloadable' and overloadf
 #![feature(const_slice_make_iter)]
@@ -20,6 +21,7 @@
 #![feature(slice_ptr_get)]
 #![feature(likely_unlikely)]
 #![feature(used_with_arg)]
+#![feature(portable_simd)]
 #![recursion_limit = "512"]
 // TODO: change the compile flags to use vector extensions IN-KERNEL
 
@@ -32,18 +34,25 @@ extern crate macro_utils;
 extern crate proc_macro_utils;
 
 pub mod arch;
-pub mod error;
 pub mod init;
 pub mod kernel;
-#[macro_use]
-pub mod logging;
+pub mod llvm;
 pub mod panic;
+pub mod unwinding;
 pub mod utils;
 
 use crate::arch::target::cpu::misc::hcf;
 
+#[allow(dead_code)]
+static UNIFONT: &[u8] = include_bytes!("../assets/font/unifont-16.0.04.otf");
+#[allow(dead_code)]
+static LOGO: &[u8] =
+	include_bytes!("../assets/logo/zeros-high-resolution-logo-white-transparent.svg");
+
 fn kmain() -> !
 {
+	// TODO: add some kind of "Framebuffer" trait
+	// TODO: implement something like a virtual terminal structure
 	if let Some(framebuffer_response) =
 		init::bootloaders::limine::FRAMEBUFFER_REQUEST.get_response()
 	{

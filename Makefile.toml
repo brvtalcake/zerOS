@@ -52,7 +52,7 @@ args = [
 ]
 
 [tasks.zerOS-do-build.env]
-RUSTFLAGS = '--cfg getrandom_backend="rdrand" -Ctarget-cpu=${ZEROS_TARGET_CPU} -Z macro-backtrace'
+RUSTFLAGS = '--cfg getrandom_backend="rdrand" -Ctarget-cpu=${ZEROS_TARGET_CPU} -Cforce-unwind-tables -Z macro-backtrace'
 
 [tasks.zerOS-pre-build]
 cwd = "./zerOS"

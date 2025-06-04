@@ -5,9 +5,9 @@ use crate::{
 	kernel::{
 		hypervisor,
 		io::{KernelIO, KernelOutput},
+		logging,
 		sync::BasicMutex
-	},
-	logging
+	}
 };
 pub struct DebugCon;
 

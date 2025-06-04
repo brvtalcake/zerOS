@@ -8,7 +8,7 @@ pub mod __linker_symbols
 	use lazy_static::lazy_static;
 
 	use super::super::LinkerSym;
-	pub const zerOS_section_count: usize = 6;
+	pub const zerOS_section_count: usize = 8;
 
 	unsafe extern "C" {
 		pub unsafe static zerOS_kernel_start: LinkerSym;
@@ -67,6 +67,34 @@ pub mod __linker_symbols
 			unsafe {
 				(zerOS_rodata_end   as usize) -
 				(zerOS_rodata_start as usize)
+			}
+		};
+	}
+
+	unsafe extern "C" {
+		pub unsafe static zerOS_eh_frame_hdr_start: LinkerSym;
+		pub unsafe static zerOS_eh_frame_hdr_end: LinkerSym;
+	}
+	lazy_static! {
+		#[allow(non_upper_case_globals)]
+		pub static ref zerOS_eh_frame_hdr_size: usize = {
+			unsafe {
+				(zerOS_eh_frame_hdr_end   as usize) -
+				(zerOS_eh_frame_hdr_start as usize)
+			}
+		};
+	}
+
+	unsafe extern "C" {
+		pub unsafe static zerOS_eh_frame_start: LinkerSym;
+		pub unsafe static zerOS_eh_frame_end: LinkerSym;
+	}
+	lazy_static! {
+		#[allow(non_upper_case_globals)]
+		pub static ref zerOS_eh_frame_size: usize = {
+			unsafe {
+				(zerOS_eh_frame_end   as usize) -
+				(zerOS_eh_frame_start as usize)
 			}
 		};
 	}
