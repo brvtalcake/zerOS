@@ -2,6 +2,9 @@ use alloc::{boxed::Box, slice};
 
 use gimli::{
 	BaseAddresses,
+	DebugAbbrev,
+	DebugInfo,
+	DebugLine,
 	EhFrame,
 	EhFrameHdr,
 	EndianSlice,
@@ -14,6 +17,12 @@ use num_traits::AsPrimitive;
 
 use super::UnwinderError;
 use crate::kernel::linker::map::{
+	zerOS_debug_abbrev_size,
+	zerOS_debug_abbrev_start,
+	zerOS_debug_info_size,
+	zerOS_debug_info_start,
+	zerOS_debug_line_size,
+	zerOS_debug_line_start,
 	zerOS_eh_frame_hdr_size,
 	zerOS_eh_frame_hdr_start,
 	zerOS_eh_frame_size,
@@ -30,7 +39,16 @@ pub struct EhInfo
 	pub(super) hdr: Box<ParsedEhFrameHdr<EndianSlice<'static, NativeEndian>>>,
 
 	/// The parsed `.eh_frame` containing the call frame information.
-	pub(super) eh_frame: EhFrame<EndianSlice<'static, NativeEndian>>
+	pub(super) eh_frame: EhFrame<EndianSlice<'static, NativeEndian>>,
+
+	/// Source location information
+	pub(super) debug_line: DebugLine<EndianSlice<'static, NativeEndian>>,
+
+	/// Debug info
+	pub(super) debug_info: DebugInfo<EndianSlice<'static, NativeEndian>>,
+
+	/// Debug Abbrev
+	pub(super) debug_abbrev: DebugAbbrev<EndianSlice<'static, NativeEndian>>
 }
 
 impl EhInfo
@@ -70,10 +88,37 @@ impl EhInfo
 
 		base_addrs = base_addrs.set_text((&raw const zerOS_text_start).addr().as_());
 
+		let debug_info = DebugInfo::new(
+			unsafe {
+				slice::from_raw_parts(&raw const zerOS_debug_info_start, *zerOS_debug_info_size)
+			},
+			NativeEndian
+		);
+
+		let source_info = DebugLine::new(
+			unsafe {
+				slice::from_raw_parts(&raw const zerOS_debug_line_start, *zerOS_debug_line_size)
+			},
+			NativeEndian
+		);
+
+		let debug_abbrev = DebugAbbrev::new(
+			unsafe {
+				slice::from_raw_parts(
+					&raw const zerOS_debug_abbrev_start,
+					*zerOS_debug_abbrev_size
+				)
+			},
+			NativeEndian
+		);
+
 		Self {
 			base_addrs,
 			hdr,
-			eh_frame
+			eh_frame,
+			debug_line: source_info,
+			debug_info,
+			debug_abbrev
 		}
 	}
 }

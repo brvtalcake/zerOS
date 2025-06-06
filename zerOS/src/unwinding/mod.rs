@@ -4,8 +4,20 @@
 //! # Future direction
 //! As an idea for future work, try to *REALLY* unwind the stack, akin to what [Theseus OS](https://github.com/theseus-os/Theseus/blob/1fbfe567075a65ed749b6680db1aeb538819c70c/kernel/unwind/src/lib.rs#L626) does.
 
+use alloc::string::String;
+
 use cfg_if::cfg_if;
-use gimli::{CfaRule, Register, RegisterRule, UnwindContext, UnwindSection};
+use corosensei::{Coroutine, CoroutineResult};
+use gimli::{
+	CfaRule,
+	DW_AT_ranges,
+	Register,
+	RegisterRule,
+	Section,
+	UnitType,
+	UnwindContext,
+	UnwindSection
+};
 use num_traits::AsPrimitive;
 
 cfg_if! {
@@ -123,6 +135,27 @@ impl Unwinder
 		self.regs.set_pc(pc);
 		self.regs.set_stack_ptr(self.cfa);
 
+		let units_iter = self.eh_info.debug_info.units();
+		while let Some(unit) = units_iter.next().map_err(|_| UnwinderError::NoSourceInfo)?
+		{
+			if unit.type_() == UnitType::Compilation
+			{
+				if let Some(abbrev) = unit
+					.abbreviations(&self.eh_info.debug_abbrev)
+					.map_err(|_| UnwinderError::NoSourceInfo)?
+					.get(pc)
+				{
+					if let Some(found_attr) = abbrev
+						.attributes()
+						.iter()
+						.find(|attr| attr.name() == DW_AT_ranges)
+					{
+						todo!()
+					}
+				}
+			}
+		}
+
 		Ok(Some(CallFrame { pc: pc.as_() }))
 	}
 }
@@ -130,16 +163,13 @@ impl Unwinder
 #[derive(Debug)]
 pub struct CallFrame
 {
-	pub pc: usize
+	pub pc:       usize,
+	pub function: String,
+	pub line:     usize,
+	pub column:   usize
 }
 
-impl CallFrame
-{
-	pub fn symbolize(&self) -> &str
-	{
-		todo!()
-	}
-}
+impl CallFrame {}
 
 #[derive(Debug, strum::AsRefStr)]
 #[strum(serialize_all = "kebab-case")]
@@ -150,6 +180,7 @@ pub enum UnwinderError
 	UnimplementedRegisterRule,
 	CfaRuleUnknownRegister(Register),
 	NoUnwindInfo,
+	NoSourceInfo,
 	NoPcRegister,
 	NoReturnAddr
 }

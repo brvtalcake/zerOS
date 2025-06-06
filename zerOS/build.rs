@@ -236,6 +236,7 @@ fn compile_c_code(
 			"-Wextra",
 			"-Werror",
 			"-ffreestanding",
+			"-funwind-tables",
 			"-fno-stack-protector",
 			"-fno-stack-check",
 			"-fcolor-diagnostics",
@@ -496,6 +497,9 @@ macro_rules! KERNEL_SECTION_LIST {
 			"rodata",
 			"eh_frame_hdr",
 			"eh_frame",
+			/* "debug_line", */
+			/* "debug_info", */
+			/* "debug_abbrev", */
 			"data",
 			"bss" // dynamic
 		]))

@@ -2,10 +2,19 @@ use std::{fs, path::PathBuf};
 
 use anyhow::{Ok, Result, anyhow, bail};
 use clap::{Args, Parser, Subcommand};
+use gimli::{BaseAddresses, EhFrame, UnwindContext, UnwindSection};
 use object::{
-	elf::STT_FUNC, read::{
-		elf::{ElfFile64, Sym}, Object
-	}, Endian, Endianness, ObjectSection, ObjectSegment, ObjectSymbol, ReadRef
+	Endian,
+	Endianness,
+	ObjectSection,
+	ObjectSegment,
+	ObjectSymbol,
+	ReadRef,
+	elf::STT_FUNC,
+	read::{
+		Object,
+		elf::{ElfFile64, Sym}
+	}
 };
 
 #[derive(Parser)]
@@ -98,7 +107,7 @@ fn main() -> Result<()>
 				{
 					object::File::Elf64(elf64) =>
 					{
-						dump_elf64(&elf64)?;
+						dump_dwarf_elf64(&elf64)?;
 					},
 					_ => bail!("unsupported format !")
 				}
@@ -121,28 +130,76 @@ fn demangle(fname: String) -> String
 	symbolic_demangle::demangle(&fname).to_string()
 }
 
-fn dump_elf64<'data, R: ReadRef<'data>>(file: &ElfFile64<'data, Endianness, R>) -> Result<()>
+fn dump_dwarf_elf64<'data, R: ReadRef<'data>>(file: &ElfFile64<'data, Endianness, R>)
+-> Result<()>
 {
+	let eh_frame_hdr = file
+		.section_by_name(".eh_frame_hdr")
+		.ok_or(anyhow!("couldn't find \".eh_frame_hdr\" section"))?;
+	let eh_frame = file
+		.section_by_name(".eh_frame")
+		.ok_or(anyhow!("couldn't find \".eh_frame\" section"))?;
+	let text = file
+		.section_by_name(".text")
+		.ok_or(anyhow!("couldn't find \".text\" section"))?;
+	let base_addresses = BaseAddresses::default()
+		.set_eh_frame_hdr(eh_frame_hdr.address())
+		.set_eh_frame(eh_frame.address())
+		.set_text(text.address());
+	let uncompressed_eh_frame = eh_frame.uncompressed_data()?;
+	let unwind_info = EhFrame::new(
+		&uncompressed_eh_frame,
+		if file.endian().is_little_endian()
+		{
+			gimli::RunTimeEndian::Little
+		}
+		else
+		{
+			gimli::RunTimeEndian::Big
+		}
+	);
+	let mut ctx = UnwindContext::new();
 	let strtable = file.elf_symbol_table().strings();
 	for sym in file.symbols()
 	{
 		if sym.elf_symbol().st_type() == STT_FUNC
 		{
 			let mangled = str::from_utf8(sym.elf_symbol().name(Endianness::Little, strtable)?)?;
+			let demangled = demangle(mangled.to_string());
+			let unwind = unwind_info
+				.unwind_info_for_address(
+					&base_addresses,
+					&mut ctx,
+					sym.address(),
+					EhFrame::cie_from_offset
+				)
+				.map_err(|err| {
+					anyhow!(format!(
+						"{} (function: {demangled}, address: {})",
+						err,
+						sym.address()
+					))
+				})?;
 			#[rustfmt::skip]
 			println!(
 				concat!(
 					"  {}:\n",
 					"    mangled: {}\n",
 					"    address: 0x{:x}\n",
-					"    size   : {}\n",
+					"    size: {}\n",
+					"    unwind info:\n",
+					"      start: 0x{:x}\n",
+					"      size: {}"
 				),
-				demangle(mangled.to_string()),
+				demangled,
 				mangled,
 				sym.address(),
-				sym.size()
+				sym.size(),
+				unwind.start_address(),
+				unwind.end_address() - unwind.start_address()
 			);
 		}
 	}
+	println!("total .eh_frame size: {}", eh_frame.size());
 	Ok(())
 }

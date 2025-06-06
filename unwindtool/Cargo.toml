@@ -12,6 +12,7 @@ gimli = "0.31.1"
 object = { version = "0.37.0", features = ["all"] }
 rustc-demangle = { version = "0.1.24", features = ["std"] }
 symbolic-demangle = "12.15.5"
+itertools = "0.14.0"
 
 [dependencies.bitflags]
 version = "*"

@@ -1,6 +1,7 @@
 #![allow(non_snake_case)]
 #![no_std]
 #![no_main]
+#![feature(min_specialization)]
 #![feature(link_llvm_intrinsics)]
 #![feature(decl_macro)]
 #![feature(unboxed_closures, fn_traits)] // for crate 'overloadable' and overloadf
@@ -21,11 +22,15 @@
 #![feature(slice_ptr_get)]
 #![feature(likely_unlikely)]
 #![feature(used_with_arg)]
+#![feature(generic_const_exprs)]
 #![feature(portable_simd)]
 #![recursion_limit = "512"]
 // TODO: change the compile flags to use vector extensions IN-KERNEL
 
 extern crate alloc;
+
+#[macro_use]
+extern crate impls;
 
 #[macro_use]
 extern crate macro_utils;
@@ -41,7 +46,7 @@ pub mod panic;
 pub mod unwinding;
 pub mod utils;
 
-use crate::arch::target::cpu::misc::hcf;
+use crate::{arch::target::cpu::misc::hcf, kernel::linker::LinkerSym};
 
 #[allow(dead_code)]
 static UNIFONT: &[u8] = include_bytes!("../assets/font/unifont-16.0.04.otf");

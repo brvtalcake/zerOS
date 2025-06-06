@@ -102,6 +102,8 @@ fontdue = "0.9.3"
 bumpalo = { version = "3", features = ["allocator_api", "boxed"] }
 object = { version = "0.37.0", default-features = false, features = ["read"] }
 fallible-iterator = { version = "0.3.0", default-features = false, features = ["alloc"] }
+impls = "1.0.3"
+addr2line = { version = "0.24.2", default-features = false, features = ["rustc-demangle", "cpp_demangle", "fallible-iterator", "smallvec"] }
 
 [dependencies.log]
 version = "0.4.27"

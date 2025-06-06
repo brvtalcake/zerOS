@@ -10,7 +10,7 @@ static RUNNING_PANIC: AtomicBool = AtomicBool::new(false);
 #[panic_handler]
 fn rust_panic_impl(_info: &core::panic::PanicInfo) -> !
 {
-	let regs = unwinding::read_registers!();
+	/* let regs = unwinding::read_registers!(); */
 	if RUNNING_PANIC.swap(true, Ordering::AcqRel)
 	{
 		error!("attempted to `panic!` while panicking");
