@@ -439,6 +439,11 @@ fn declare_c_source_code_in<T: AsRef<path::Path>>(paths: &[T], recurse: bool)
 	}
 }
 
+fn lalrpop_compile()
+{
+	lalrpop::process_src().unwrap();
+}
+
 pub fn main()
 {
 	generate_config_arch_aliases();
@@ -471,6 +476,8 @@ pub fn main()
 	{
 		make_lib_with(&c_objs, &PathBuf::from(odir).join("libzerOS-c.a"));
 	}
+
+	lalrpop_compile();
 
 	let linker_script = update_linker_script_and_related(&abspath)
 		.into_os_string()

@@ -74,6 +74,12 @@ unsafe extern "C" {
 unsafe extern "C" {
 	pub fn zerOS_region_allocator_reclaim(allocator: *mut zerOS_region_allocator) -> bool;
 }
+unsafe extern "C" {
+	pub fn zerOS_region_allocator_max_size_for(
+		allocator: *mut zerOS_region_allocator,
+		ptr: *mut ::core::ffi::c_void
+	) -> usize;
+}
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct zerOS_region_allocator_additional_space_info

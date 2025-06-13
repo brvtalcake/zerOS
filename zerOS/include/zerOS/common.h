@@ -57,4 +57,9 @@ extern void* memcpy(void* restrict dst, const void* restrict src, size_t size);
 		(destination);                                           \
 	})
 
+#undef zerOS_PP_FORCE_SEMICOLON
+#define zerOS_PP_FORCE_SEMICOLON \
+	;                            \
+	(void)0
+
 #endif

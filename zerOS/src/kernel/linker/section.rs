@@ -13,7 +13,7 @@ pub fn in_section(secname: &str, addr: *const c_void) -> Option<bool>
         ("rodata", unsafe { zerOS_rodata_start }, unsafe { zerOS_rodata_end }),
         ("eh_frame", unsafe { zerOS_eh_frame_start }, unsafe { zerOS_eh_frame_end }),
         ("eh_frame_hdr", unsafe { zerOS_eh_frame_hdr_start }, unsafe { zerOS_eh_frame_hdr_end }),
-        ("debug_line", unsafe { zerOS_debug_line_start }, unsafe { zerOS_debug_line_end }),
+        /* ("debug_line", unsafe { zerOS_debug_line_start }, unsafe { zerOS_debug_line_end }), */
         ("data", unsafe { zerOS_data_start }, unsafe { zerOS_data_end }),
         ("bss", unsafe { zerOS_bss_start }, unsafe { zerOS_bss_end }),
     ];

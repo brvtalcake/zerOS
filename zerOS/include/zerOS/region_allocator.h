@@ -52,6 +52,9 @@ extern bool zerOS_region_allocator_is_static_region(struct zerOS_region_allocato
 
 extern bool zerOS_region_allocator_reclaim(struct zerOS_region_allocator* allocator);
 
+extern size_t
+zerOS_region_allocator_max_size_for(struct zerOS_region_allocator* allocator, void* ptr);
+
 #if 0
 extern struct zerOS_region_allocator*
 zerOS_region_allocator_prev(struct zerOS_region_allocator* allocator);

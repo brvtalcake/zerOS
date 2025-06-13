@@ -1,8 +1,15 @@
 #![allow(non_snake_case)]
+
 #![no_std]
 #![no_main]
+
+#![feature(pointer_try_cast_aligned)]
 #![feature(min_specialization)]
-#![feature(link_llvm_intrinsics)]
+#![feature(macro_metavar_expr_concat)]
+#![feature(macro_metavar_expr)]
+#![feature(custom_test_frameworks)]
+#![feature(derive_const)]
+#![feature(linkage)]
 #![feature(decl_macro)]
 #![feature(unboxed_closures, fn_traits)] // for crate 'overloadable' and overloadf
 #![feature(const_slice_make_iter)]
@@ -14,6 +21,7 @@
 #![feature(transmutability)]
 #![feature(allocator_api)]
 #![feature(unsafe_cell_access)]
+#![feature(ptr_as_uninit)]
 #![feature(nonzero_ops)]
 #![feature(trivial_bounds)]
 #![feature(exclusive_wrapper)]
@@ -22,10 +30,21 @@
 #![feature(slice_ptr_get)]
 #![feature(likely_unlikely)]
 #![feature(used_with_arg)]
-#![feature(generic_const_exprs)]
+#![feature(const_raw_ptr_comparison)]
 #![feature(portable_simd)]
+#![feature(ptr_mask)]
+#![feature(cfg_select)]
+#![feature(set_ptr_value)]
+#![feature(stmt_expr_attributes)]
+#![feature(ptr_metadata)]
+
+#![allow(internal_features)]
+#![feature(link_llvm_intrinsics)]
+
+#![allow(incomplete_features)]
+#![feature(generic_const_exprs)]
+
 #![recursion_limit = "512"]
-// TODO: change the compile flags to use vector extensions IN-KERNEL
 
 extern crate alloc;
 
@@ -46,7 +65,7 @@ pub mod panic;
 pub mod unwinding;
 pub mod utils;
 
-use crate::{arch::target::cpu::misc::hcf, kernel::linker::LinkerSym};
+use crate::arch::target::cpu::misc::hcf;
 
 #[allow(dead_code)]
 static UNIFONT: &[u8] = include_bytes!("../assets/font/unifont-16.0.04.otf");

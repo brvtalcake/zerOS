@@ -27,6 +27,7 @@ use core::{
 
 mod bindings;
 
+pub(super) use bindings::region::zerOS_region_allocator_max_size_for;
 pub use bindings::region::zerOS_region_reclaim_hook_t as RegionAllocatorReclaimHook;
 
 #[derive(Default)]
@@ -57,10 +58,11 @@ impl AllocationStrategy
 #[repr(C)]
 pub struct RegionAllocator
 {
-	inner:        *mut bindings::region::zerOS_region_allocator,
+	pub(super) inner:
+		*mut bindings::region::zerOS_region_allocator,
 	self_storage: NonNull<Self>,
-	after_self:   NonNull<u8>,
-	after_size:   usize
+	after_self: NonNull<u8>,
+	after_size: usize
 }
 
 impl Default for RegionAllocator
@@ -249,6 +251,45 @@ impl RegionAllocator
 	{
 		use bindings::region::zerOS_region_allocator_reclaim;
 		unsafe { zerOS_region_allocator_reclaim(self.inner) }
+	}
+
+	pub unsafe fn alloc_raw(&self, size: usize) -> *mut core::ffi::c_void
+	{
+		use bindings::region::zerOS_region_allocator_alloc;
+		unsafe {
+			zerOS_region_allocator_alloc(
+				self.inner,
+				size,
+				usize::MAX,
+				AllocationStrategy::Default.to_binding_strategy()
+			)
+		}
+	}
+
+	pub unsafe fn dealloc_raw(&self, ptr: *mut core::ffi::c_void)
+	{
+		use bindings::region::zerOS_region_allocator_dealloc;
+		unsafe { zerOS_region_allocator_dealloc(self.inner, ptr) }
+	}
+
+	pub unsafe fn realloc_raw(
+		&self,
+		ptr: *mut core::ffi::c_void,
+		size: usize
+	) -> *mut core::ffi::c_void
+	{
+		use bindings::region::zerOS_region_allocator_realloc;
+		unsafe {
+			zerOS_region_allocator_realloc(
+				self.inner,
+				ptr,
+				usize::MAX,
+				usize::MAX,
+				size,
+				usize::MAX,
+				AllocationStrategy::Default.to_binding_strategy()
+			)
+		}
 	}
 
 	pub fn allocate_with_strategy(

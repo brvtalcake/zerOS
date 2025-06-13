@@ -7,6 +7,7 @@
 #include <stdatomic.h>
 
 #include <zerOS/common.h>
+#include <zerOS/guard.h>
 #include <zerOS/rbtree.h>
 #include <zerOS/region_allocator.h>
 #include <zerOS/spinlock.h>
@@ -132,7 +133,7 @@ struct subregion_node
 	// this remains in memory even when allocated, hence it shall never be overwritten by user
 	struct [[gnu::packed]] subregion_node_persistent
 	{
-		// since it's aligned on page start, we can further shrink the xored addresses
+		// since it's aligned on page start, we can further shrink the xored addresses.
 		// only here to be able to coalesce free pages
 		uintptr_t xored_prev_next : (MAX_VIRTUAL_ADDRESS_LOG2 - PAGE_SIZE_LOG2);
 		bool      free : 1;
@@ -657,8 +658,10 @@ struct zerOS_region_allocator
 	bool                           authorize_reclaim;
 	zerOS_region_reclaim_hook_t    reclaim_hook;
 
-	alignas(max_align_t) struct zerOS_spinlock spinlock;
+	alignas(64) struct zerOS_spinlock spinlock;
 };
+
+static_assert(sizeof(struct zerOS_region_allocator) < PAGE_SIZE);
 
 /**
  * @brief The size of a `struct subregion_node` when not allocated
@@ -931,6 +934,9 @@ extern void* zerOS_region_allocator_alloc(
   size_t                         align,
   enum zerOS_allocation_strategy strategy)
 {
+	if (unlikely(align == SIZE_MAX))
+		align = alignof(max_align_t);
+
 	if (!layout_requirements_ok(size, align))
 		return nullptr;
 
@@ -963,8 +969,11 @@ extern void* zerOS_region_allocator_alloc(
 
 extern bool zerOS_region_allocator_contains(struct zerOS_region_allocator* allocator, void* ptr)
 {
+	if (unlikely(!ptr))
+		return true;
 	return (uintptr_t)ptr >= (uintptr_t)allocator->region
-		&& (uintptr_t)ptr <= (uintptr_t)allocator->region + allocator->region_page_count;
+		&& (uintptr_t)ptr
+			 <= (uintptr_t)allocator->region + (allocator->region_page_count * PAGE_SIZE);
 }
 
 extern void zerOS_region_allocator_dealloc(struct zerOS_region_allocator* allocator, void* ptr)
@@ -1052,9 +1061,15 @@ extern void* zerOS_region_allocator_realloc(
   size_t                         align,
   enum zerOS_allocation_strategy strategy)
 {
-	(void)old_align;
-
 	prefetch_rw(allocator, 2);
+
+	if (unlikely(!ptr))
+		return zerOS_region_allocator_alloc(allocator, size, align, strategy);
+
+	if (unlikely(align == SIZE_MAX))
+		align = alignof(max_align_t);
+	if (unlikely(old_align == SIZE_MAX))
+		old_align = alignof(max_align_t);
 
 	if (!layout_requirements_ok(size, align))
 		return nullptr;
@@ -1064,6 +1079,8 @@ extern void* zerOS_region_allocator_realloc(
 	  node == allocator->list.tail
 		? nullptr
 		: node_at((uintptr_t)node, subregion_page_count(node), OFFSET_KIND_PAGE);
+	if (unlikely(old_size == SIZE_MAX))
+		old_size = subregion_page_count(node);
 
 	const size_t alignment_padding = padding_for(align);
 	const size_t absolute_minimum  = MEMNODE_ALLOCATED_SIZE + alignment_padding + size;
@@ -1081,7 +1098,7 @@ extern void* zerOS_region_allocator_realloc(
 #if 0
 	// TODO: Make sure the compiler doesn't reorder this before the previous lines
 	//       (how ?)
-	zerOS_lock_guard(spin)(guard, &allocator->spinlock);
+	zerOS_guard(spinlock)(guard, &allocator->spinlock);
 #else
 	zerOS_spin_lock(&allocator->spinlock);
 #endif
@@ -1128,7 +1145,7 @@ extern void* zerOS_region_allocator_realloc(
 
 extern bool zerOS_region_allocator_is_static_region(struct zerOS_region_allocator* allocator)
 {
-	zerOS_lock_guard(spin)(guard, &allocator->spinlock);
+	zerOS_guard(spinlock)(guard, &allocator->spinlock);
 	return allocator->is_static_memory;
 }
 
@@ -1200,28 +1217,28 @@ extern bool zerOS_region_allocator_reclaim(struct zerOS_region_allocator* alloca
 extern struct zerOS_region_allocator*
 zerOS_region_allocator_prev(struct zerOS_region_allocator* allocator)
 {
-	zerOS_lock_guard(spin)(guard, &allocator->spinlock);
+	zerOS_guard(spinlock)(guard, &allocator->spinlock);
 	return allocator->prev;
 }
 
 extern struct zerOS_region_allocator*
 zerOS_region_allocator_next(struct zerOS_region_allocator* allocator)
 {
-	zerOS_lock_guard(spin)(guard, &allocator->spinlock);
+	zerOS_guard(spinlock)(guard, &allocator->spinlock);
 	return allocator->next;
 }
 
 extern void zerOS_region_allocator_set_prev(
   struct zerOS_region_allocator* allocator, struct zerOS_region_allocator* prev)
 {
-	zerOS_lock_guard(spin)(guard, &allocator->spinlock);
+	zerOS_guard(spinlock)(guard, &allocator->spinlock);
 	allocator->prev = prev;
 }
 
 extern void zerOS_region_allocator_set_next(
   struct zerOS_region_allocator* allocator, struct zerOS_region_allocator* next)
 {
-	zerOS_lock_guard(spin)(guard, &allocator->spinlock);
+	zerOS_guard(spinlock)(guard, &allocator->spinlock);
 	allocator->next = next;
 }
 #endif
@@ -1233,4 +1250,15 @@ zerOS_region_allocator_additional_space(struct zerOS_region_allocator* allocator
 		.addr = allocator->region + sizeof(struct zerOS_region_allocator),
 		.size = PAGE_SIZE - sizeof(struct zerOS_region_allocator)
 	};
+}
+
+extern size_t
+zerOS_region_allocator_max_size_for(struct zerOS_region_allocator* allocator, void* ptr)
+{
+	if (unlikely(!zerOS_region_allocator_contains(allocator, ptr)))
+		return SIZE_MAX;
+
+	zerOS_guard(spinlock)(guard, &allocator->spinlock);
+	struct subregion_node* node = node_at(find_header((uintptr_t)ptr));
+	return subregion_page_count(node) * PAGE_SIZE;
 }

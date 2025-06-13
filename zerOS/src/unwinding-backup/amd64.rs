@@ -13,16 +13,10 @@ use gimli::{
 	Register,
 	X86_64
 };
-use num_traits::AsPrimitive;
+use num::traits::AsPrimitive;
 
 use super::UnwinderError;
 use crate::kernel::linker::map::{
-	zerOS_debug_abbrev_size,
-	zerOS_debug_abbrev_start,
-	zerOS_debug_info_size,
-	zerOS_debug_info_start,
-	zerOS_debug_line_size,
-	zerOS_debug_line_start,
 	zerOS_eh_frame_hdr_size,
 	zerOS_eh_frame_hdr_start,
 	zerOS_eh_frame_size,

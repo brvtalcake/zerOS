@@ -2,6 +2,16 @@ use core::mem::{self, Assume, TransmuteFrom};
 
 pub use rustc_demangle::{demangle, try_demangle};
 
+pub mod str;
+
+pub macro likely($boolean:expr) {
+	::core::hint::likely(($boolean) as bool)
+}
+
+pub macro unlikely($boolean:expr) {
+	::core::hint::unlikely(($boolean) as bool)
+}
+
 #[macro_export]
 macro_rules! alignment_of {
 	(    ) => {
@@ -51,6 +61,19 @@ macro_rules! alignment_of {
 	};
 	(f128) => {
 		16
+	};
+	($other:ty) => {
+		const { align_of::<$other>() }
+	};
+}
+
+#[macro_export]
+/// # TODO
+/// This is technically `* __CHAR_BIT__` but no idea how to get that info from
+/// rust
+macro_rules! width_of {
+	($typ:ty) => {
+		($crate::size_of!($typ) * 8)
 	};
 }
 
@@ -103,6 +126,9 @@ macro_rules! size_of {
 	};
 	(f128) => {
 		16
+	};
+	($other:ty) => {
+		const { size_of::<$other>() }
 	};
 }
 

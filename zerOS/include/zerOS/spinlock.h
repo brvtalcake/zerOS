@@ -3,6 +3,7 @@
 
 #include <stdatomic.h>
 
+#include <zerOS/common.h>
 #include <zerOS/platform.h>
 
 #if zerOS_PLATFORM_IS_X86 || zerOS_PLATFORM_IS_AMD64
@@ -70,18 +71,15 @@ static inline void zerOS_spin_unlock(struct zerOS_spinlock* spinlock)
 	__atomic_store_n(&spinlock->locked, false, __ATOMIC_RELEASE);
 }
 
-static inline void __zerOS_spin_lock_guard_cleanup_func(struct zerOS_spinlock** spinlock)
+static inline void __zerOS_spinlock_guard_cleanup_func(struct zerOS_spinlock** spinlock)
 {
 	zerOS_spin_unlock(*spinlock);
 }
 
-#undef zerOS_lock_guard
-#define zerOS_lock_guard(kind) __zerOS_##kind##_lock_guard_impl
-
-#undef __zerOS_spin_lock_guard_impl
-#define __zerOS_spin_lock_guard_impl(name, spinlock)       \
-	[[gnu::cleanup(__zerOS_spin_lock_guard_cleanup_func)]] \
-	struct zerOS_spinlock* name = (spinlock);              \
-	zerOS_spin_lock(name);
+#undef __zerOS_spinlock_guard_impl
+#define __zerOS_spinlock_guard_impl(name, spinlock)       \
+	[[gnu::cleanup(__zerOS_spinlock_guard_cleanup_func)]] \
+	struct zerOS_spinlock* name = (spinlock);             \
+	zerOS_spin_lock(name) zerOS_PP_FORCE_SEMICOLON
 
 #endif

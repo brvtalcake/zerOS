@@ -243,7 +243,7 @@ pub static ZEROS_GLOBAL_LOGGER: MultiLogger = MultiLogger::new();
 
 ctor! {
 	@name(zerOS_initialize_global_logger);
-	@priority(1);
+	@priority(2);
 
 	crate::arch::target::cpu::irq::disable();
 	unsafe {

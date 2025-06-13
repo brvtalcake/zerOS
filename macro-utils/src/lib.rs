@@ -63,7 +63,9 @@ macro_rules! __ctor_impl {
                 #[unsafe(link_section = ".bootcode")]
                 unsafe extern "C" fn concat_idents!($name, _generated_function) ()
                 {
-                    $($body)*
+                    ::eager2::lazy! {
+                        $($body)*
+                    }
                 }
 
                 #[unsafe(link_section = ::eager2::concat!(".ctors_init_array.", ::eager2::stringify!($prio)))]
@@ -247,18 +249,20 @@ macro_rules! static_max {
     ($expr:expr) => { const { ($expr) } };
     ($first:expr $(,$rest:expr)*)
         => { const {
-            if ($first) >= (static_max!(@inner $(,$rest)*))
+            let recursed_max = static_max!(@inner $(,$rest)*);
+            if ($first) >= (recursed_max)
             { ($first) }
             else
-            { static_max!(@inner $(,$rest)*) }
+            { recursed_max }
          } };
     (@inner, $expr:expr) => { const { ($expr) } };
     (@inner, $first:expr $(,$rest:expr)*)
         => { const {
-            if ($first) >= (static_max!(@inner $(,$rest)*))
+            let recursed_max = static_max!(@inner $(,$rest)*);
+            if ($first) >= (recursed_max)
             { ($first) }
             else
-            { static_max!(@inner $(,$rest)*) }
+            { recursed_max }
          } };
 }
 
@@ -268,18 +272,66 @@ macro_rules! max {
     ($expr:expr) => { { ($expr) } };
     ($first:expr $(,$rest:expr)*)
         => { {
-            if ($first) >= (max!(@inner $(,$rest)*))
+            let recursed_max = max!(@inner $(,$rest)*);
+            if ($first) >= (recursed_max)
             { ($first) }
             else
-            { max!(@inner $(,$rest)*) }
+            { recursed_max }
          } };
     (@inner, $expr:expr) => { { ($expr) } };
     (@inner, $first:expr $(,$rest:expr)*)
         => { {
-            if ($first) >= (max!(@inner $(,$rest)*))
+            let recursed_max = max!(@inner $(,$rest)*);
+            if ($first) >= (recursed_max)
             { ($first) }
             else
-            { max!(@inner $(,$rest)*) }
+            { recursed_max }
+         } };
+}
+
+#[macro_export]
+macro_rules! static_min {
+    () => { 0_usize };
+    ($expr:expr) => { const { ($expr) } };
+    ($first:expr $(,$rest:expr)*)
+        => { const {
+            let recursed_min = static_min!(@inner $(,$rest)*);
+            if ($first) <= (recursed_min)
+            { ($first) }
+            else
+            { recursed_min }
+         } };
+    (@inner, $expr:expr) => { const { ($expr) } };
+    (@inner, $first:expr $(,$rest:expr)*)
+        => { const {
+            let recursed_min = static_min!(@inner $(,$rest)*);
+            if ($first) <= (recursed_min)
+            { ($first) }
+            else
+            { recursed_min }
+         } };
+}
+
+#[macro_export]
+macro_rules! min {
+    () => { 0_usize };
+    ($expr:expr) => { { ($expr) } };
+    ($first:expr $(,$rest:expr)*)
+        => { {
+            let recursed_min = min!(@inner $(,$rest)*);
+            if ($first) <= (recursed_min)
+            { ($first) }
+            else
+            { recursed_min }
+         } };
+    (@inner, $expr:expr) => { { ($expr) } };
+    (@inner, $first:expr $(,$rest:expr)*)
+        => { {
+            let recursed_min = min!(@inner $(,$rest)*);
+            if ($first) <= (recursed_min)
+            { ($first) }
+            else
+            { recursed_min }
          } };
 }
 
@@ -385,7 +437,28 @@ mod tests
 	#[test]
 	fn static_max_test()
 	{
-		assert_eq!(static_max!(0, 8, 18, 2, 4235468, 1), 4235468);
-		assert_eq!(static_max!(0, 8, 18, 2, 18, 1), 18);
+		assert_eq!(const { static_max!(0, 8, 18, 2, 4235468, 1) }, 4235468);
+		assert_eq!(const { static_max!(0, 8, 18, 2, 18, 1) }, 18);
+	}
+
+    #[test]
+	fn static_min_test()
+	{
+		assert_eq!(const { static_min!(0, 8, 18, 2, 4235468, 1) }, 0);
+		assert_eq!(const { static_min!(0, 8, 18, 2, 18, 1) }, 0);
+	}
+
+    #[test]
+	fn max_test()
+	{
+		assert_eq!(max!(0, 8, 18, 2, 4235468, 1), 4235468);
+		assert_eq!(max!(0, 8, 18, 2, 18, 1), 18);
+	}
+
+    #[test]
+	fn min_test()
+	{
+		assert_eq!(min!(0, 8, 18, 2, 4235468, 1), 0);
+		assert_eq!(min!(0, 8, 18, 2, 18, 1), 0);
 	}
 }

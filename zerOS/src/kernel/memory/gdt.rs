@@ -3,7 +3,7 @@ use core::{
 	mem::{align_of, size_of}
 };
 
-use num_traits::AsPrimitive;
+use num::traits::AsPrimitive;
 use zerocopy::{FromBytes, IntoBytes};
 
 #[repr(C, packed)]

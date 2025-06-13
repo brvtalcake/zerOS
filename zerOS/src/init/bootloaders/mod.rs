@@ -10,6 +10,10 @@ cfg_if! {
             stringify!(
                 bootloader "uefi" is not implemented for now !
             )
-        )
+        );
+    } else {
+        compile_error!(
+            "unknown bootloader !"
+        );
     }
 }

@@ -1,6 +1,11 @@
 use cfg_if::cfg_if;
 use macro_utils::{CaseKind, MultiCaseStaticString};
+use num::traits::AsPrimitive;
 use overloadable::overloadable;
+use portable_atomic::{AtomicBool, Ordering};
+use raw_cpuid::{CpuId, CpuIdReaderNative, ProcessorCapacityAndFeatureInfo};
+
+use crate::kernel::sync::BasicRwLock;
 
 cfg_if! {
 	if #[cfg(target_arch = "x86_64")] {
@@ -14,9 +19,11 @@ cfg_if! {
 	}
 }
 
+pub mod addr;
 pub mod io;
 pub mod irq;
 pub mod misc;
+
 mod registers;
 
 pub mod ctlregs
@@ -38,8 +45,6 @@ pub mod msr
 {
 	pub use super::registers::msr::*;
 }
-
-pub use raw_cpuid as features;
 
 #[gen_variant_names]
 #[repr(usize)]
@@ -204,6 +209,101 @@ overloadable! {
 	{
 		unsafe {
 			__cpuid_count(leaf, 0)
+		}
+	}
+}
+
+pub struct CpuFeatures
+{
+	pub cpuid:                  BasicRwLock<Option<CpuId<CpuIdReaderNative>>>,
+	pub proc_cap_and_feat_info: BasicRwLock<Option<ProcessorCapacityAndFeatureInfo>>,
+	pub have_pae:               AtomicBool
+}
+
+impl CpuFeatures
+{
+	const fn new() -> Self
+	{
+		Self {
+			cpuid:                  BasicRwLock::new(None),
+			proc_cap_and_feat_info: BasicRwLock::new(None),
+			have_pae:               AtomicBool::new(false)
+		}
+	}
+}
+
+#[used]
+#[unsafe(no_mangle)]
+#[allow(non_upper_case_globals)]
+static mut zerOS_boot_cpu_linear_address_bits: usize = 32;
+
+#[used]
+#[unsafe(no_mangle)]
+#[allow(non_upper_case_globals)]
+static mut zerOS_boot_cpu_physical_address_bits: usize = 32;
+
+pub static ZEROS_BOOT_CPU_FEATURES: CpuFeatures = CpuFeatures::new();
+
+ctor! {
+	@priority(1);
+	@name(zerOS_init_boot_cpu_features);
+
+	if cfg!(target_env = "sgx")
+	{
+		return;
+	}
+
+	*ZEROS_BOOT_CPU_FEATURES.cpuid.write() = Some(CpuId::new());
+
+	*ZEROS_BOOT_CPU_FEATURES.proc_cap_and_feat_info.write()
+		= unsafe {
+			ZEROS_BOOT_CPU_FEATURES
+				.cpuid
+				.read()
+				.unwrap_unchecked()
+		}.get_processor_capacity_feature_info();
+
+	ZEROS_BOOT_CPU_FEATURES.have_pae.store(
+		unsafe {
+			ZEROS_BOOT_CPU_FEATURES
+				.cpuid
+				.read()
+				.unwrap_unchecked()
+		}
+		.get_feature_info()
+		.map_or(false, |featinf| featinf.has_pae()),
+		Ordering::Release
+	);
+
+	if let Some(inf) = &*ZEROS_BOOT_CPU_FEATURES
+		.proc_cap_and_feat_info
+		.read()
+	{
+		unsafe {
+			zerOS_boot_cpu_linear_address_bits
+				= inf.linear_address_bits().as_();
+		}
+	}
+	else
+	{
+		unsafe {
+			zerOS_boot_cpu_linear_address_bits = 32;
+		}
+	}
+
+	if let Some(inf) = &*ZEROS_BOOT_CPU_FEATURES
+		.proc_cap_and_feat_info
+		.read()
+	{
+		unsafe {
+			zerOS_boot_cpu_physical_address_bits
+				= inf.physical_address_bits().as_();
+		}
+	}
+	else
+	{
+		unsafe {
+			zerOS_boot_cpu_physical_address_bits = 32;
 		}
 	}
 }

@@ -6,7 +6,7 @@ use core::{
 };
 
 use super::allocators::{AllocationStrategy, RegionAllocator, RegionAllocatorReclaimHook};
-use crate::{arch::target, kernel::sync::BasicMutex};
+use crate::{arch::target, kernel::sync::BasicRwLock};
 
 struct RegionAllocatorListLink
 {
@@ -188,7 +188,7 @@ impl Iterator for RegionAllocatorIter
 
 pub struct KernelAllocator
 {
-	regions: BasicMutex<RegionAllocatorList>
+	regions: BasicRwLock<RegionAllocatorList>
 }
 
 unsafe impl Sync for KernelAllocator {}
@@ -200,7 +200,7 @@ impl KernelAllocator
 	pub const fn const_new() -> Self
 	{
 		Self {
-			regions: BasicMutex::new(RegionAllocatorList {
+			regions: BasicRwLock::new(RegionAllocatorList {
 				head:            None,
 				tail:            None,
 				last_successful: None
@@ -252,7 +252,7 @@ impl KernelAllocator
 			});
 		}
 		Some(Self {
-			regions: BasicMutex::new(RegionAllocatorList {
+			regions: BasicRwLock::new(RegionAllocatorList {
 				head:            Some(new_link),
 				tail:            Some(new_link),
 				last_successful: Some(new_link)
@@ -285,7 +285,7 @@ impl KernelAllocator
 		default_strategy: AllocationStrategy
 	) -> Option<&Self>
 	{
-		self.regions.lock().add_region(
+		self.regions.write().add_region(
 			region,
 			static_memory,
 			reclaim_hook,
@@ -294,13 +294,90 @@ impl KernelAllocator
 		)?;
 		Some(self)
 	}
+
+	pub unsafe fn alloc_raw(&self, size: usize) -> *mut core::ffi::c_void
+	{
+		let guard = self.regions.read();
+		let list: &RegionAllocatorList = &guard;
+		for allocator in list.into_iter()
+		{
+			let returned = unsafe { allocator.as_ref().alloc_raw(size) };
+			if !returned.is_null()
+			{
+				return returned;
+			}
+		}
+		ptr::null_mut()
+	}
+
+	pub unsafe fn dealloc_raw(&self, ptr: *mut core::ffi::c_void)
+	{
+		let guard = self.regions.read();
+		let list: &RegionAllocatorList = &guard;
+		for allocator in list.into_iter()
+		{
+			unsafe {
+				if NonNull::new(ptr.cast())
+					.map_or(true, |nonnull| allocator.as_ref().contains(nonnull))
+				{
+					allocator.as_ref().dealloc_raw(ptr);
+					return;
+				}
+			}
+		}
+	}
+
+	pub unsafe fn realloc_raw(&self, ptr: *mut core::ffi::c_void, size: usize) -> *mut core::ffi::c_void
+	{
+		use super::allocators::zerOS_region_allocator_max_size_for;
+
+		let guard = self.regions.read();
+		let list: &RegionAllocatorList = &guard;
+		for (i, allocator) in list.into_iter().enumerate()
+		{
+			unsafe {
+				if NonNull::new(ptr.cast())
+					.map_or(true, |nonnull| allocator.as_ref().contains(nonnull))
+				{
+					let curr_size =
+						zerOS_region_allocator_max_size_for(allocator.as_ref().inner, ptr);
+					let mut returned = allocator.as_ref().realloc_raw(ptr, size);
+					if !returned.is_null()
+					{
+						return returned;
+					}
+
+					for other_allocator in list
+						.into_iter()
+						.enumerate()
+						.filter(|(idx, _)| *idx != i)
+						.map(|(_, other)| other)
+					{
+						returned = other_allocator.as_ref().alloc_raw(size);
+						if !returned.is_null()
+						{
+							ptr::copy_nonoverlapping(
+								ptr.cast::<u8>().cast_const(),
+								returned.cast::<u8>(),
+								min!(curr_size, size)
+							);
+							allocator.as_ref().dealloc_raw(ptr);
+							return returned;
+						}
+					}
+					return ptr::null_mut();
+				}
+			}
+		}
+		ptr::null_mut()
+	}
 }
 
 unsafe impl Allocator for KernelAllocator
 {
 	fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError>
 	{
-		let guard = self.regions.lock();
+		let guard = self.regions.read();
 		let list: &RegionAllocatorList = &guard;
 		for allocator in list.into_iter()
 		{
@@ -314,7 +391,7 @@ unsafe impl Allocator for KernelAllocator
 
 	unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout)
 	{
-		let guard = self.regions.lock();
+		let guard = self.regions.read();
 		let list: &RegionAllocatorList = &guard;
 		for allocator in list.into_iter()
 		{
@@ -330,7 +407,7 @@ unsafe impl Allocator for KernelAllocator
 
 	fn allocate_zeroed(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError>
 	{
-		let guard = self.regions.lock();
+		let guard = self.regions.read();
 		let list: &RegionAllocatorList = &guard;
 		for allocator in list.into_iter()
 		{
@@ -349,14 +426,39 @@ unsafe impl Allocator for KernelAllocator
 		new_layout: Layout
 	) -> Result<NonNull<[u8]>, AllocError>
 	{
-		let guard = self.regions.lock();
+		let guard = self.regions.read();
 		let list: &RegionAllocatorList = &guard;
-		for allocator in list.into_iter()
+		for (i, allocator) in list.into_iter().enumerate()
 		{
 			unsafe {
 				if allocator.as_ref().contains(ptr)
 				{
-					return allocator.as_ref().shrink(ptr, old_layout, new_layout);
+					match allocator.as_ref().shrink(ptr, old_layout, new_layout)
+					{
+						res @ Ok(_) => return res,
+						_ =>
+						{
+							for other_allocator in list
+								.into_iter()
+								.enumerate()
+								.filter(|(idx, _)| *idx != i)
+								.map(|(_, other)| other)
+							{
+								if let res @ Ok(new_ptr) =
+									other_allocator.as_ref().allocate(new_layout)
+								{
+									ptr::copy_nonoverlapping(
+										ptr.as_ptr().cast_const(),
+										new_ptr.as_mut_ptr(),
+										new_layout.size()
+									);
+									allocator.as_ref().deallocate(ptr, old_layout);
+									return res;
+								}
+							}
+							return Err(AllocError);
+						}
+					}
 				}
 			}
 		}
@@ -370,14 +472,39 @@ unsafe impl Allocator for KernelAllocator
 		new_layout: Layout
 	) -> Result<NonNull<[u8]>, AllocError>
 	{
-		let guard = self.regions.lock();
+		let guard = self.regions.read();
 		let list: &RegionAllocatorList = &guard;
-		for allocator in list.into_iter()
+		for (i, allocator) in list.into_iter().enumerate()
 		{
 			unsafe {
 				if allocator.as_ref().contains(ptr)
 				{
-					return allocator.as_ref().grow(ptr, old_layout, new_layout);
+					match allocator.as_ref().grow(ptr, old_layout, new_layout)
+					{
+						res @ Ok(_) => return res,
+						_ =>
+						{
+							for other_allocator in list
+								.into_iter()
+								.enumerate()
+								.filter(|(idx, _)| *idx != i)
+								.map(|(_, other)| other)
+							{
+								if let res @ Ok(new_ptr) =
+									other_allocator.as_ref().allocate(new_layout)
+								{
+									ptr::copy_nonoverlapping(
+										ptr.as_ptr().cast_const(),
+										new_ptr.as_mut_ptr(),
+										old_layout.size()
+									);
+									allocator.as_ref().deallocate(ptr, old_layout);
+									return res;
+								}
+							}
+							return Err(AllocError);
+						}
+					}
 				}
 			}
 		}
@@ -391,14 +518,39 @@ unsafe impl Allocator for KernelAllocator
 		new_layout: Layout
 	) -> Result<NonNull<[u8]>, AllocError>
 	{
-		let guard = self.regions.lock();
+		let guard = self.regions.read();
 		let list: &RegionAllocatorList = &guard;
-		for allocator in list.into_iter()
+		for (i, allocator) in list.into_iter().enumerate()
 		{
 			unsafe {
 				if allocator.as_ref().contains(ptr)
 				{
-					return allocator.as_ref().grow_zeroed(ptr, old_layout, new_layout);
+					match allocator.as_ref().grow_zeroed(ptr, old_layout, new_layout)
+					{
+						res @ Ok(_) => return res,
+						_ =>
+						{
+							for other_allocator in list
+								.into_iter()
+								.enumerate()
+								.filter(|(idx, _)| *idx != i)
+								.map(|(_, other)| other)
+							{
+								if let res @ Ok(new_ptr) =
+									other_allocator.as_ref().allocate_zeroed(new_layout)
+								{
+									ptr::copy_nonoverlapping(
+										ptr.as_ptr().cast_const(),
+										new_ptr.as_mut_ptr(),
+										old_layout.size()
+									);
+									allocator.as_ref().deallocate(ptr, old_layout);
+									return res;
+								}
+							}
+							return Err(AllocError);
+						}
+					}
 				}
 			}
 		}
@@ -520,4 +672,28 @@ ctor! {
 		ptr::write(global_allocator_ptr, new);
 	}
 	crate::arch::target::cpu::irq::enable();
+}
+
+#[linkage = "weak"]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn malloc(size: usize) -> *mut core::ffi::c_void
+{
+	unsafe { ZEROS_GLOBAL_ALLOCATOR.alloc_raw(size) }
+}
+
+#[linkage = "weak"]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn free(ptr: *mut core::ffi::c_void)
+{
+	unsafe {
+		ZEROS_GLOBAL_ALLOCATOR.dealloc_raw(ptr);
+	}
+}
+
+#[linkage = "weak"]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn realloc(ptr: *mut core::ffi::c_void, size: usize)
+-> *mut core::ffi::c_void
+{
+	unsafe { ZEROS_GLOBAL_ALLOCATOR.realloc_raw(ptr, size) }
 }

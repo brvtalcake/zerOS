@@ -26,7 +26,7 @@ use limine::{
 		StackSizeRequest
 	}
 };
-use num_traits::AsPrimitive;
+use num::traits::AsPrimitive;
 
 use crate::{error, info, warn};
 
@@ -102,10 +102,10 @@ mod __markers
 
 	#[used]
 	#[unsafe(link_section = ".requests_start_marker")]
-	pub static _START_MARKER: RequestsStartMarker = RequestsStartMarker::new();
+	static _START_MARKER: RequestsStartMarker = RequestsStartMarker::new();
 	#[used]
 	#[unsafe(link_section = ".requests_end_marker")]
-	pub static _END_MARKER: RequestsEndMarker = RequestsEndMarker::new();
+	static _END_MARKER: RequestsEndMarker = RequestsEndMarker::new();
 }
 
 macro implements_display($typ:ty)
@@ -421,7 +421,23 @@ mod entry
 
 		CtorIter::new().for_each(|ctor| unsafe { ctor() });
 
-		log::set_max_level(log::LevelFilter::Trace);
+		log::set_max_level(log::LevelFilter::Warn);
+
+		{
+			let mut guard = init::cmdline::ZEROS_COMMAND_LINE.write();
+			let cmdline = &mut *guard;
+			*cmdline = KERNEL_CMDLINE_REQUEST
+				.get_response()
+				.unwrap()
+				.cmdline()
+				.to_str()
+				.unwrap()
+				.into();
+		}
+
+		let loglvl_wanted = init::cmdline::ZEROS_COMMAND_LINE.read().log_level;
+		log::set_max_level(loglvl_wanted);
+		info!("log level set to {loglvl_wanted}");
 
 		assert!(verify_requests());
 

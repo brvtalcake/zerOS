@@ -1,0 +1,62 @@
+use alloc::string::String;
+use crate::init::cmdline::{
+    LexerError,
+    Token,
+    parse::ast::{
+        ParsedCmdline,
+        ParsedCmdlineOption,
+        ParsedCmdlineValue
+    }
+};
+
+grammar<'source>(input: &'source str);
+
+pub Cmdline: ParsedCmdline<'source> = {
+    <opts: CmdlineOption*> => opts
+}
+
+pub CmdlineOption: ParsedCmdlineOption<'source> = {
+    <name: "ident"> => {
+        ParsedCmdlineOption {
+            name: name.into(),
+            value: None
+        }
+    },
+    <name: "ident"> "=" <value: "ident"> => {
+        ParsedCmdlineOption {
+            name: name.into(),
+            value: Some(ParsedCmdlineValue::Ident(value.into()))
+        }
+    },
+    <name: "ident"> "=" <value: "string"> => {
+        ParsedCmdlineOption {
+            name: name.into(),
+            value: Some(ParsedCmdlineValue::String(value))
+        }
+    },
+    <name: "ident"> "=" <value: "int"> => {
+        ParsedCmdlineOption {
+            name: name.into(),
+            value: Some(ParsedCmdlineValue::Integer(value))
+        }
+    },
+    <name: "ident"> "=" <value: "float"> => {
+        ParsedCmdlineOption {
+            name: name.into(),
+            value: Some(ParsedCmdlineValue::Float(value))
+        }
+    },
+}
+
+extern {
+  type Location = usize;
+  type Error = LexerError;
+
+  enum Token<'source> {
+    "ident" => Token::Ident(<&'source str>),
+	"int" => Token::IntegerValue(<i128>),
+	"float" => Token::FloatValue(<f64>),
+	"string" => Token::StringValue(<String>),
+	"=" => Token::Equality,
+  }
+}
