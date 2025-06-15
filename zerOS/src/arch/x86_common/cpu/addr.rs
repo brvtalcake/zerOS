@@ -17,6 +17,10 @@ fn zero_extend_impl(bits: usize) -> impl FnOnce(usize) -> usize
 
 fn sign_extend_impl(bits: usize) -> impl FnOnce(usize) -> usize
 {
+	// move |addr| {
+	// let shift = width_of!(usize) - bits;
+	// ((addr << shift) as isize >> shift) as usize
+	// }
 	move |addr| {
 		let u64addr: u64 = addr.as_();
 		let shift = width_of!(usize) - bits;

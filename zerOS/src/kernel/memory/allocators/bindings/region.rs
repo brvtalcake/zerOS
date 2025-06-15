@@ -2,6 +2,26 @@
 
 pub const zerOS_REGION_ALLOCATOR_H_INCLUDED_: u32 = 1;
 pub const zerOS_COMMON_H_INCLUDED_: u32 = 1;
+pub const zerOS_PLATFORM_IS_AMD64: u32 = 1;
+pub const zerOS_PLATFORM_IS_X86: u32 = 0;
+pub const zerOS_PLATFORM_IS_AARCH64: u32 = 0;
+pub const zerOS_PLATFORM_IS_ARM32: u32 = 0;
+pub const zerOS_PLATFORM_IS_PPC64: u32 = 0;
+pub const zerOS_PLATFORM_IS_PPC32: u32 = 0;
+pub const zerOS_PLATFORM_IS_MIPS64: u32 = 0;
+pub const zerOS_PLATFORM_IS_MIPS32: u32 = 0;
+pub const zerOS_PLATFORM_IS_RISCV64: u32 = 0;
+pub const zerOS_PLATFORM_IS_RISCV32: u32 = 0;
+pub const zerOS_PLATFORM_IS_LOONGARCH64: u32 = 0;
+pub const zerOS_PLATFORM_IS_SPARC32: u32 = 0;
+pub const zerOS_PLATFORM_IS_SPARC64: u32 = 0;
+pub const zerOS_PLATFORM_IS_AVR32: u32 = 0;
+pub const zerOS_PLATFORM_IS_ZARCH: u32 = 0;
+pub const L1_CACHE_LINE_SIZE: u32 = 64;
+pub const PAGE_SIZE: u32 = 4096;
+pub const MAX_ALIGN: u32 = 4096;
+pub const MAX_VIRTUAL_ADDRESS_LOG2: u32 = 57;
+pub const PAGE_SIZE_LOG2: u32 = 12;
 pub type zerOS_byte_t = u8;
 impl zerOS_allocation_strategy
 {

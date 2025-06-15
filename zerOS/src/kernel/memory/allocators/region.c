@@ -2,131 +2,27 @@
 // TODO: random idea I had when writing code here: write a clang plugin to optimize data structure
 //       layout for structure marked with a custom attribute
 
-#include <libdivide.h>
 #include <stdalign.h>
 #include <stdatomic.h>
 
+#include <zerOS/address.h>
 #include <zerOS/common.h>
 #include <zerOS/guard.h>
+#include <zerOS/platform.h>
 #include <zerOS/rbtree.h>
 #include <zerOS/region_allocator.h>
 #include <zerOS/spinlock.h>
 
-#undef fast_log2_approx
-#define fast_log2_approx(X) \
-	((unsigned)(__CHAR_BIT__ * sizeof(typeof((X))) - __builtin_clzg((X), 0)))
-
-#undef is_power_of_two
-#define is_power_of_two(value) ((bool)(value && !(value & (value - 1))))
-
-#undef L1_CACHE_LINE_SIZE
-#define L1_CACHE_LINE_SIZE 64
-
-#undef PAGE_SIZE
-#define PAGE_SIZE 4096
-
-#undef MAX_ALIGN
-#define MAX_ALIGN PAGE_SIZE
-
-#undef MAX_ALIGN_LOG2
-#define MAX_ALIGN_LOG2 PAGE_SIZE_LOG2
-
-#undef MAX_VIRTUAL_ADDRESS_LOG2
-#define MAX_VIRTUAL_ADDRESS_LOG2 57
-
-#undef PAGE_SIZE_LOG2
-#define PAGE_SIZE_LOG2 12
-
-#undef likely
-#undef unlikely
-#undef expect
-#define likely(...)         __builtin_expect((bool)(__VA_ARGS__), true)
-#define unlikely(...)       __builtin_expect((bool)(__VA_ARGS__), false)
-#define expect(expr, value) __builtin_expect((expr), (value))
-
-#undef prefetch
-#undef prefetch_ro
-#undef prefetch_rw
-#define prefetch(...)          __builtin_prefetch(__VA_ARGS__)
-#define prefetch_ro(addr, ...) prefetch((addr), 0, __VA_ARGS__)
-#define prefetch_rw(addr, ...) prefetch((addr), 1, __VA_ARGS__)
-
-#undef prefetch_range
-#undef prefetch_range_ro
-#undef prefetch_range_rw
-#define prefetch_range(addr, size, ...)                                                          \
-	({                                                                                           \
-		char* UNIQUE(addr_in_prefetch_range) = (char*)(addr);                                    \
-		for (size_t UNIQUE(i_in_prefetch_range)  = 0; UNIQUE(i_in_prefetch_range) < (size);      \
-			 UNIQUE(i_in_prefetch_range)        += L1_CACHE_LINE_SIZE)                           \
-		{                                                                                        \
-			prefetch(UNIQUE(addr_in_prefetch_range) + UNIQUE(i_in_prefetch_range), __VA_ARGS__); \
-		}                                                                                        \
-	})
-#define prefetch_range_ro(addr, size, ...) prefetch_range((addr), (size), 0, __VA_ARGS__)
-#define prefetch_range_rw(addr, size, ...) prefetch_range((addr), (size), 1, __VA_ARGS__)
-
-#undef assume_aligned
-#define assume_aligned(ptr, align) __builtin_assume_aligned((ptr), (align))
-
-#undef assume
-#define assume(cond) __builtin_assume((bool)(cond))
-
-#undef assume_unaliasing_pointers
-#define assume_unaliasing_pointers(ptr1, ptr2) __builtin_assume_separate_storage((ptr1), (ptr2))
-
-#undef on_page_start
-#define on_page_start(ptr) assume_aligned((ptr), (PAGE_SIZE))
-
-#ifndef alloca
-	#define alloca(size) __builtin_alloca(size)
+#undef HAVE_LIBDIVIDE
+#if zerOS_PLATFORM_IS_X86    \
+  || zerOS_PLATFORM_IS_AMD64 \
+  || zerOS_PLATFORM_IS_ARM32 \
+  || zerOS_PLATFORM_IS_AARCH64
+#	define HAVE_LIBDIVIDE 1
+#	include <libdivide.h>
+#else
+#	define HAVE_LIBDIVIDE 0
 #endif
-
-#undef stack_alloc
-#define stack_alloc(type) stack_alloc_array(type, 1)
-
-#undef stack_alloc_array
-#define stack_alloc_array(type, count) \
-	__builtin_alloca_with_align((count) * sizeof(type), alignof(type))
-
-#undef PP_PASTE
-#define PP_PASTE(a, b) PP_PASTE_IMPL(a, b)
-
-#undef PP_PASTE_IMPL
-#define PP_PASTE_IMPL(a, b) a##b
-
-#undef PP_PASTE4
-#define PP_PASTE4(a, b, c, d) PP_PASTE4_IMPL(a, b, c, d)
-
-#undef PP_PASTE4_IMPL
-#define PP_PASTE4_IMPL(a, b, c, d) PP_PASTE(PP_PASTE(a, b), PP_PASTE(c, d))
-
-#undef UNIQUE
-#define UNIQUE(ident) PP_PASTE4(___uNiQuE_iDeNtIfIeR_at_LINE, __LINE__, _NAMED, ident)
-
-#undef min
-#undef max
-#define min(a, b)                                                                  \
-	({                                                                             \
-		auto UNIQUE(a_in_min) = (a);                                               \
-		auto UNIQUE(b_in_min) = (b);                                               \
-		UNIQUE(a_in_min) < UNIQUE(b_in_min) ? UNIQUE(a_in_min) : UNIQUE(b_in_min); \
-	})
-#define max(a, b)                                                                  \
-	({                                                                             \
-		auto UNIQUE(a_in_max) = (a);                                               \
-		auto UNIQUE(b_in_max) = (b);                                               \
-		UNIQUE(a_in_max) > UNIQUE(b_in_max) ? UNIQUE(a_in_max) : UNIQUE(b_in_max); \
-	})
-
-#undef distance
-#define distance(a, b)                                         \
-	({                                                         \
-		auto UNIQUE(a_in_distance) = (a);                      \
-		auto UNIQUE(b_in_distance) = (b);                      \
-		max(UNIQUE(a_in_distance), UNIQUE(b_in_distance))      \
-		  - min(UNIQUE(a_in_distance), UNIQUE(b_in_distance)); \
-	})
 
 struct subregion_node
 {
@@ -183,7 +79,7 @@ struct subregion_node
 	} rbtree_info;
 };
 
-[[gnu::pure]]
+[[__gnu__::__pure__]]
 static inline size_t subregion_page_count(const struct subregion_node* restrict const node)
 {
 	return node->persistent.page_count;
@@ -194,7 +90,18 @@ static inline void subregion_set_page_count(struct subregion_node* node, size_t 
 	node->persistent.page_count = new_count;
 }
 
-[[gnu::pure]]
+[[__gnu__::__pure__]]
+static inline size_t subregion_size(const struct subregion_node* restrict const node)
+{
+	return subregion_page_count(node) * PAGE_SIZE;
+}
+
+static inline void subregion_set_size(struct subregion_node* node, size_t new_count)
+{
+	node->persistent.page_count = new_count / PAGE_SIZE;
+}
+
+[[__gnu__::__pure__]]
 static inline bool subregion_free(const struct subregion_node* restrict const node)
 {
 	return node->persistent.free;
@@ -317,29 +224,37 @@ struct subregion_list
 	struct subregion_node* tail;
 };
 
-[[gnu::pure]]
+[[__gnu__::__pure__]]
 static inline struct subregion_node* subregion_list_prev(
   const struct subregion_node* restrict const node,
   const struct subregion_node* restrict const next)
 {
-	return node_at(
-	  (node->persistent.xored_prev_next ^ ((uintptr_t)next >> PAGE_SIZE_LOG2)) << PAGE_SIZE_LOG2);
+	const uintptr_t zeroext_xored = zerOS_virtaddr_zero_extend(node->persistent.xored_prev_next);
+	const uintptr_t zeroext_next  = zerOS_virtaddr_zero_extend((uintptr_t)next) >> PAGE_SIZE_LOG2;
+	const uintptr_t zeroext_prev  = (zeroext_xored ^ zeroext_next) << PAGE_SIZE_LOG2;
+
+	return node_at(zerOS_virtaddr_canonicalize(zeroext_prev));
 }
 
-[[gnu::pure]]
+[[__gnu__::__pure__]]
 static inline struct subregion_node* subregion_list_next(
   const struct subregion_node* restrict const node,
   const struct subregion_node* restrict const prev)
 {
-	return node_at(
-	  (node->persistent.xored_prev_next ^ ((uintptr_t)prev >> PAGE_SIZE_LOG2)) << PAGE_SIZE_LOG2);
+	const uintptr_t zeroext_xored = zerOS_virtaddr_zero_extend(node->persistent.xored_prev_next);
+	const uintptr_t zeroext_prev  = zerOS_virtaddr_zero_extend((uintptr_t)prev) >> PAGE_SIZE_LOG2;
+	const uintptr_t zeroext_next  = (zeroext_xored ^ zeroext_prev) << PAGE_SIZE_LOG2;
+
+	return node_at(zerOS_virtaddr_canonicalize(zeroext_next));
 }
 
 static inline void subregion_list_set_prev_next(
   struct subregion_node* node, struct subregion_node* prev, struct subregion_node* next)
 {
-	node->persistent.xored_prev_next =
-	  ((uintptr_t)prev >> PAGE_SIZE_LOG2) ^ ((uintptr_t)next >> PAGE_SIZE_LOG2);
+	const uintptr_t zeroext_prev = zerOS_virtaddr_zero_extend((uintptr_t)prev) >> PAGE_SIZE_LOG2;
+	const uintptr_t zeroext_next = zerOS_virtaddr_zero_extend((uintptr_t)next) >> PAGE_SIZE_LOG2;
+
+	node->persistent.xored_prev_next = zeroext_prev ^ zeroext_next;
 }
 
 static inline void subregion_list_new(struct subregion_list* list, struct subregion_node* node)
@@ -351,8 +266,14 @@ static inline void subregion_list_new(struct subregion_list* list, struct subreg
 
 [[maybe_unused]]
 static inline void subregion_list_insert_before(
-  struct subregion_list* list, struct subregion_node* at, struct subregion_node* new_node)
+  struct subregion_list* restrict list, struct subregion_node* at, struct subregion_node* new_node)
 {
+	assert(list);
+	assert(at);
+	assert(new_node);
+	assert(list->head);
+	assert(list->tail);
+
 	enum
 	{
 		LIST_PREV = 0,
@@ -384,8 +305,14 @@ static inline void subregion_list_insert_before(
 }
 
 static inline void subregion_list_insert_after(
-  struct subregion_list* list, struct subregion_node* at, struct subregion_node* new_node)
+  struct subregion_list* restrict list, struct subregion_node* at, struct subregion_node* new_node)
 {
+	assert(list);
+	assert(at);
+	assert(new_node);
+	assert(list->head);
+	assert(list->tail);
+
 	enum
 	{
 		LIST_PREV = 0,
@@ -417,14 +344,19 @@ static inline void subregion_list_insert_after(
 }
 
 static inline void subregion_list_delete(
-  struct subregion_list* list,
-  struct subregion_node* node,
+  struct subregion_list* restrict list,
+  struct subregion_node* deleted,
   struct subregion_node* prev,
   struct subregion_node* next)
 {
+	assert(list);
+	assert(list->head);
+	assert(list->tail);
+	assert(deleted);
+
 	if (prev)
 	{
-		struct subregion_node* prev_prev = subregion_list_prev(prev, node);
+		struct subregion_node* prev_prev = subregion_list_prev(prev, deleted);
 		subregion_list_set_prev_next(prev, prev_prev, next);
 	}
 	else
@@ -432,7 +364,7 @@ static inline void subregion_list_delete(
 
 	if (next)
 	{
-		struct subregion_node* next_next = subregion_list_next(next, node);
+		struct subregion_node* next_next = subregion_list_next(next, deleted);
 		subregion_list_set_prev_next(next, prev, next_next);
 	}
 	else
@@ -522,6 +454,8 @@ static inline void subregion_rbtree_add_to_bucket(
 static inline struct subregion_node*
 subregion_rbtree_take_from_bucket(struct subregion_node* const head_node)
 {
+	assert(head_node);
+
 	struct subregion_node_bucket_head* bucket = &head_node->rbtree_info.as_head;
 
 	struct subregion_node* restrict const returned = bucket->list.head;
@@ -537,6 +471,8 @@ subregion_rbtree_take_from_bucket(struct subregion_node* const head_node)
 
 static inline void subregion_rbtree_delete(struct subregion_node* const node)
 {
+	assert(node);
+
 	if (node->rbtree_info.is_bucket_head)
 	{
 		if (!node->rbtree_info.as_head.list.head && !node->rbtree_info.as_head.list.tail)
@@ -707,15 +643,17 @@ union fast_divmod
 	} out;
 };
 
+#if HAVE_LIBDIVIDE
+
 struct libdivide_wrapper
 {
-#if SIZE_WIDTH == 32
+#	if SIZE_WIDTH == 32
 	struct libdivide_u32_branchfree_t divider;
-#elif SIZE_WIDTH == 64
+#	elif SIZE_WIDTH == 64
 	struct libdivide_u64_branchfree_t divider;
-#else
-	#error "unsupported SIZE_WIDTH"
-#endif
+#	else
+#		error "unsupported SIZE_WIDTH"
+#	endif
 	bool initialized;
 };
 
@@ -724,11 +662,11 @@ static inline void libdivide_wrapper_init(struct libdivide_wrapper* wrapper, siz
 	if (wrapper->initialized)
 		return;
 
-#if SIZE_WIDTH == 32
+#	if SIZE_WIDTH == 32
 	wrapper->divider = libdivide_u32_branchfree_gen(denom);
-#elif SIZE_WIDTH == 64
+#	elif SIZE_WIDTH == 64
 	wrapper->divider = libdivide_u64_branchfree_gen(denom);
-#endif
+#	endif
 	wrapper->initialized = true;
 }
 
@@ -738,15 +676,18 @@ libdivide_wrapper_calc(struct libdivide_wrapper* wrapper, size_t numer, size_t d
 	if (!wrapper->initialized)
 		libdivide_wrapper_init(wrapper, denom);
 
-#if SIZE_WIDTH == 32
+#	if SIZE_WIDTH == 32
 	return libdivide_u32_branchfree_do(numer, &wrapper->divider);
-#elif SIZE_WIDTH == 64
+#	elif SIZE_WIDTH == 64
 	return libdivide_u64_branchfree_do(numer, &wrapper->divider);
-#endif
+#	endif
 }
+#endif
 
+[[__maybe_unused__]]
 static void fast_divmod(union fast_divmod* inout)
 {
+#if HAVE_LIBDIVIDE
 	static struct zerOS_spinlock spinlock = zerOS_SPINLOCK_INITIALIAZER;
 
 	// clang-format off
@@ -769,19 +710,49 @@ static void fast_divmod(union fast_divmod* inout)
 	zerOS_spin_unlock(&spinlock);
 
 	inout->out.mod = numer - (inout->out.div * denom);
+#else
+	const size_t numer = inout->in.numer;
+	const size_t denom = inout->in.denom;
+
+	inout->out.div = numer / denom;
+	inout->out.mod = numer % denom;
+#endif
+}
+
+[[__maybe_unused__]]
+static void fast_divmod_by_power_of_two(union fast_divmod* inout)
+{
+	const size_t numer = inout->in.numer;
+	const size_t denom = inout->in.denom;
+
+	size_t log2 = fast_log2_approx(denom);
+
+	inout->out.div = numer >> log2;
+	inout->out.mod = numer & ((1ull << log2) - 1);
 }
 
 // TODO: align_up and align_down macros or functions
 
+/**
+ * @brief Align a pointer up
+ * @param ptr The pointer
+ * @param align The alignment
+ * @returns The aligned pointer value
+ * @pre `align` must be a power of two
+ */
 static inline uintptr_t align_up(uintptr_t ptr, size_t align)
 {
+	assert(align % 2 == 0 || align == 1);
+	assert(is_power_of_two(align));
+
 	static_assert(sizeof(uintptr_t) == sizeof(size_t));
 	static_assert(alignof(uintptr_t) == alignof(size_t));
+
 	union fast_divmod divmod = {
 		.in = { .numer = ptr, .denom = align }
 	};
-	fast_divmod(&divmod);
-	return ptr + divmod.out.mod;
+	fast_divmod_by_power_of_two(&divmod);
+	return ptr + (align - divmod.out.mod);
 }
 
 static inline uintptr_t find_header(uintptr_t user_ptr)
@@ -813,7 +784,7 @@ extern struct zerOS_region_allocator* zerOS_region_allocator_create(
 
 	struct subregion_node* first_node = on_page_start(region + PAGE_SIZE);
 
-	subregion_set_page_count(first_node, (region_size / PAGE_SIZE) - 1);
+	subregion_set_size(first_node, region_size - PAGE_SIZE);
 	subregion_set_free(first_node, true);
 
 	subregion_list_new(&ret->list, first_node);
@@ -830,7 +801,7 @@ extern struct zerOS_region_allocator* zerOS_region_allocator_create(
 	ret->preferred_strategy =
 	  preferred != zerOS_ALLOC_STRAT_DEFAULT ? preferred : zerOS_ALLOC_STRAT_BEST_FIT;
 
-	if (authorize_reclaim && hook != nullptr)
+	if (authorize_reclaim && hook)
 	{
 		ret->authorize_reclaim = true;
 		ret->reclaim_hook      = hook;
@@ -851,8 +822,11 @@ extern struct zerOS_region_allocator* zerOS_region_allocator_create(
 	return ret;
 }
 
+[[__gnu__::__const__]]
 static inline size_t padding_for(size_t align)
 {
+	assert(is_power_of_two(align));
+
 	const uintptr_t aligned = align_up(MEMNODE_ALLOCATED_SIZE, align);
 	return aligned - MEMNODE_ALLOCATED_SIZE;
 }
@@ -934,6 +908,9 @@ extern void* zerOS_region_allocator_alloc(
   size_t                         align,
   enum zerOS_allocation_strategy strategy)
 {
+	assert(allocator->list.head);
+	assert(allocator->list.tail);
+
 	if (unlikely(align == SIZE_MAX))
 		align = alignof(max_align_t);
 
@@ -948,6 +925,7 @@ extern void* zerOS_region_allocator_alloc(
 
 	enum zerOS_allocation_strategy strat =
 	  strategy != zerOS_ALLOC_STRAT_DEFAULT ? strategy : allocator->preferred_strategy;
+	assert(strat == zerOS_ALLOC_STRAT_BEST_FIT || strat == zerOS_ALLOC_STRAT_FIRST_FIT);
 
 	switch (strat)
 	{
@@ -963,6 +941,12 @@ extern void* zerOS_region_allocator_alloc(
 	}
 
 	zerOS_spin_unlock(&allocator->spinlock);
+
+	assert((uintptr_t)returned % align == 0);
+	assert((uintptr_t)returned > (uintptr_t)allocator->region + PAGE_SIZE);
+	assert(
+	  (uintptr_t)returned
+	  < (uintptr_t)allocator->region + allocator->region_page_count * PAGE_SIZE);
 
 	return returned;
 }
@@ -1033,7 +1017,7 @@ extern void zerOS_region_allocator_dealloc(struct zerOS_region_allocator* alloca
 	else
 	{
 		// in the node list, we have:
-		//     ... <-> prev <-> node <-> next <-> ...
+		//     ... <-> node <-> next <-> ...
 
 		subregion_set_free(node, true);
 		if (next && subregion_free(next))
@@ -1042,7 +1026,7 @@ extern void zerOS_region_allocator_dealloc(struct zerOS_region_allocator* alloca
 			new_size += subregion_page_count(next);
 
 			struct subregion_node* next_next = subregion_list_next(next, node);
-			subregion_list_delete(&allocator->list, next, prev, next_next);
+			subregion_list_delete(&allocator->list, next, node, next_next);
 		}
 	}
 
@@ -1080,13 +1064,14 @@ extern void* zerOS_region_allocator_realloc(
 		? nullptr
 		: node_at((uintptr_t)node, subregion_page_count(node), OFFSET_KIND_PAGE);
 	if (unlikely(old_size == SIZE_MAX))
-		old_size = subregion_page_count(node);
+		old_size = subregion_page_count(node) * PAGE_SIZE;
 
 	const size_t alignment_padding = padding_for(align);
 	const size_t absolute_minimum  = MEMNODE_ALLOCATED_SIZE + alignment_padding + size;
 	const size_t absolute_page_count_minimum =
 	  (absolute_minimum / PAGE_SIZE) + (absolute_minimum % PAGE_SIZE ? 1 : 0);
 
+	// TODO: we might as well split if possible/needed
 	if (subregion_page_count(node) >= absolute_page_count_minimum)
 	{
 		void* new_ptr = (zerOS_byte_t*)node + MEMNODE_ALLOCATED_SIZE + alignment_padding;
@@ -1095,13 +1080,7 @@ extern void* zerOS_region_allocator_realloc(
 		return new_ptr;
 	}
 
-#if 0
-	// TODO: Make sure the compiler doesn't reorder this before the previous lines
-	//       (how ?)
-	zerOS_guard(spinlock)(guard, &allocator->spinlock);
-#else
 	zerOS_spin_lock(&allocator->spinlock);
-#endif
 
 	void* res = nullptr;
 
@@ -1110,6 +1089,8 @@ extern void* zerOS_region_allocator_realloc(
 	  && subregion_free(next)
 	  && subregion_page_count(node) + subregion_page_count(next) >= absolute_page_count_minimum)
 	{
+		res = ptr;
+
 		// NOTE: there shouldn't be multiple adjacent free regions as we should have coalesced them
 		const size_t total        = subregion_page_count(node) + subregion_page_count(next);
 		const size_t unused_pages = total - absolute_page_count_minimum;
@@ -1255,10 +1236,14 @@ zerOS_region_allocator_additional_space(struct zerOS_region_allocator* allocator
 extern size_t
 zerOS_region_allocator_max_size_for(struct zerOS_region_allocator* allocator, void* ptr)
 {
+#if 0
 	if (unlikely(!zerOS_region_allocator_contains(allocator, ptr)))
 		return SIZE_MAX;
+#else
+	assert(zerOS_region_allocator_contains(allocator, ptr));
+#endif
 
 	zerOS_guard(spinlock)(guard, &allocator->spinlock);
 	struct subregion_node* node = node_at(find_header((uintptr_t)ptr));
-	return subregion_page_count(node) * PAGE_SIZE;
+	return subregion_size(node);
 }

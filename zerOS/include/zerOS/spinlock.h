@@ -4,13 +4,6 @@
 #include <stdatomic.h>
 
 #include <zerOS/common.h>
-#include <zerOS/platform.h>
-
-#if zerOS_PLATFORM_IS_X86 || zerOS_PLATFORM_IS_AMD64
-	#include <x86intrin.h>
-#elif zerOS_PLATFORM_IS_ARM32 || zerOS_PLATFORM_IS_AARCH64
-	#include <arm_acle.h>
-#endif
 
 struct zerOS_spinlock
 {
@@ -19,10 +12,11 @@ struct zerOS_spinlock
 static_assert(__atomic_always_lock_free(sizeof(volatile bool), nullptr));
 
 #if 1
-	#undef zerOS_SPINLOCK_INITIALIAZER
-	#define zerOS_SPINLOCK_INITIALIAZER ((struct zerOS_spinlock){ .locked = false })
+#	undef zerOS_SPINLOCK_INITIALIAZER
+#	define zerOS_SPINLOCK_INITIALIAZER ((struct zerOS_spinlock){ .locked = false })
 #else
-static constexpr struct zerOS_spinlock zerOS_SPINLOCK_INITIALIAZER = { .locked = false };
+static constexpr struct zerOS_spinlock zerOS_SPINLOCK_INITIALIAZER =
+  (constexpr struct zerOS_spinlock){ .locked = false };
 #endif
 
 static inline bool zerOS_spin_try_lock(struct zerOS_spinlock* spinlock)
@@ -47,21 +41,8 @@ static inline void zerOS_spin_lock(struct zerOS_spinlock* spinlock)
 	{
 		while (spinlock->locked)
 		{
-#if zerOS_PLATFORM_IS_X86 || zerOS_PLATFORM_IS_AMD64
-			_mm_pause();
-#elif zerOS_PLATFORM_IS_ARM32
-			// TODO: we need at least arm v6
-			__yield();
-#elif zerOS_PLATFORM_IS_AARCH64
-			__isb(15); // ISB SY
-#elif zerOS_PLATFORM_IS_RISCV32 || zerOS_PLATFORM_IS_RISCV64
-			asm volatile("pause"
-						 :
-						 :
-						 : "memory");
-#else
+			zerOS_spin_hint();
 			continue;
-#endif
 		}
 	} while (!zerOS_spin_try_lock(spinlock));
 }

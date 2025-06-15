@@ -153,6 +153,8 @@ IncludeCategories:
   # zerOS subdirs
   - Regex: '^<zerOS/\.+>$'
     Priority: 2
+  - Regex: '^<libdivide\.h>$'
+    Priority: 3
 #  # Klibc
 #  - Regex: '^<klibc/.+>$'
 #    Priority: 1
@@ -184,7 +186,7 @@ IndentExternBlock: NoIndent #Indent
 
 IndentGotoLabels: true
 
-IndentPPDirectives: BeforeHash
+IndentPPDirectives: AfterHash #BeforeHash
 
 IndentWidth: 4
 

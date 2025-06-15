@@ -15,7 +15,7 @@ fn rust_panic_impl(info: &core::panic::PanicInfo) -> !
 	let mut column_buf = itoa::Buffer::new();
 	error!(
 		r#"
-PANIC at {}{}{}:
+PANIC at {}:{}:{}:
 	{}
 "#,
 		info.location().map_or("<unknown-file>", |loc| loc.file()),

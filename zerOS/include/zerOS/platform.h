@@ -150,6 +150,6 @@ static_assert(
 	  + zerOS_PLATFORM_IS_AVR32
 	  + zerOS_PLATFORM_IS_ZARCH
 	== 1,
-  "multiple platforms detected");
+  "only one platform should be detected !");
 
 /* !!! NO INCLUDE GUARDS DESIRED !!! */
