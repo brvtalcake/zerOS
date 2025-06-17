@@ -1008,7 +1008,7 @@ extern void zerOS_region_allocator_dealloc(struct zerOS_region_allocator* alloca
 			subregion_rbtree_delete(next);
 			new_size += subregion_page_count(next);
 
-			struct subregion_node* next_next = subregion_list_next(next, node);
+			struct subregion_node* next_next = subregion_list_next(next, prev);
 			subregion_list_delete(&allocator->list, next, prev, next_next);
 			// and finally we have:
 			//     ... <-> prev <-> next_next <-> ...

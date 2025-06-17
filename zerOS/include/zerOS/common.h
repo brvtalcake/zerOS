@@ -24,6 +24,26 @@
 #	endif
 #endif
 
+#ifndef UINTPTR_C
+#	if UINTPTR_WIDTH == 64
+#		define UINTPTR_C(...) UINT64_C(__VA_ARGS__)
+#	elif UINTPTR_WIDTH == 32
+#		define UINTPTR_C(...) UINT32_C(__VA_ARGS__)
+#	else
+#		error "`UINTPTR_WIDTH` is neither 32 nor 64"
+#	endif
+#endif
+
+#ifndef INTPTR_C
+#	if INTPTR_WIDTH == 64
+#		define INTPTR_C(...) INT64_C(__VA_ARGS__)
+#	elif INTPTR_WIDTH == 32
+#		define INTPTR_C(...) INT32_C(__VA_ARGS__)
+#	else
+#		error "`INTPTR_WIDTH` is neither 32 nor 64"
+#	endif
+#endif
+
 #include <zerOS/platform.h>
 #if zerOS_PLATFORM_IS_X86 || zerOS_PLATFORM_IS_AMD64
 #	include <x86intrin.h>
@@ -223,17 +243,35 @@ extern void* memcpy(void* restrict dst, const void* restrict src, size_t size);
 	})
 
 #undef zerOS_PP_FORCE_SEMICOLON
-#define zerOS_PP_FORCE_SEMICOLON \
-	;                            \
-	(void)0
+#define zerOS_PP_FORCE_SEMICOLON struct UNIQUE(__zerOS_semicolon_forcer)
+
+#undef __zerOS_make_uX_impl
+#define __zerOS_make_uX_impl(size)                                      \
+	[[__gnu__::__always_inline__]]                                      \
+	static inline PP_PASTE(uint, PP_PASTE(size, _t))                    \
+	  PP_PASTE(zerOS_make_u, size)(uint8_t from, uint8_t to)            \
+	{                                                                   \
+		if (from < to && from < PP_PASTE(UINT, PP_PASTE(size, _WIDTH))) \
+			return (PP_PASTE(UINT, PP_PASTE(size, _C))(1) << from)      \
+				 | PP_PASTE(zerOS_make_u, size)(from + 1, to);          \
+		return PP_PASTE(UINT, PP_PASTE(size, _C))(0);                   \
+	}                                                                   \
+	zerOS_PP_FORCE_SEMICOLON
+
+__zerOS_make_uX_impl(8);
+__zerOS_make_uX_impl(16);
+__zerOS_make_uX_impl(32);
+__zerOS_make_uX_impl(64);
 
 [[__gnu__::__always_inline__]]
-static inline uint8_t zerOS_make_u8(uint8_t from, uint8_t to)
+static inline uintptr_t zerOS_make_uptr(uint8_t from, uint8_t to)
 {
-	if (from < to)
-		return (UINT8_C(1) << from) | zerOS_make_u8(from + 1, to);
-	return UINT8_C(0);
+	if (from < to && from < UINTPTR_WIDTH)
+		return (UINTPTR_C(1) << from) | zerOS_make_uptr(from + 1, to);
+	return UINTPTR_C(0);
 }
+
+#undef __zerOS_make_uX_impl
 
 [[__gnu__::__always_inline__]]
 static inline void zerOS_spin_hint(void)
@@ -260,5 +298,12 @@ static inline void zerOS_hcf(void)
 	while (true)
 		zerOS_spin_hint();
 }
+
+#undef bit_at
+#define bit_at(index, num)                                                      \
+	({                                                                          \
+		const auto UNIQUE(mask_in_bit_at) = ((typeof_unqual(num))1 << (index)); \
+		(bool)(((num) & UNIQUE(mask_in_bit_at)) == UNIQUE(mask_in_bit_at));     \
+	})
 
 #endif

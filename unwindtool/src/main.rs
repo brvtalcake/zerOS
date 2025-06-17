@@ -1,7 +1,7 @@
 use std::{fs, path::PathBuf};
 
 use anyhow::{Ok, Result, anyhow, bail};
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use gimli::{BaseAddresses, EhFrame, UnwindContext, UnwindSection};
 use object::{
 	Endian,
@@ -16,6 +16,8 @@ use object::{
 		elf::{ElfFile64, Sym}
 	}
 };
+
+mod troll;
 
 #[derive(Parser)]
 #[command(
@@ -53,6 +55,9 @@ enum UnwindToolAction
 		#[clap(value_name = "FROM")]
 		/// The input executable to modify.
 		input:  PathBuf,
+		#[arg(short, long, value_enum)]
+		/// The architecture to generate debuginfo for.
+		arch:   SupportedArch,
 		#[command(flatten)]
 		output: UnwindToolGenerationOutput
 	}
@@ -90,6 +95,39 @@ struct UnwindToolGenerationOutput
 	#[arg(short = 'o', long = "output", value_name = "TO")]
 	/// The output executable to modify.
 	file: Option<PathBuf>
+}
+
+#[derive(
+	Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Hash, strum::AsRefStr,
+)]
+#[strum(serialize_all = "lowercase")]
+#[clap(rename_all = "lower")]
+enum SupportedArch
+{
+	#[default]
+	#[value(alias("x86-64"), alias("x86_64"))]
+	Amd64,
+	#[value(alias("i386"), alias("i486"), alias("i586"), alias("i686"))]
+	X86,
+	#[value(alias("arm64"))]
+	AArch64,
+	#[value(alias("arm"))]
+	Arm32,
+	Riscv32,
+	Riscv64,
+	#[value(alias("ppc32"))]
+	PowerPC32,
+	#[value(alias("ppc64"), alias("ppc"))]
+	PowerPC64,
+	Sparc32,
+	Sparc64,
+	Mips32,
+	Mips64,
+	#[value(alias("avr"))]
+	Avr32,
+	LoongArch64,
+	#[value(alias("s390x"))]
+	ZArch
 }
 
 fn main() -> Result<()>
@@ -180,23 +218,39 @@ fn dump_dwarf_elf64<'data, R: ReadRef<'data>>(file: &ElfFile64<'data, Endianness
 						sym.address()
 					))
 				})?;
+			let fde = unwind_info
+				.fde_for_address(&base_addresses, sym.address(), EhFrame::cie_from_offset)
+				.map_err(|err| {
+					anyhow!(format!(
+						"{} (function: {demangled}, address: {})",
+						err,
+						sym.address()
+					))
+				})?;
 			#[rustfmt::skip]
 			println!(
 				concat!(
 					"  {}:\n",
 					"    mangled: {}\n",
-					"    address: 0x{:x}\n",
+					"    address: {:#x}\n",
 					"    size: {}\n",
 					"    unwind info:\n",
-					"      start: 0x{:x}\n",
-					"      size: {}"
+					"      start: {:#x}\n",
+					"      size: {}\n",
+					"      fde:\n",
+					"        start: {:#x}\n",
+					"        end: {:#x}\n",
+					"        size: {}\n"
 				),
 				demangled,
 				mangled,
 				sym.address(),
 				sym.size(),
 				unwind.start_address(),
-				unwind.end_address() - unwind.start_address()
+				unwind.end_address() - unwind.start_address(),
+				fde.initial_address(),
+				fde.end_address(),
+				fde.end_address().wrapping_sub(fde.initial_address())
 			);
 		}
 	}

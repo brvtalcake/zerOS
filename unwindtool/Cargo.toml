@@ -13,8 +13,14 @@ object = { version = "0.37.0", features = ["all"] }
 rustc-demangle = { version = "0.1.24", features = ["std"] }
 symbolic-demangle = "12.15.5"
 itertools = "0.14.0"
+fallible-iterator = { version = "0.3.0", features = ["std", "alloc"] }
 
 [dependencies.bitflags]
 version = "*"
 features = ["std", "serde"]
 #rustc_target = "0"
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = 3

@@ -182,9 +182,9 @@ fn verify_requests() -> bool
 				bad!(
 					concat!(
 						"\t",
-						"expected \"{}\" for response field \"",
+						"expected `{}` for response field `",
 						stringify!($field),
-						"\", but got \"{:#?}\" instead"
+						"`, but got `{:#?}` instead"
 					),
 					stringify!($value $(|| $other)*),
 					_tmp
@@ -202,9 +202,9 @@ fn verify_requests() -> bool
 				bad!(
 					concat!(
 						"\t",
-						"expected \"{}\" for \"",
+						"expected `{}` for `",
 						$override,
-						"\", but got \"{:#?}\" instead"
+						"`, but got `{:#?}` instead"
 					),
 					stringify!($value $(|| $other)*),
 					_tmp
@@ -214,7 +214,7 @@ fn verify_requests() -> bool
 	}
 
 	macro_rules! verify {
-		($what:literal: $req:expr; { $( $(($override:literal))? $field:ident $( = $expected:expr $(, $other:expr)* )?; )*}) => {
+		($((required: $required:expr))? $what:literal: $req:expr; { $( $(($override:literal))? $field:ident $( = $expected:expr $(, $other:expr)* )?; )*}) => {
 			info!(
 				event: "limine-boot",
 				concat!(
@@ -235,7 +235,7 @@ fn verify_requests() -> bool
 					);
 				)*
 			}
-			else {
+			else if true $(&& ($required as bool))? {
 				very_bad!(
 					concat!(
 						"couldn't verify ",
@@ -243,6 +243,16 @@ fn verify_requests() -> bool
 						" response: ",
 						stringify!($req),
 						" has no response field !"
+					)
+				);
+			}
+			else
+			{
+				info!(
+					event: "limine-boot",
+					concat!(
+						$what,
+						" not present, but this is expected, skipping..."
 					)
 				);
 			}
@@ -254,7 +264,7 @@ fn verify_requests() -> bool
 	verify!(
 		"bootloader info": BOOTLOADER_INFO_REQUEST;
 		{
-			name = "limine";
+			name = "Limine";
 			version;
 		}
 	);
@@ -265,6 +275,7 @@ fn verify_requests() -> bool
 		}
 	);
 	verify!(
+		(required: cfg!(not(x86_alike)))
 		"device-tree blob": DTB_REQUEST;
 		{
 			dtb_ptr;
@@ -272,6 +283,7 @@ fn verify_requests() -> bool
 	);
 	verify!(
 		// TODO: dump the memory map
+		(required: false)
 		"EFI memory map": EFI_MEMMAP_REQUEST;
 		{
 			memmap;
@@ -281,6 +293,7 @@ fn verify_requests() -> bool
 		}
 	);
 	verify!(
+		(required: false)
 		"EFI system table": EFI_SYSTBL_REQUEST;
 		{
 			address;
@@ -306,9 +319,9 @@ fn verify_requests() -> bool
 			bad!(
 				concat!(
 					"\t",
-					"expected \"{}\" for response field \"",
+					"expected `{}` for response field `",
 					stringify!(firmware_type),
-					"\", but got \"{:#?}\" instead"
+					"`, but got `{:#?}` instead"
 				),
 				stringify!((FirmwareType::UEFI_32) || (FirmwareType::UEFI_64)),
 				firmware_type_string(_tmp)
@@ -378,12 +391,14 @@ fn verify_requests() -> bool
 		}
 	);
 	verify!(
+		(required: false)
 		"rsdp": RSDP_REQUEST;
 		{
 			address;
 		}
 	);
 	verify!(
+		(required: false)
 		"smbios": SMBIOS_REQUEST;
 		{
 			entry_32;

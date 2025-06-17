@@ -61,6 +61,7 @@ static inline void __zerOS_spinlock_guard_cleanup_func(struct zerOS_spinlock** s
 #define __zerOS_spinlock_guard_impl(name, spinlock)       \
 	[[gnu::cleanup(__zerOS_spinlock_guard_cleanup_func)]] \
 	struct zerOS_spinlock* name = (spinlock);             \
-	zerOS_spin_lock(name) zerOS_PP_FORCE_SEMICOLON
+	zerOS_spin_lock(name);                                \
+	zerOS_PP_FORCE_SEMICOLON
 
 #endif

@@ -23,6 +23,30 @@ pub const MAX_ALIGN: u32 = 4096;
 pub const MAX_VIRTUAL_ADDRESS_LOG2: u32 = 57;
 pub const PAGE_SIZE_LOG2: u32 = 12;
 pub type zerOS_byte_t = u8;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct ___uNiQuE_iDeNtIfIeR_at_LINE261_NAMED__zerOS_semicolon_forcer
+{
+	_unused: [u8; 0]
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct ___uNiQuE_iDeNtIfIeR_at_LINE262_NAMED__zerOS_semicolon_forcer
+{
+	_unused: [u8; 0]
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct ___uNiQuE_iDeNtIfIeR_at_LINE263_NAMED__zerOS_semicolon_forcer
+{
+	_unused: [u8; 0]
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct ___uNiQuE_iDeNtIfIeR_at_LINE264_NAMED__zerOS_semicolon_forcer
+{
+	_unused: [u8; 0]
+}
 impl zerOS_allocation_strategy
 {
 	pub const zerOS_ALLOC_STRAT_DEFAULT: zerOS_allocation_strategy = zerOS_allocation_strategy(0);
