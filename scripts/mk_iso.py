@@ -83,7 +83,8 @@ class IsoMaker:
         executable: str | pathlib.Path,
         arch: Arch, bootloader: Bootloader,
         output: str | pathlib.Path,
-        bootconf: str | pathlib.Path | None) -> None:
+        bootconf: str | pathlib.Path | None,
+        bootmods: str | pathlib.Path) -> None:
         self.root = pathlib.Path(root)
         self.executable = pathlib.Path(executable)
         self.arch = arch
@@ -93,6 +94,7 @@ class IsoMaker:
             self.bootconf = pathlib.Path(bootconf)
         else:
             self.bootconf = None
+        self.bootmods = bootmods
         return
     
     def __call__(self) -> None:
@@ -187,6 +189,8 @@ def cp_if_newer(fromfile: str, tofile: str):
 def cp(fromfile: str, tofile: str):
     fromfile, tofile, _ = _cp_common(fromfile, tofile)
     pinfo(f'copying {fromfile} to {tofile}')
+    if os.path.isdir(fromfile):
+        return _cp_dir(fromfile, tofile)
     fromfd = -1
     tofd = -1
     try:
@@ -201,6 +205,17 @@ def cp(fromfile: str, tofile: str):
         if tofd != -1:
             os.close(tofd)
     return tofile
+
+def _cp_dir(fromdir: str, todir: str, strict: bool = True):
+    if os.path.exists(todir):
+        if strict:
+            raise RuntimeError(f'path {todir} already exists !')
+        else:
+            return todir
+    os.mkdir(todir)
+    for path in os.scandir(fromdir):
+        cp(path.path, todir)
+    return todir
 
 def cargo(cargo_cmd: str, *extra: str, **kwargs):
     args = [ 'cargo', cargo_cmd, '-Z', 'unstable-options' ]
@@ -306,6 +321,7 @@ def make_iso(args: IsoMaker):
             }
             downloader = download_latest_limine_binaries(args.root)
             cp(get_path_str(args.executable), f'{get_path_str(args.root)}/boot/')
+            cp(get_path_str(args.bootmods), f'{get_path_str(args.root)}/boot/')
             cp(get_path_str(args.bootconf), f'{get_path_str(args.root)}/boot/limine/')
             downloader[f'BOOT{UEFI_BOOT_SUFFIXES[args.arch]}.EFI'].materialize(f'{get_path_str(args.root)}/EFI/BOOT/')
             match args.arch:
@@ -374,6 +390,13 @@ def parse_cmdline():
         type=str,
         default='amd64',
         help='The target architecture'
+    )
+    parser.add_argument(
+        '-m', '--boot-modules',
+        type=pathlib.Path,
+        default=None,
+        required=True,
+        help='The directory where the kernel\'s boot modules reside'
     )
     return parser.parse_args()
 
@@ -467,6 +490,14 @@ def validate_bootloader_config(parsed: argparse.Namespace, bootloader: Bootloade
             raise ProgramArgError(f'invalid bootloader {bootloader}')
     return bootconf.resolve() if bootconf is not None else None
 
+def validate_boot_modules_path(parsed: argparse.Namespace) -> pathlib.Path:
+    bootmods: pathlib.Path = parsed.boot_modules
+    if not bootmods.exists():
+        raise ProgramArgError(f'provided boot modules path {bootmods} doesn\'t exist')
+    elif not bootmods.is_dir():
+        raise ProgramArgError(f'provided boot modules path {bootmods} is not a directory')
+    return bootmods.resolve()
+
 def main() -> int:
     try:
         parsed = parse_cmdline()
@@ -476,7 +507,8 @@ def main() -> int:
         arch = validate_arch(parsed)
         bootloader = validate_bootloader(parsed, arch)
         bootconf = validate_bootloader_config(parsed, bootloader)
-        IsoMaker(root, exe, arch, bootloader, out, bootconf)()
+        bootmods = validate_boot_modules_path(parsed)
+        IsoMaker(root, exe, arch, bootloader, out, bootconf, bootmods)()
     except ProcessFailedError as e:
         perror(f'command \'{' '.join(e.proc.args)}\' exited with error code {e.proc.returncode}')
         perror("terminating...")

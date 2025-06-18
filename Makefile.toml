@@ -3,6 +3,16 @@
 # TODO: kernel test framework
 # TODO: what are e.g. Redox or Linux "`alternatives`"
 
+env_scripts = ['''
+#!@duckscript
+strip = which eu-strip
+if is_empty ${strip}
+    set_env ZEROS_HAVE_EU_STRIP false
+else
+    set_env ZEROS_HAVE_EU_STRIP true
+end
+''']
+
 [config]
 additional_profiles = ["dev", "dev-lto", "release", "release-lto"]
 #time_summary = true
@@ -57,9 +67,107 @@ RUSTFLAGS = '--cfg getrandom_backend="rdrand" -Ctarget-cpu=${ZEROS_TARGET_CPU} -
 [tasks.zerOS-pre-build]
 cwd = "./zerOS"
 private = true
+script_runner = "@duckscript"
+script = '''
+rm -r ./bin
+rm -r ./iso_root
+mkdir ./bin
+mkdir ./bin/zerOS-boot-modules
+mkdir ./iso_root
+'''
+
+[tasks.zerOS-do-strip-classic-dev]
+cwd = "./zerOS"
+private = true
+condition_script = ['''
+#!/usr/bin/env python3
+import os
+profile = os.environ['ZEROS_PROFILE']
+if 'test' in profile or profile.startswith('dev'):
+    exit(0)
+else:
+    exit(1)
+''']
+script_runner = "@shell"
+script = '''
+objcopy --only-keep-debug "./bin/zerOS" "./bin/zerOS-boot-modules/debug-info.zko" || exit 1
+strip -S "./bin/zerOS" -o "./bin/zerOS.stripped" || exit 1
+'''
+
+[tasks.zerOS-do-strip-classic-release]
+cwd = "./zerOS"
+private = true
+condition_script = ['''
+#!/usr/bin/env python3
+import os
+profile = os.environ['ZEROS_PROFILE']
+if 'test' not in profile and not profile.startswith('dev'):
+    exit(0)
+else:
+    exit(1)
+''']
+script_runner = "@shell"
+script = '''
+strip -S "./bin/zerOS" -o "./bin/zerOS.stripped" || exit 1
+'''
+
+[tasks.zerOS-do-strip-elfutils-dev]
+cwd = "./zerOS"
+private = true
+condition_script = ['''
+#!/usr/bin/env python3
+import os
+profile = os.environ['ZEROS_PROFILE']
+if 'test' in profile or profile.startswith('dev'):
+    exit(0)
+else:
+    exit(1)
+''']
+command = "eu-strip"
+args = [
+    "-f",
+    "./bin/zerOS-boot-modules/debug-info.zko",
+    "./bin/zerOS",
+    "-o",
+    "./bin/zerOS.stripped",
+]
+
+[tasks.zerOS-do-strip-elfutils-release]
+cwd = "./zerOS"
+private = true
+condition_script = ['''
+#!/usr/bin/env python3
+import os
+profile = os.environ['ZEROS_PROFILE']
+if 'test' not in profile and not profile.startswith('dev'):
+    exit(0)
+else:
+    exit(1)
+''']
+command = "eu-strip"
+args = ["./bin/zerOS", "-o", "./bin/zerOS.stripped"]
+
+[tasks.zerOS-strip]
+cwd = "./zerOS"
+private = true
+run_task = [
+    { name = [
+        "zerOS-do-strip-elfutils-dev",
+        "zerOS-do-strip-elfutils-release",
+    ], condition = { env_true = [
+        "ZEROS_HAVE_EU_STRIP",
+    ] } },
+    { name = [
+        "zerOS-do-strip-classic-dev",
+        "zerOS-do-strip-classic-release",
+    ], condition = { env_false = [
+        "ZEROS_HAVE_EU_STRIP",
+    ] } },
+]
 
 # TODO: mk_iso.py
 [tasks.zerOS-post-build]
+dependencies = ["zerOS-strip"]
 cwd = "./zerOS"
 private = true
 command = "../scripts/mk_iso.py"
@@ -74,7 +182,9 @@ args = [
     "${ZEROS_TARGET_ARCH}",
     "-c",
     "./config/limine.conf",
-    "./bin/zerOS",
+    "-m",
+    "./bin/zerOS-boot-modules",
+    "./bin/zerOS.stripped",
 ]
 
 [tasks.zerOS-build]

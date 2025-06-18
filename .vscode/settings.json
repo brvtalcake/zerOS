@@ -153,5 +153,8 @@
     "rust-analyzer.cargo.target": "/home/axel/tmp/x86_64-unknown-kernel.json",
     "rust-analyzer.cargo.extraEnv": {
         "ZEROS_TARGET_CPU": "skylake"
+    },
+    "[just]": {
+        "editor.defaultFormatter": "nefrob.vscode-just-syntax",
     }
 }
