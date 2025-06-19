@@ -1,0 +1,10 @@
+[alias]
+xtask = [
+    "run",
+    "-Z",
+    "unstable-options",
+    "--release",
+    "--manifest-path",
+    "./xtask/Cargo.toml",
+    "--",
+]

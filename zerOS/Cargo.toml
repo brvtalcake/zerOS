@@ -248,9 +248,9 @@ rpath = false
 
 [profile.release-lto]
 inherits = "release"
-lto = true
+lto = "fat"
 
 [profile.dev-lto]
 inherits = "dev"
-lto = true
+lto = "fat"
 incremental = false

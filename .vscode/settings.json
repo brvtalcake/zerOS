@@ -155,6 +155,13 @@
         "ZEROS_TARGET_CPU": "skylake"
     },
     "[just]": {
-        "editor.defaultFormatter": "nefrob.vscode-just-syntax",
+        "editor.defaultFormatter": "TobiasHochguertel.just-formatter",
+    },
+    "python.analysis.extraPaths": [
+        /* "${workspaceFolder}/.waf3-2.1.6-6a38d8c49406d2fef32d6f6600c8f033/waflib", */
+        "${workspaceFolder}/.waf3-2.1.6-6a38d8c49406d2fef32d6f6600c8f033"
+    ],
+    "[python]": {
+        "editor.defaultFormatter": "ms-python.black-formatter"
     }
 }

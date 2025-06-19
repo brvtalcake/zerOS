@@ -29,3 +29,6 @@ zerOS/vendor
 
 intel-manual.pdf
 amd-manual.pdf
+
+/*waf*
+/build
