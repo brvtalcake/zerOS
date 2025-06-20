@@ -1,6 +1,11 @@
 use clap::{Subcommand, ValueEnum};
 
-use crate::{SupportedArch, doc_comments::subdir};
+use crate::{
+	SupportedArch,
+	XtaskGlobalOptions,
+	actions::{Xtask, configure::ZerosConfig},
+	doc_comments::subdir
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Subcommand)]
 #[clap(rename_all = "lowercase")]
@@ -41,4 +46,31 @@ pub(crate) enum ZerosBuildProfile
 	Release,
 	#[default]
 	ReleaseLTO
+}
+
+impl XtaskBuildableSubproj
+{
+	#[allow(non_snake_case)]
+	fn execute_zerOS(&self, globals: &XtaskGlobalOptions)
+	{
+		let Self::Zeros { arch, profile, cpu } = self
+		else
+		{
+			unreachable!()
+		};
+		let cfg = ZerosConfig::load_or_error();
+		todo!()
+	}
+}
+
+impl Xtask for XtaskBuildableSubproj
+{
+	fn execute(&self, globals: &XtaskGlobalOptions)
+	{
+		match self
+		{
+			Self::Zeros { .. } => self.execute_zerOS(globals),
+			_ => todo!()
+		}
+	}
 }

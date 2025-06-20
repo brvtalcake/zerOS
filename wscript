@@ -4,7 +4,12 @@ from waflib.Build import BuildContext
 
 from scripts.get_valid_profiles import get_cargo_profiles
 
+APPNAME = "zerOS"
+VERSION = "0.1.0"
+
 out_dir = "./build"
+
+ZEROS_BOOTLOADER_CHOICES = ["limine", "grub2", "uefi"]
 
 ZEROS_EMULATOR_CHOICES = ["qemu", "bochs"]
 
@@ -141,18 +146,32 @@ def options(opts: OptionsContext):
         default=False,
         help="Use KVM accelerator if possible",
     )
+    zeros_opts.add_argument(
+        "--bootloader",
+        choices=ZEROS_BOOTLOADER_CHOICES,
+        default="limine",
+        help="The chosen bootloader for zerOS",
+    )
+    zeros_opts.add_argument(
+        "--docs",
+        action="store_true",
+        default=False,
+        help="Whether documentation should be built",
+    )
 
 
 def configure(conf: ConfigurationContext):
-    conf.load(["clang"])
+    conf.check_waf_version(mini="1.9.99", maxi="2.2.0")
+    to_load = ["clang"]
+    if conf.options.docs:
+        to_load.append("tex")
+    conf.load(to_load)
     conf.find_program("cargo")
     conf.find_program("strip", mandatory=False)
     conf.find_program("eu-strip", var="EUSTRIP", mandatory=False)
     conf.find_program("objcopy", mandatory=False)
     conf.find_program("xorriso", mandatory=False)
     conf.find_program("bochs", mandatory=False)
-    conf.find_program("gdb", mandatory=False)
-    conf.find_program("rust-gdb", mandatory=False)
     conf.find_program("qemu-system-x86_64", mandatory=False)
     conf.find_program("qemu-system-aarch64", mandatory=False)
     conf.find_program("qemu-system-arm", mandatory=False)
@@ -168,7 +187,10 @@ def configure(conf: ConfigurationContext):
     conf.find_program("qemu-system-mipsel", mandatory=False)
     conf.find_program("qemu-system-mips64el", mandatory=False)
     conf.find_program("qemu-system-loongarch64", mandatory=False)
+    if conf.options.gdb:
+        conf.find_program("gdb", mandatory=False)
+        conf.find_program("rust-gdb", mandatory=False)
 
 
 def build(bld: BuildContext):
-    print(bld)
+    """match bld.options."""

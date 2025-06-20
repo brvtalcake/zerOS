@@ -1,15 +1,22 @@
+#![feature(variant_count)]
 #![feature(decl_macro)]
+#![feature(file_lock)]
 
-use clap::{Args, Parser, Subcommand, ValueEnum};
+use std::fs;
+
+use anyhow::{Ok, Result};
+use clap::{ArgAction, Args, Parser, Subcommand, ValueEnum};
+use serde::{Deserialize, Serialize};
 
 mod actions;
 mod doc_comments;
 
 use crate::actions::{
+	Xtask,
 	build::XtaskBuildableSubproj,
 	clean::XtaskCleanableSubproj,
 	clippy::XtaskClippyableSubproj,
-	configure::XtaskConfigurableSubproj,
+	configure::{XtaskConfigurableSubproj, config_location, init_default_executable_names},
 	format::XtaskFormattableSubproj
 };
 
@@ -20,10 +27,19 @@ use crate::actions::{
 	long_about
 )]
 #[clap(rename_all = "kebab-case")]
-struct Xtask
+struct XtaskCLI
 {
 	#[command(subcommand)]
-	task: XtaskSubcmd
+	task:    XtaskSubcmd,
+	#[command(flatten)]
+	globals: XtaskGlobalOptions
+}
+
+#[derive(Debug, Clone, Args)]
+struct XtaskGlobalOptions
+{
+	#[arg(short, long, default_value_t = false, action = ArgAction::SetTrue)]
+	debug: bool
 }
 
 #[derive(Debug, Clone, Subcommand)]
@@ -62,7 +78,7 @@ enum XtaskSubcmd
 	}
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, ValueEnum, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash, ValueEnum, Default)]
 #[clap(rename_all = "lower")]
 enum SupportedArch
 {
@@ -92,8 +108,33 @@ enum SupportedArch
 	ZArch
 }
 
-fn main()
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+enum Endianness
 {
-	let cli = Xtask::parse();
-	dbg!(cli);
+	Little,
+	Big
+}
+
+fn main() -> Result<()>
+{
+	init_default_executable_names();
+
+	if !fs::exists(config_location!(root))?
+	{
+		fs::create_dir(config_location!(root)).unwrap();
+	}
+
+	let cli = XtaskCLI::parse();
+	dbg!(&cli);
+
+	match &cli.task
+	{
+		XtaskSubcmd::Configure { subproj } => subproj.execute(&cli.globals),
+		XtaskSubcmd::Build { subproj } => subproj.execute(&cli.globals),
+		XtaskSubcmd::Clean { subproj } => subproj.execute(&cli.globals),
+		XtaskSubcmd::Clippy { subproj } => subproj.execute(&cli.globals),
+		XtaskSubcmd::Format { subproj } => subproj.execute(&cli.globals)
+	}
+
+	Ok(())
 }

@@ -1,8 +1,23 @@
+use std::{
+	collections::HashMap,
+	fs::{self, File, OpenOptions},
+	mem::{self, MaybeUninit},
+	path::PathBuf,
+	str::FromStr,
+	sync::{Arc, RwLock}
+};
+
+use camino::{Utf8Path, Utf8PathBuf};
 use clap::Subcommand;
+use phf::phf_map;
+use regex::Regex;
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
+use which::which;
 
-use crate::doc_comments::subdir;
+use crate::{Endianness, SupportedArch, XtaskGlobalOptions, actions::Xtask, doc_comments::subdir};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Subcommand)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Subcommand)]
 #[clap(rename_all = "lowercase")]
 pub(crate) enum XtaskConfigurableSubproj
 {
@@ -10,4 +25,254 @@ pub(crate) enum XtaskConfigurableSubproj
 	#[clap(name = "zerOS", alias("zeros"), rename_all = "kebab-case")]
 	#[clap(about = subdir!(zerOS))]
 	Zeros
+	{
+		assignments: Vec<String>
+	} // TODO: add Docs target
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub(crate) enum Executable
+{
+	Clang,
+	Cargo,
+	Xorriso,
+	Strip,
+	EuStrip,
+	Qemu(SupportedArch, Option<Endianness>)
+}
+
+pub(crate) static EXECUTABLE_DEFAULTS: RwLock<
+	MaybeUninit<HashMap<Executable, (&'static str, &'static [&'static str])>>
+> = RwLock::new(MaybeUninit::uninit());
+
+pub(crate) fn init_default_executable_names()
+{
+	let mut guard = EXECUTABLE_DEFAULTS.write().unwrap();
+	let mut map = guard.write(HashMap::with_capacity(
+		mem::variant_count::<Executable>() + mem::variant_count::<SupportedArch>()
+	));
+	map.insert(Executable::Clang, ("clang", &["CC", "CLANG"]));
+	map.insert(Executable::Cargo, ("cargo", &["CARGO"]));
+	map.insert(Executable::Xorriso, ("xorriso", &["XORRISO"]));
+	map.insert(Executable::Strip, ("strip", &["STRIP"]));
+	map.insert(Executable::EuStrip, ("eu-strip", &["EU_STRIP", "EUSTRIP"]));
+	map.insert(
+		Executable::Qemu(SupportedArch::Amd64, None),
+		(
+			"qemu-system-x86_64",
+			&[
+				"QEMU",
+				"QEMU_X86_64",
+				"QEMUX86_64",
+				"QEMUX64",
+				"QEMU_X64",
+				"QEMUAMD64",
+				"QEMU_AMD64"
+			]
+		)
+	);
+	map.insert(
+		Executable::Qemu(SupportedArch::AArch64, None),
+		(
+			"qemu-system-aarch64",
+			&["QEMU", "QEMU_AARCH64", "QEMUAARCH64"]
+		)
+	);
+	map.insert(
+		Executable::Qemu(SupportedArch::Arm32, None),
+		("qemu-system-arm", &["QEMU", "QEMU_ARM", "QEMUARM"])
+	);
+	map.insert(
+		Executable::Qemu(SupportedArch::Avr32, None),
+		("qemu-system-avr", &["QEMU", "QEMU_AVR", "QEMUAVR"])
+	);
+	map.insert(
+		Executable::Qemu(SupportedArch::Riscv32, None),
+		(
+			"qemu-system-riscv32",
+			&["QEMU", "QEMU_RISCV32", "QEMURISCV32"]
+		)
+	);
+	map.insert(
+		Executable::Qemu(SupportedArch::Riscv64, None),
+		(
+			"qemu-system-riscv64",
+			&["QEMU", "QEMU_RISCV64", "QEMURISCV64"]
+		)
+	);
+	map.insert(
+		Executable::Qemu(SupportedArch::PowerPC32, None),
+		("qemu-system-ppc", &["QEMU", "QEMU_PPC", "QEMUPPC"])
+	);
+	map.insert(
+		Executable::Qemu(SupportedArch::PowerPC64, None),
+		("qemu-system-ppc64", &["QEMU", "QEMU_PPC64", "QEMUPPC64"])
+	);
+	map.insert(
+		Executable::Qemu(SupportedArch::Sparc32, None),
+		("qemu-system-sparc", &["QEMU", "QEMU_SPARC", "QEMUSPARC"])
+	);
+	map.insert(
+		Executable::Qemu(SupportedArch::Sparc64, None),
+		(
+			"qemu-system-sparc64",
+			&["QEMU", "QEMU_SPARC64", "QEMUSPARC64"]
+		)
+	);
+	map.insert(
+		Executable::Qemu(SupportedArch::Mips32, Some(Endianness::Big)),
+		("qemu-system-mips", &["QEMU", "QEMU_MIPS", "QEMUMIPS"])
+	);
+	map.insert(
+		Executable::Qemu(SupportedArch::Mips64, Some(Endianness::Big)),
+		("qemu-system-mips64", &["QEMU", "QEMU_MIPS64", "QEMUMIPS64"])
+	);
+	map.insert(
+		Executable::Qemu(SupportedArch::Mips32, Some(Endianness::Little)),
+		("qemu-system-mipsel", &["QEMU", "QEMU_MIPSEL", "QEMUMIPSEL"])
+	);
+	map.insert(
+		Executable::Qemu(SupportedArch::Mips64, Some(Endianness::Little)),
+		(
+			"qemu-system-mips64el",
+			&["QEMU", "QEMU_MIPS64EL", "QEMUMIPS64EL"]
+		)
+	);
+	map.insert(
+		Executable::Qemu(SupportedArch::LoongArch64, None),
+		(
+			"qemu-system-loongarch64",
+			&["QEMU", "QEMU_LOONGARCH64", "QEMULOONGARCH64"]
+		)
+	);
+}
+
+#[serde_as]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ZerosConfig
+{
+	#[serde_as(as = "Vec<(_, _)>")]
+	pub(crate) map: HashMap<Executable, Option<Utf8PathBuf>>
+}
+
+impl ZerosConfig
+{
+	pub(crate) fn load_or_error() -> Self
+	{
+		let path = config_location!(zerOS);
+		let file = File::open(path).unwrap();
+		file.lock_shared().unwrap();
+		rmp_serde::decode::from_read(file).unwrap()
+	}
+}
+
+impl Xtask for XtaskConfigurableSubproj
+{
+	fn execute(&self, globals: &XtaskGlobalOptions)
+	{
+		match self
+		{
+			Self::Zeros { assignments } =>
+			{
+				let find_exe = |name: &'static str, alts: &[&'static str]| -> Option<Utf8PathBuf> {
+					let raw = format!(r"({})\=(\S+)", alts.join("|"));
+					let regex = Regex::new(raw.as_str()).unwrap();
+					assignments
+						.iter()
+						.map(|el| regex.captures(el.trim()))
+						.find(|el| el.as_ref().is_some_and(|matched| matched.get(2).is_some()))
+						.flatten()
+						.map(|matched| unsafe { matched.get(2).unwrap_unchecked() }.as_str().into())
+						.or_else(|| {
+							for env in alts.iter().map(|&alt| std::env::var(alt))
+							{
+								if let Ok(binding) = env
+								{
+									return Some(binding.into());
+								}
+							}
+							None
+						})
+						.or_else(|| {
+							which(name)
+								.ok()
+								.and_then(|p| Utf8PathBuf::from_path_buf(p).ok())
+						})
+				};
+				let mut cfg = ZerosConfig {
+					map: HashMap::new()
+				};
+
+				let to_find = [
+					Executable::Clang,
+					Executable::Cargo,
+					Executable::Xorriso,
+					Executable::Strip,
+					Executable::EuStrip,
+					Executable::Qemu(SupportedArch::Amd64, None),
+					Executable::Qemu(SupportedArch::AArch64, None),
+					Executable::Qemu(SupportedArch::Arm32, None),
+					Executable::Qemu(SupportedArch::Avr32, None),
+					Executable::Qemu(SupportedArch::Riscv32, None),
+					Executable::Qemu(SupportedArch::Riscv64, None),
+					Executable::Qemu(SupportedArch::PowerPC32, None),
+					Executable::Qemu(SupportedArch::PowerPC64, None),
+					Executable::Qemu(SupportedArch::Sparc32, None),
+					Executable::Qemu(SupportedArch::Sparc64, None),
+					Executable::Qemu(SupportedArch::Mips32, Some(Endianness::Big)),
+					Executable::Qemu(SupportedArch::Mips64, Some(Endianness::Big)),
+					Executable::Qemu(SupportedArch::Mips32, Some(Endianness::Little)),
+					Executable::Qemu(SupportedArch::Mips64, Some(Endianness::Little)),
+					Executable::Qemu(SupportedArch::LoongArch64, None)
+				];
+				let guard = EXECUTABLE_DEFAULTS.read().unwrap();
+				for (exe, name, vars) in to_find.map(|e| {
+					let &(n, v) = unsafe { guard.assume_init_ref() }.get(&e).unwrap();
+					(e, n, v)
+				})
+				{
+					cfg.map.insert(exe, find_exe(name, vars));
+				}
+
+				if globals.debug
+				{
+					dbg!(&cfg);
+				}
+
+				let mut file = OpenOptions::new()
+					.create(true)
+					.truncate(true)
+					.write(true)
+					.read(false)
+					.open(config_location!(zerOS))
+					.unwrap();
+				file.lock().unwrap();
+				rmp_serde::encode::write(&mut file, &cfg).unwrap()
+			}
+		}
+	}
+}
+
+pub(crate) macro config_location
+{
+	(root) =>  {
+		$crate::actions::configure::get_topdir().join(".xtask-cache")
+	},
+	(zerOS) => {
+		$crate::actions::configure::config_location!(root).join("zerOS.msgpack")
+	},
+	($($errtoks:tt)*) => {
+		compile_error!(concat!("invalid tokens: ", stringify!($($errtoks)*)));
+	}
+}
+
+pub(crate) fn get_topdir() -> Utf8PathBuf
+{
+	Utf8PathBuf::from_path_buf(PathBuf::from_str(env!("CARGO_MANIFEST_DIR")).unwrap())
+		.unwrap()
+		.canonicalize_utf8()
+		.unwrap()
+		.parent()
+		.unwrap()
+		.to_path_buf()
 }

@@ -1,6 +1,6 @@
 use clap::Subcommand;
 
-use crate::doc_comments::subdir;
+use crate::{XtaskGlobalOptions, actions::Xtask, doc_comments::subdir};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Subcommand)]
 #[clap(rename_all = "lowercase")]
@@ -27,4 +27,12 @@ pub(crate) enum XtaskFormattableSubproj
 	#[doc = subdir!(docs)]
 	#[clap(about = subdir!(docs))]
 	Docs
+}
+
+impl Xtask for XtaskFormattableSubproj
+{
+	fn execute(&self, globals: &XtaskGlobalOptions)
+	{
+		todo!()
+	}
 }
