@@ -1,0 +1,49 @@
+{
+    "extensions": {},
+    "settings": {
+        "[just]": {
+            "editor.defaultFormatter": "TobiasHochguertel.just-formatter",
+        },
+        "python.analysis.extraPaths": [
+            /* "${workspaceFolder}/.waf3-2.1.6-6a38d8c49406d2fef32d6f6600c8f033/waflib", */
+            "${workspaceFolder}/.waf3-2.1.6-6a38d8c49406d2fef32d6f6600c8f033"
+        ],
+        "[python]": {
+            "editor.defaultFormatter": "ms-python.black-formatter"
+        }
+    },
+    "folders": [
+        {
+            "path": "./zerOS",
+            "name": "zerOS-kernel"
+        },
+        {
+            "path": "./generate-target",
+            "name": "zerOS-generate-target"
+        },
+        {
+            "path": "./docs",
+            "name": "zerOS-docs"
+        },
+        {
+            "path": "./macro-utils",
+            "name": "zerOS-macro-utils"
+        },
+        {
+            "path": "./proc-macro-utils",
+            "name": "zerOS-proc-macro-utils"
+        },
+        {
+            "path": "./scripts",
+            "name": "zerOS-scripts"
+        },
+        {
+            "path": "./unwindtool",
+            "name": "zerOS-unwindtool"
+        },
+        {
+            "path": "./xtask",
+            "name": "zerOS-xtask"
+        }
+    ]
+}

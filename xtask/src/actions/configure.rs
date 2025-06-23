@@ -1,10 +1,11 @@
 use std::{
+	cell::LazyCell,
 	collections::HashMap,
 	fs::{self, File, OpenOptions},
 	mem::{self, MaybeUninit},
 	path::PathBuf,
 	str::FromStr,
-	sync::{Arc, RwLock}
+	sync::{Arc, LazyLock, RwLock}
 };
 
 use camino::{Utf8Path, Utf8PathBuf};
@@ -255,24 +256,27 @@ impl Xtask for XtaskConfigurableSubproj
 
 pub(crate) macro config_location
 {
-	(root) =>  {
+	() =>  {
 		$crate::actions::configure::get_topdir().join(".xtask-cache")
 	},
 	(zerOS) => {
-		$crate::actions::configure::config_location!(root).join("zerOS.msgpack")
+		$crate::actions::configure::config_location!().join("zerOS.msgpack")
 	},
 	($($errtoks:tt)*) => {
 		compile_error!(concat!("invalid tokens: ", stringify!($($errtoks)*)));
 	}
 }
 
-pub(crate) fn get_topdir() -> Utf8PathBuf
+pub(crate) fn get_topdir() -> &'static Utf8Path
 {
-	Utf8PathBuf::from_path_buf(PathBuf::from_str(env!("CARGO_MANIFEST_DIR")).unwrap())
-		.unwrap()
-		.canonicalize_utf8()
-		.unwrap()
-		.parent()
-		.unwrap()
-		.to_path_buf()
+	static TOPDIR: LazyLock<Utf8PathBuf> = LazyLock::new(|| {
+		Utf8PathBuf::from_path_buf(PathBuf::from_str(env!("CARGO_MANIFEST_DIR")).unwrap())
+			.unwrap()
+			.canonicalize_utf8()
+			.unwrap()
+			.parent()
+			.unwrap()
+			.to_path_buf()
+	});
+	TOPDIR.as_path()
 }

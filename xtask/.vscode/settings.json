@@ -1,0 +1,26 @@
+{
+    "editor.detectIndentation": true,
+    "editor.tabCompletion": "off",
+    /* "rust-analyzer.server.path": "/home/axel/.cargo/bin/rust-analyzer", */
+    /* "rust-analyzer.procMacro.server": "/opt/rust-bin-9999/libexec/rust-analyzer-proc-macro-srv", */
+    "rust-analyzer.check.workspace": false,
+    "rust-analyzer.cargo.buildScripts.enable": true,
+    "rust-analyzer.diagnostics.enable": true,
+    "rust-analyzer.hover.memoryLayout.niches": true,
+    "rust-analyzer.hover.memoryLayout.enable": true,
+    "rust-analyzer.hover.memoryLayout.alignment": "both",
+    "rust-analyzer.hover.memoryLayout.offset": "both",
+    "rust-analyzer.hover.memoryLayout.size": "both",
+    "rust-analyzer.procMacro.enable": true,
+    "rust-analyzer.lens.enable": true,
+    "rust-analyzer.rustfmt.rangeFormatting.enable": true,
+    "rust-analyzer.typing.triggerChars": "=.{(<>",
+    "rust-analyzer.signatureInfo.documentation.enable": true,
+    "rust-analyzer.signatureInfo.detail": "full",
+    "rust-analyzer.rustfmt.extraArgs": [
+        "--config-path",
+        "${workspaceFolder}/../rustfmt.toml",
+    ],
+    "rust-analyzer.inlayHints.implicitDrops.enable": true,
+    "rust-analyzer.procMacro.attributes.enable": true,
+}

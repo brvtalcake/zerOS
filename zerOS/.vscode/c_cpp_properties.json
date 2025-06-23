@@ -1,0 +1,28 @@
+{
+    "version": 4,
+    "configurations": [
+        {
+            "name": "Linux_ZerOS_kernel",
+            "includePath": [
+                "${workspaceFolder}/include/"
+            ],
+            "browse": {
+                "path": [
+                    "${workspaceFolder}",
+                    "${workspaceFolder}/include"
+                ]
+            },
+            "defines": [],
+            "cStandard": "gnu23",
+            "cppStandard": "gnu++23",
+            "intelliSenseMode": "linux-clang-x64",
+            "compilerArgs": [
+                "-O3",
+                "-ffreestanding",
+                "--target=x86_64-unknown-none-elf",
+                "-nostdlib"
+            ],
+            "mergeConfigurations": true
+        }
+    ]
+}

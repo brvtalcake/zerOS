@@ -32,3 +32,6 @@ amd-manual.pdf
 
 /*waf*
 /build
+/.xtask-cache
+/.justfile
+/wscript

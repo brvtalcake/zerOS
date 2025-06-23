@@ -105,18 +105,9 @@
         ".h++",
         ".hh"
     ],
-    "C/C++ Include Guard.Suffix": "_INCLUDED",
+    "C/C++ Include Guard.Suffix": "_INCLUDED_",
     "C/C++ Include Guard.Path Skip": 2,
     "C/C++ Include Guard.Prefix": "zerOS_",
-    /* "C_Cpp.default.compilerPath": "${workspaceFolder}/toolchain/install/bin/x86_64-elf-gcc", */
-    "C_Cpp.default.compilerPath": "clang",
-    "C_Cpp.default.compilerArgs": [
-        "-ffreestanding",
-        "-fno-builtin",
-        "-nostdlib",
-        /* "-nostdinc", */
-        "--target=x86_64-unknown-none-elf"
-    ],
     "editor.tabCompletion": "off",
     "C_Cpp.intelliSenseMemoryLimit": 4096,
     "C_Cpp.workspaceParsingPriority": "medium",
@@ -132,7 +123,9 @@
     "[cpp]": {
         "editor.defaultFormatter": "xaver.clang-format"
     },
-    "rust-analyzer.check.workspace": true,
+    /* "rust-analyzer.server.path": "/home/axel/.cargo/bin/rust-analyzer", */
+    /* "rust-analyzer.procMacro.server": "/opt/rust-bin-9999/libexec/rust-analyzer-proc-macro-srv", */
+    "rust-analyzer.check.workspace": false,
     "rust-analyzer.cargo.buildScripts.enable": true,
     "rust-analyzer.diagnostics.enable": true,
     "rust-analyzer.hover.memoryLayout.niches": true,
@@ -148,20 +141,18 @@
     "rust-analyzer.signatureInfo.detail": "full",
     "rust-analyzer.rustfmt.extraArgs": [
         "--config-path",
-        "${workspaceFolder}/zerOS/rustfmt.toml",
+        "${workspaceFolder}/rustfmt.toml",
     ],
+    "rust-analyzer.inlayHints.implicitDrops.enable": true,
     "rust-analyzer.cargo.target": "/home/axel/tmp/x86_64-unknown-kernel.json",
     "rust-analyzer.cargo.extraEnv": {
-        "ZEROS_TARGET_CPU": "skylake"
+        "ZEROS_TARGET_CPU": "skylake",
+        /* "RUSTUP_TOOLCHAIN": "stable", */
+        /* "__CARGO_TEST_CHANNEL_OVERRIDE_DO_NOT_USE_THIS": "nightly" */
     },
-    "[just]": {
-        "editor.defaultFormatter": "TobiasHochguertel.just-formatter",
-    },
-    "python.analysis.extraPaths": [
-        /* "${workspaceFolder}/.waf3-2.1.6-6a38d8c49406d2fef32d6f6600c8f033/waflib", */
-        "${workspaceFolder}/.waf3-2.1.6-6a38d8c49406d2fef32d6f6600c8f033"
-    ],
-    "[python]": {
-        "editor.defaultFormatter": "ms-python.black-formatter"
-    }
+    //"rust-analyzer.cargo.extraArgs": [
+    //    "+nightly"
+    //],
+    /* "rust-analyzer.cargo.sysroot": "/home/axel/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu", */
+    "rust-analyzer.procMacro.attributes.enable": true,
 }

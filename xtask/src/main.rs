@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 
 mod actions;
 mod doc_comments;
+mod tools;
 
 use crate::actions::{
 	Xtask,
@@ -17,6 +18,7 @@ use crate::actions::{
 	clean::XtaskCleanableSubproj,
 	clippy::XtaskClippyableSubproj,
 	configure::{XtaskConfigurableSubproj, config_location, init_default_executable_names},
+	expand::XtaskExpandableSubproj,
 	format::XtaskFormattableSubproj
 };
 
@@ -75,10 +77,29 @@ enum XtaskSubcmd
 	{
 		#[command(subcommand)]
 		subproj: XtaskFormattableSubproj
-	}
+	},
+	/// Expand macros in code from a subproject
+	Expand
+	{
+		#[command(subcommand)]
+		subproj: XtaskExpandableSubproj
+	} // TODO: `Run` variant
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash, ValueEnum, Default)]
+#[derive(
+	Serialize,
+	Deserialize,
+	Debug,
+	Clone,
+	Copy,
+	PartialEq,
+	Eq,
+	Hash,
+	ValueEnum,
+	Default,
+	strum::AsRefStr,
+)]
+#[strum(serialize_all = "lowercase")]
 #[clap(rename_all = "lower")]
 enum SupportedArch
 {
@@ -119,13 +140,25 @@ fn main() -> Result<()>
 {
 	init_default_executable_names();
 
-	if !fs::exists(config_location!(root))?
+	if !fs::exists(config_location!())?
 	{
-		fs::create_dir(config_location!(root)).unwrap();
+		fs::create_dir(config_location!()).unwrap();
 	}
 
 	let cli = XtaskCLI::parse();
-	dbg!(&cli);
+	if cli.globals.debug
+	{
+		dbg!(&cli);
+		unsafe {
+			std::env::set_var("RUST_BACKTRACE", "full");
+		}
+	}
+	else
+	{
+		unsafe {
+			std::env::set_var("RUST_BACKTRACE", "1");
+		}
+	}
 
 	match &cli.task
 	{
@@ -133,7 +166,8 @@ fn main() -> Result<()>
 		XtaskSubcmd::Build { subproj } => subproj.execute(&cli.globals),
 		XtaskSubcmd::Clean { subproj } => subproj.execute(&cli.globals),
 		XtaskSubcmd::Clippy { subproj } => subproj.execute(&cli.globals),
-		XtaskSubcmd::Format { subproj } => subproj.execute(&cli.globals)
+		XtaskSubcmd::Format { subproj } => subproj.execute(&cli.globals),
+		XtaskSubcmd::Expand { subproj } => subproj.execute(&cli.globals)
 	}
 
 	Ok(())
