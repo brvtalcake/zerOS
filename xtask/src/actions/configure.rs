@@ -5,7 +5,12 @@ use std::{
 	mem::{self, MaybeUninit},
 	path::PathBuf,
 	str::FromStr,
-	sync::{Arc, LazyLock, RwLock}
+	sync::{
+		Arc,
+		LazyLock,
+		RwLock,
+		atomic::{self, AtomicBool}
+	}
 };
 
 use camino::{Utf8Path, Utf8PathBuf};
@@ -16,7 +21,14 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use which::which;
 
-use crate::{Endianness, SupportedArch, XtaskGlobalOptions, actions::Xtask, doc_comments::subdir};
+use crate::{
+	Endianness,
+	SupportedArch,
+	XtaskGlobalOptions,
+	actions::Xtask,
+	doc_comments::subdir,
+	tools::check
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Subcommand)]
 #[clap(rename_all = "lowercase")]
@@ -46,10 +58,12 @@ pub(crate) static EXECUTABLE_DEFAULTS: RwLock<
 	MaybeUninit<HashMap<Executable, (&'static str, &'static [&'static str])>>
 > = RwLock::new(MaybeUninit::uninit());
 
+static INITIALIZED: AtomicBool = AtomicBool::new(false);
+
 pub(crate) fn init_default_executable_names()
 {
 	let mut guard = EXECUTABLE_DEFAULTS.write().unwrap();
-	let mut map = guard.write(HashMap::with_capacity(
+	let map = guard.write(HashMap::with_capacity(
 		mem::variant_count::<Executable>() + mem::variant_count::<SupportedArch>()
 	));
 	map.insert(Executable::Clang, ("clang", &["CC", "CLANG"]));
@@ -146,6 +160,14 @@ pub(crate) fn init_default_executable_names()
 			&["QEMU", "QEMU_LOONGARCH64", "QEMULOONGARCH64"]
 		)
 	);
+	INITIALIZED.store(true, atomic::Ordering::Release);
+}
+
+fn get_default_executable_short_name(exe: &Executable) -> &'static str
+{
+	assert!(INITIALIZED.load(atomic::Ordering::Acquire));
+	let locked = EXECUTABLE_DEFAULTS.read().unwrap();
+	unsafe { locked.assume_init_ref() }.get(exe).unwrap().0
 }
 
 #[serde_as]
@@ -153,7 +175,7 @@ pub(crate) fn init_default_executable_names()
 pub(crate) struct ZerosConfig
 {
 	#[serde_as(as = "Vec<(_, _)>")]
-	pub(crate) map: HashMap<Executable, Option<Utf8PathBuf>>
+	pub(crate) map: HashMap<Executable, Utf8PathBuf>
 }
 
 impl ZerosConfig
@@ -161,9 +183,33 @@ impl ZerosConfig
 	pub(crate) fn load_or_error() -> Self
 	{
 		let path = config_location!(zerOS);
-		let file = File::open(path).unwrap();
-		file.lock_shared().unwrap();
-		rmp_serde::decode::from_read(file).unwrap()
+		let file = check!(File::open(path).expect("could not read zerOS config file"));
+		check!(
+			file.lock_shared()
+				.expect("could not lock zerOS config file")
+		);
+		check!(
+			rmp_serde::decode::from_read(file).expect("could not deserialize zerOS config file")
+				=>
+					"this might be a config format mismatch",
+					"please re-run the configure step and file an issue if the error persists"
+		)
+	}
+
+	pub(crate) fn get(&self, name: &Executable) -> &Utf8Path
+	{
+		check!(
+			self.map
+				.get(name)
+				.ok_or("please (re-)run the configure step first")
+				.expect(
+					format!(
+						"could not find executable `{}`",
+						get_default_executable_short_name(name)
+					)
+					.as_str()
+				)
+		)
 	}
 }
 
@@ -232,7 +278,10 @@ impl Xtask for XtaskConfigurableSubproj
 					(e, n, v)
 				})
 				{
-					cfg.map.insert(exe, find_exe(name, vars));
+					if let Some(found) = find_exe(name, vars)
+					{
+						cfg.map.insert(exe, found);
+					}
 				}
 
 				if globals.debug
@@ -265,6 +314,10 @@ pub(crate) macro config_location
 	($($errtoks:tt)*) => {
 		compile_error!(concat!("invalid tokens: ", stringify!($($errtoks)*)));
 	}
+}
+
+pub(crate) macro subproj_location($subdir:literal) {
+	$crate::actions::configure::get_topdir().join($subdir)
 }
 
 pub(crate) fn get_topdir() -> &'static Utf8Path

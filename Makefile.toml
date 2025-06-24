@@ -70,10 +70,10 @@ private = true
 script_runner = "@duckscript"
 script = '''
 rm -r ./bin
-rm -r ./iso_root
+rm -r ./iso-root
 mkdir ./bin
 mkdir ./bin/zerOS-boot-modules
-mkdir ./iso_root
+mkdir ./iso-root
 '''
 
 [tasks.zerOS-do-strip-classic-dev]
@@ -175,7 +175,7 @@ args = [
     "-o",
     "./bin/zerOS.iso",
     "--iso-root",
-    "./iso_root/",
+    "./iso-root/",
     "-b",
     "limine",
     "-a",

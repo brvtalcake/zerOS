@@ -1,8 +1,9 @@
 #![feature(variant_count)]
 #![feature(decl_macro)]
-#![feature(file_lock)]
-
-use std::fs;
+#![feature(cfg_version)]
+#![feature(exit_status_error)]
+#![feature(panic_backtrace_config)]
+#![cfg_attr(not(version("1.89")), feature(file_lock))]
 
 use anyhow::{Ok, Result};
 use clap::{ArgAction, Args, Parser, Subcommand, ValueEnum};
@@ -12,14 +13,17 @@ mod actions;
 mod doc_comments;
 mod tools;
 
-use crate::actions::{
-	Xtask,
-	build::XtaskBuildableSubproj,
-	clean::XtaskCleanableSubproj,
-	clippy::XtaskClippyableSubproj,
-	configure::{XtaskConfigurableSubproj, config_location, init_default_executable_names},
-	expand::XtaskExpandableSubproj,
-	format::XtaskFormattableSubproj
+use crate::{
+	actions::{
+		Xtask,
+		build::XtaskBuildableSubproj,
+		clean::XtaskCleanableSubproj,
+		clippy::XtaskClippyableSubproj,
+		configure::{XtaskConfigurableSubproj, config_location, init_default_executable_names},
+		expand::XtaskExpandableSubproj,
+		format::XtaskFormattableSubproj
+	},
+	tools::mkdir
 };
 
 #[derive(Debug, Clone, Parser)]
@@ -139,11 +143,10 @@ enum Endianness
 fn main() -> Result<()>
 {
 	init_default_executable_names();
+	colog::init();
+	std::panic::set_backtrace_style(std::panic::BacktraceStyle::Short);
 
-	if !fs::exists(config_location!())?
-	{
-		fs::create_dir(config_location!()).unwrap();
-	}
+	mkdir(false, false, &config_location!());
 
 	let cli = XtaskCLI::parse();
 	if cli.globals.debug

@@ -3,8 +3,12 @@ use clap::{Subcommand, ValueEnum};
 use crate::{
 	SupportedArch,
 	XtaskGlobalOptions,
-	actions::{Xtask, configure::ZerosConfig},
-	doc_comments::subdir
+	actions::{
+		Xtask,
+		configure::{Executable, ZerosConfig, subproj_location}
+	},
+	doc_comments::subdir,
+	tools::{CmdIn, gentarget::generate_target_default, mkdir, rm}
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Subcommand)]
@@ -37,8 +41,11 @@ pub(crate) enum XtaskBuildableSubproj
 	Docs
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, ValueEnum, Default)]
+#[derive(
+	Debug, Clone, Copy, PartialEq, Eq, Hash, ValueEnum, Default, strum::Display, strum::AsRefStr,
+)]
 #[clap(rename_all = "kebab-case")]
+#[strum(serialize_all = "kebab-case")]
 pub(crate) enum ZerosBuildProfile
 {
 	Dev,
@@ -58,7 +65,38 @@ impl XtaskBuildableSubproj
 		{
 			unreachable!()
 		};
+
+		// load cfg
 		let cfg = ZerosConfig::load_or_error();
+
+		// generate target
+		let (cmd, json_target) = generate_target_default(cfg.get(&Executable::Cargo), *arch, cpu);
+		cmd.finalize();
+
+		// prepare output directories
+		rm(true, false, &subproj_location!("zerOS").join("bin"));
+		rm(true, false, &subproj_location!("zerOS").join("iso-root"));
+		mkdir(
+			true,
+			false,
+			&subproj_location!("zerOS")
+				.join("bin")
+				.join("zerOS-boot-modules")
+		);
+		mkdir(true, false, &subproj_location!("zerOS").join("iso-root"));
+
+		let mut cmd = std::process::Command::new(cfg.get(&Executable::Cargo));
+		cmd.args(&[
+			"build",
+			format!("--target={json_target}").as_str(),
+			"-Z",
+			"unstable-options",
+			"--artifact-dir",
+			"./bin",
+			format!("--profile={profile}").as_str()
+		]);
+		let cmd = CmdIn::new(&subproj_location!("zerOS"), cmd);
+
 		todo!()
 	}
 }
