@@ -31,7 +31,7 @@ pub(crate) enum XtaskCleanableSubproj
 
 impl Xtask for XtaskCleanableSubproj
 {
-	fn execute(&self, globals: &XtaskGlobalOptions)
+	async fn execute(&self, globals: &XtaskGlobalOptions)
 	{
 		todo!()
 	}

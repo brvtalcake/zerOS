@@ -9,5 +9,5 @@ pub(crate) mod format;
 
 pub(crate) trait Xtask
 {
-	fn execute(&self, globals: &XtaskGlobalOptions);
+	async fn execute(&self, globals: &XtaskGlobalOptions);
 }

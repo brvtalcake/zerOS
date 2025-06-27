@@ -20,9 +20,6 @@ pub struct BasicRwLockRaw
 	inner: BasicMutex<BasicRwLockRawInner>
 }
 
-unsafe impl Sync for BasicRwLockRaw {}
-unsafe impl Send for BasicRwLockRaw {}
-
 unsafe impl RawRwLock for BasicRwLockRaw
 {
 	type GuardMarker = GuardSend;

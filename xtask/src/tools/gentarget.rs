@@ -1,6 +1,7 @@
 use std::ffi::OsStr;
 
 use camino::Utf8PathBuf;
+use tokio::process;
 
 use crate::{
 	SupportedArch,
@@ -37,10 +38,10 @@ pub(crate) fn generate_target_default(
 fn generate_target_default_amd64(
 	cargo: impl AsRef<OsStr>,
 	cpu: &String
-) -> (std::process::Command, Utf8PathBuf)
+) -> (process::Command, Utf8PathBuf)
 {
-	let outfile = config_location!().join("amd64-unknown-kernel.json");
-	let mut cmd = std::process::Command::new(cargo);
+	let outfile = config_location!().join("x86_64-unknown-kernel.json");
+	let mut cmd = process::Command::new(cargo);
 	cmd.args([
 		"run",
 		"--release",

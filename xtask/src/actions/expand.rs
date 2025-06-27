@@ -51,7 +51,7 @@ pub(crate) enum XtaskExpandableSubproj
 
 impl Xtask for XtaskExpandableSubproj
 {
-	fn execute(&self, globals: &XtaskGlobalOptions)
+	async fn execute(&self, globals: &XtaskGlobalOptions)
 	{
 		todo!()
 	}

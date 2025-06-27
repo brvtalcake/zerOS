@@ -31,7 +31,7 @@ pub(crate) enum XtaskClippyableSubproj
 
 impl Xtask for XtaskClippyableSubproj
 {
-	fn execute(&self, globals: &XtaskGlobalOptions)
+	async fn execute(&self, globals: &XtaskGlobalOptions)
 	{
 		todo!()
 	}

@@ -31,7 +31,7 @@ pub(crate) enum XtaskFormattableSubproj
 
 impl Xtask for XtaskFormattableSubproj
 {
-	fn execute(&self, globals: &XtaskGlobalOptions)
+	async fn execute(&self, globals: &XtaskGlobalOptions)
 	{
 		todo!()
 	}

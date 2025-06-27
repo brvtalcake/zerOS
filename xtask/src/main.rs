@@ -4,6 +4,14 @@
 #![feature(exit_status_error)]
 #![feature(panic_backtrace_config)]
 #![cfg_attr(not(version("1.89")), feature(file_lock))]
+#![forbid(unused_must_use)]
+#![allow(macro_expanded_macro_exports_accessed_by_absolute_paths)]
+
+#[allow(unused_imports)]
+#[macro_use]
+extern crate scopeguard;
+#[macro_use]
+extern crate eager2;
 
 use anyhow::{Ok, Result};
 use clap::{ArgAction, Args, Parser, Subcommand, ValueEnum};
@@ -11,6 +19,7 @@ use serde::{Deserialize, Serialize};
 
 mod actions;
 mod doc_comments;
+mod limine;
 mod tools;
 
 use crate::{
@@ -23,7 +32,7 @@ use crate::{
 		expand::XtaskExpandableSubproj,
 		format::XtaskFormattableSubproj
 	},
-	tools::mkdir
+	tools::{check, mkdir}
 };
 
 #[derive(Debug, Clone, Parser)]
@@ -142,36 +151,85 @@ enum Endianness
 
 fn main() -> Result<()>
 {
-	init_default_executable_names();
-	colog::init();
-	std::panic::set_backtrace_style(std::panic::BacktraceStyle::Short);
+	let tokio = check!(
+		tokio::runtime::Builder::new_multi_thread()
+			.enable_all()
+			.worker_threads(num_cpus::get() * 2)
+			.thread_name("xtask-tokio-worker")
+			.build()
+			.expect("failed to create tokio runtime")
+	);
+	tokio.block_on(async {
+		init_default_executable_names();
+		colog::init();
+		std::panic::set_backtrace_style(std::panic::BacktraceStyle::Short);
 
-	mkdir(false, false, &config_location!());
+		mkdir(false, false, &config_location!()).await;
 
-	let cli = XtaskCLI::parse();
-	if cli.globals.debug
-	{
-		dbg!(&cli);
-		unsafe {
-			std::env::set_var("RUST_BACKTRACE", "full");
+		let cli = XtaskCLI::parse();
+		if cli.globals.debug
+		{
+			dbg!(&cli);
+			unsafe {
+				std::env::set_var("RUST_BACKTRACE", "full");
+			}
 		}
-	}
-	else
-	{
-		unsafe {
-			std::env::set_var("RUST_BACKTRACE", "1");
+		else
+		{
+			unsafe {
+				std::env::set_var("RUST_BACKTRACE", "1");
+			}
 		}
-	}
 
-	match &cli.task
+		match &cli.task
+		{
+			XtaskSubcmd::Configure { subproj } => subproj.execute(&cli.globals).await,
+			XtaskSubcmd::Build { subproj } => subproj.execute(&cli.globals).await,
+			XtaskSubcmd::Clean { subproj } => subproj.execute(&cli.globals).await,
+			XtaskSubcmd::Clippy { subproj } => subproj.execute(&cli.globals).await,
+			XtaskSubcmd::Format { subproj } => subproj.execute(&cli.globals).await,
+			XtaskSubcmd::Expand { subproj } => subproj.execute(&cli.globals).await
+		}
+
+		Ok(())
+	})
+}
+
+pub(crate) trait IntoArray<T, const N: usize>
+where
+	T: Sized
+{
+	fn into_array(self) -> [T; N];
+}
+
+impl<T: Sized> IntoArray<T, 2> for (T, T)
+{
+	fn into_array(self) -> [T; 2]
 	{
-		XtaskSubcmd::Configure { subproj } => subproj.execute(&cli.globals),
-		XtaskSubcmd::Build { subproj } => subproj.execute(&cli.globals),
-		XtaskSubcmd::Clean { subproj } => subproj.execute(&cli.globals),
-		XtaskSubcmd::Clippy { subproj } => subproj.execute(&cli.globals),
-		XtaskSubcmd::Format { subproj } => subproj.execute(&cli.globals),
-		XtaskSubcmd::Expand { subproj } => subproj.execute(&cli.globals)
+		[self.0, self.1]
 	}
+}
 
-	Ok(())
+impl<T: Sized> IntoArray<T, 3> for (T, T, T)
+{
+	fn into_array(self) -> [T; 3]
+	{
+		[self.0, self.1, self.2]
+	}
+}
+
+impl<T: Sized> IntoArray<T, 4> for (T, T, T, T)
+{
+	fn into_array(self) -> [T; 4]
+	{
+		[self.0, self.1, self.2, self.3]
+	}
+}
+
+impl<T: Sized> IntoArray<T, 5> for (T, T, T, T, T)
+{
+	fn into_array(self) -> [T; 5]
+	{
+		[self.0, self.1, self.2, self.3, self.4]
+	}
 }

@@ -1,12 +1,12 @@
 use std::{
-	cell::LazyCell,
 	collections::HashMap,
+	ffi::OsStr,
 	fs::{self, File, OpenOptions},
+	io::Write,
 	mem::{self, MaybeUninit},
 	path::PathBuf,
 	str::FromStr,
 	sync::{
-		Arc,
 		LazyLock,
 		RwLock,
 		atomic::{self, AtomicBool}
@@ -14,8 +14,7 @@ use std::{
 };
 
 use camino::{Utf8Path, Utf8PathBuf};
-use clap::Subcommand;
-use phf::phf_map;
+use clap::{Subcommand, ValueEnum};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -39,6 +38,8 @@ pub(crate) enum XtaskConfigurableSubproj
 	#[clap(about = subdir!(zerOS))]
 	Zeros
 	{
+		#[arg(short, long, value_enum, default_value_t)]
+		bootloader:  KConfigBootBootloader,
 		assignments: Vec<String>
 	} // TODO: add Docs target
 }
@@ -51,6 +52,7 @@ pub(crate) enum Executable
 	Xorriso,
 	Strip,
 	EuStrip,
+	Objcopy,
 	Qemu(SupportedArch, Option<Endianness>)
 }
 
@@ -70,6 +72,7 @@ pub(crate) fn init_default_executable_names()
 	map.insert(Executable::Cargo, ("cargo", &["CARGO"]));
 	map.insert(Executable::Xorriso, ("xorriso", &["XORRISO"]));
 	map.insert(Executable::Strip, ("strip", &["STRIP"]));
+	map.insert(Executable::Objcopy, ("objcopy", &["OBJCOPY"]));
 	map.insert(Executable::EuStrip, ("eu-strip", &["EU_STRIP", "EUSTRIP"]));
 	map.insert(
 		Executable::Qemu(SupportedArch::Amd64, None),
@@ -163,11 +166,72 @@ pub(crate) fn init_default_executable_names()
 	INITIALIZED.store(true, atomic::Ordering::Release);
 }
 
-fn get_default_executable_short_name(exe: &Executable) -> &'static str
+pub(crate) fn get_default_executable_short_name(exe: &Executable) -> &'static str
 {
 	assert!(INITIALIZED.load(atomic::Ordering::Acquire));
 	let locked = EXECUTABLE_DEFAULTS.read().unwrap();
 	unsafe { locked.assume_init_ref() }.get(exe).unwrap().0
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) struct KConfig
+{
+	pub(crate) boot: KConfigBoot
+}
+
+impl Default for KConfig
+{
+	fn default() -> Self
+	{
+		Self {
+			boot: KConfigBoot::default()
+		}
+	}
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+#[serde(rename = "boot")]
+pub(crate) struct KConfigBoot
+{
+	pub(crate) bootloader: KConfigBootBootloader
+}
+
+impl Default for KConfigBoot
+{
+	fn default() -> Self
+	{
+		Self {
+			bootloader: KConfigBootBootloader::Limine
+		}
+	}
+}
+
+#[derive(
+	Serialize,
+	Deserialize,
+	Debug,
+	Default,
+	Clone,
+	Copy,
+	PartialEq,
+	Eq,
+	Hash,
+	ValueEnum,
+	strum::AsRefStr,
+	strum::EnumString,
+	strum::VariantNames,
+)]
+#[strum(serialize_all = "kebab-case")]
+#[serde(rename_all = "kebab-case")]
+#[serde(rename = "bootloader")]
+pub(crate) enum KConfigBootBootloader
+{
+	#[default]
+	Limine,
+	GRUB2,
+	UEFI
 }
 
 #[serde_as]
@@ -175,7 +239,8 @@ fn get_default_executable_short_name(exe: &Executable) -> &'static str
 pub(crate) struct ZerosConfig
 {
 	#[serde_as(as = "Vec<(_, _)>")]
-	pub(crate) map: HashMap<Executable, Utf8PathBuf>
+	pub(crate) executables: HashMap<Executable, Utf8PathBuf>,
+	pub(crate) kcfg:        KConfig
 }
 
 impl ZerosConfig
@@ -189,19 +254,21 @@ impl ZerosConfig
 				.expect("could not lock zerOS config file")
 		);
 		check!(
-			rmp_serde::decode::from_read(file).expect("could not deserialize zerOS config file")
-				=>
-					"this might be a config format mismatch",
-					"please re-run the configure step and file an issue if the error persists"
+			rmp_serde::decode::from_read(file).expect(
+				"could not deserialize zerOS config file"
+					=>
+						"this might be a config format mismatch",
+						"please re-run the configure step and file an issue if the error persists"
+			)
 		)
 	}
 
 	pub(crate) fn get(&self, name: &Executable) -> &Utf8Path
 	{
 		check!(
-			self.map
+			self.executables
 				.get(name)
-				.ok_or("please (re-)run the configure step first")
+				.ok_or("please (re-)run the configure step before retrying")
 				.expect(
 					format!(
 						"could not find executable `{}`",
@@ -215,11 +282,14 @@ impl ZerosConfig
 
 impl Xtask for XtaskConfigurableSubproj
 {
-	fn execute(&self, globals: &XtaskGlobalOptions)
+	async fn execute(&self, globals: &XtaskGlobalOptions)
 	{
 		match self
 		{
-			Self::Zeros { assignments } =>
+			Self::Zeros {
+				bootloader,
+				assignments
+			} =>
 			{
 				let find_exe = |name: &'static str, alts: &[&'static str]| -> Option<Utf8PathBuf> {
 					let raw = format!(r"({})\=(\S+)", alts.join("|"));
@@ -247,8 +317,10 @@ impl Xtask for XtaskConfigurableSubproj
 						})
 				};
 				let mut cfg = ZerosConfig {
-					map: HashMap::new()
+					executables: HashMap::new(),
+					kcfg:        KConfig::default()
 				};
+				cfg.kcfg.boot.bootloader = *bootloader;
 
 				let to_find = [
 					Executable::Clang,
@@ -256,6 +328,7 @@ impl Xtask for XtaskConfigurableSubproj
 					Executable::Xorriso,
 					Executable::Strip,
 					Executable::EuStrip,
+					Executable::Objcopy,
 					Executable::Qemu(SupportedArch::Amd64, None),
 					Executable::Qemu(SupportedArch::AArch64, None),
 					Executable::Qemu(SupportedArch::Arm32, None),
@@ -280,7 +353,7 @@ impl Xtask for XtaskConfigurableSubproj
 				{
 					if let Some(found) = find_exe(name, vars)
 					{
-						cfg.map.insert(exe, found);
+						cfg.executables.insert(exe, found);
 					}
 				}
 
@@ -332,4 +405,27 @@ pub(crate) fn get_topdir() -> &'static Utf8Path
 			.to_path_buf()
 	});
 	TOPDIR.as_path()
+}
+
+// TODO: make it async
+pub(crate) fn kcfg_write(kcfg: &KConfig)
+{
+	check!(
+		toml::to_string_pretty(kcfg)
+			.map_err(anyhow::Error::new)
+			.and_then(|toml| {
+				let mut file = OpenOptions::new()
+					.create(true)
+					.truncate(true)
+					.write(true)
+					.read(false)
+					.open(subproj_location!("zerOS").join("kconfig.toml"))?;
+				check!(file.lock().expect("could not lock file"));
+				Ok(check!(
+					file.write_all(toml.as_bytes())
+						.expect("could not write to file")
+				))
+			})
+			.expect("could not format kernel configuration")
+	)
 }
