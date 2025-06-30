@@ -1,0 +1,193 @@
+use std::{
+	cell::SyncUnsafeCell,
+	mem::MaybeUninit,
+	pin::Pin,
+	sync::{
+		Arc,
+		atomic::{self, AtomicBool}
+	},
+	task::{Poll, ready},
+	time::Duration
+};
+
+use futures::FutureExt;
+use http_body_util::Empty;
+use hyper::{
+	Request,
+	body::Bytes,
+	client::conn::{http1 as hypercli1, http2 as hypercli2}
+};
+use hyper_util::rt::{TokioExecutor, TokioIo};
+use tokio::{net::TcpStream, task::JoinHandle};
+use url::Url;
+
+use crate::tools::check;
+
+struct GlobalClientHolder
+{
+	client: SyncUnsafeCell<MaybeUninit<Arc<Client>>>
+}
+
+impl Drop for GlobalClientHolder
+{
+	fn drop(&mut self)
+	{
+		if GLOBAL_CLIENT_INITIALIZED.swap(false, atomic::Ordering::AcqRel)
+		{
+			unsafe {
+				self.client.get_mut().assume_init_drop();
+			}
+		}
+	}
+}
+
+static GLOBAL_CLIENT: GlobalClientHolder = GlobalClientHolder {
+	client: SyncUnsafeCell::new(MaybeUninit::uninit())
+};
+static GLOBAL_CLIENT_INITIALIZED: AtomicBool = AtomicBool::new(false);
+
+pub(super) fn init_global_client()
+{
+	// technically this function is called once so we could even just use a raw
+	// `bool`
+	if !GLOBAL_CLIENT_INITIALIZED.swap(true, atomic::Ordering::AcqRel)
+	{
+		let client = unsafe { &mut *GLOBAL_CLIENT.client.get() };
+		client.write(Arc::new(Client::default()));
+	}
+}
+
+pub(crate) struct Client
+{
+	http1: hypercli1::Builder,
+	http2: hypercli2::Builder<TokioExecutor>
+}
+
+impl Default for Client
+{
+	fn default() -> Self
+	{
+		Self::new()
+	}
+}
+
+impl Client
+{
+	pub(crate) fn new() -> Self
+	{
+		let mut this = Self {
+			http1: hypercli1::Builder::new(),
+			http2: hypercli2::Builder::new(TokioExecutor::new())
+		};
+		this.http1.writev(true);
+		this.http2
+			.keep_alive_interval(Some(Duration::from_secs(5)))
+			.keep_alive_timeout(Duration::from_secs(20))
+			.keep_alive_while_idle(true);
+		this
+	}
+
+	pub(crate) async fn connect_to<B: http_body::Body + Send + 'static + Unpin>(
+		&self,
+		url: &Url
+	) -> PendingConnection<B>
+	where
+		<B as http_body::Body>::Error: std::error::Error + Send + Sync,
+		<B as http_body::Body>::Data: Send
+	{
+		let resolved_vec = check!(
+			url.socket_addrs(|| Some(80))
+				.expect(format!("could not resolve url's host: {url}").as_str())
+		);
+		let tcp;
+		let mut tcp_opened = false;
+		'got_tcp: for resolved in resolved_vec
+		{
+			match TcpStream::connect(resolved).await
+			{
+				Err(_) => continue,
+				Ok(stream) =>
+				{
+					tcp = stream;
+					tcp_opened = true;
+					break 'got_tcp;
+				}
+			}
+		}
+		if !tcp_opened
+		{
+			check!(
+				Err("could not connect to any of the addresses the url resolved to")
+					.expect("could not connect to host")
+			);
+			unreachable!();
+		}
+		check!(
+			self.http2
+				.handshake(TokioIo::new(tcp))
+				.await
+				.expect("could not proceed to HTTP/2 handshake")
+		)
+	}
+}
+
+pub(crate) struct PendingConnection<B: http_body::Body + Send + 'static + Unpin>
+where
+	<B as http_body::Body>::Error: std::error::Error + Send + Sync,
+	<B as http_body::Body>::Data: Send
+{
+	sender: hypercli2::SendRequest<Request<B>>,
+	conn:   hypercli2::Connection<TokioIo<TcpStream>, B, TokioExecutor>
+}
+
+pub(crate) struct Connection<B: http_body::Body + Send + 'static + Unpin>
+where
+	<B as http_body::Body>::Error: std::error::Error + Send + Sync,
+	<B as http_body::Body>::Data: Send
+{
+	sender: hypercli2::SendRequest<Request<B>>
+}
+
+impl<B: http_body::Body + Send + 'static + Unpin> Future for PendingConnection<B>
+where
+	<B as http_body::Body>::Error: std::error::Error + Send + Sync,
+	<B as http_body::Body>::Data: Send
+{
+	type Output = hyper::Result<Connection<B>>;
+
+	fn poll(mut self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output>
+	{
+		Poll::Ready(ready!(self.conn.poll_unpin(cx)).and_then(|_| {
+			Ok(Connection {
+				sender: self.sender.clone()
+			})
+		}))
+	}
+}
+
+impl<B: http_body::Body + Send + 'static + Unpin> Connection<B>
+where
+	<B as http_body::Body>::Error: std::error::Error + Send + Sync,
+	<B as http_body::Body>::Data: Send
+{
+    pub(crate) async fn get(&mut self)
+    {
+        todo!("create the request and send it");
+        /* self.sender.send_request(http::Request::builder().method("GET")) */
+    }
+}
+
+pub(crate) struct Response<S: ringbuf::storage::Storage<Item = u8>>
+{
+	tx:  JoinHandle<()>,
+	buf: async_ringbuf::AsyncRb<S>
+}
+
+pub(crate) fn client() -> Arc<Client>
+{
+	debug_assert!(GLOBAL_CLIENT_INITIALIZED.load(atomic::Ordering::Acquire));
+	unsafe {
+		let client = &*GLOBAL_CLIENT.client.get();
+		client.assume_init_ref().clone()
+	}
+}

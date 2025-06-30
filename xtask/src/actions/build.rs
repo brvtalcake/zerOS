@@ -5,6 +5,7 @@ use std::{
 };
 
 use anyhow::anyhow;
+use camino::Utf8PathBuf;
 use clap::{Subcommand, ValueEnum};
 use tokio::process;
 
@@ -24,9 +25,11 @@ use crate::{
 		}
 	},
 	doc_comments::subdir,
+	limine,
 	tools::{
 		CmdIn,
 		check,
+		check_handle,
 		gentarget::generate_target_default,
 		mk_iso,
 		mkdir,
@@ -94,6 +97,7 @@ impl XtaskBuildableSubproj
 			std::env::set_var("ZEROS_TARGET_ARCH", arch.as_ref());
 			std::env::set_var("ZEROS_PROFILE", profile.as_ref());
 		}
+		let iso_root = Arc::new(subproj_location!("zerOS").join("iso-root"));
 
 		// load cfg
 		let cfg = Arc::new(ZerosConfig::load_or_error());
@@ -107,30 +111,40 @@ impl XtaskBuildableSubproj
 		// prepare output directories
 		let _ = tokio::join!(
 			kcfg_write,
-			tokio::spawn(async { rm(true, false, &subproj_location!("zerOS").join("bin")).await }),
-			tokio::spawn(async {
-				rm(true, false, &subproj_location!("zerOS").join("iso-root")).await
+			tokio::task::spawn(async {
+				rm(true, false, &subproj_location!("zerOS").join("bin")).await
 			}),
+			tokio::task::spawn((async move |root: Arc<Utf8PathBuf>| {
+				rm(true, false, &root).await
+			})(iso_root.clone())),
 		)
 		.into_array()
 		.map(|res| check!(res.expect("failed to run tokio task")));
-		let _ = tokio::join!(
-			tokio::spawn(async {
-				mkdir(
-					true,
-					false,
-					&subproj_location!("zerOS")
-						.join("bin")
-						.join("zerOS-boot-modules")
-				)
-				.await
-			}),
-			tokio::spawn(async {
-				mkdir(true, false, &subproj_location!("zerOS").join("iso-root")).await
-			})
-		)
-		.into_array()
-		.map(|res| check!(res.expect("failed to run tokio task")));
+		let (bootloader_downloads, _) = (
+			match cfg.kcfg.boot.bootloader
+			{
+				KConfigBootBootloader::Limine =>
+				{
+					tokio::task::spawn((async move |a, root: Arc<Utf8PathBuf>| {
+						limine::download(9..=10, a, &root).await
+					})(*arch, iso_root.clone()))
+				},
+				_ => todo!()
+			},
+			check_handle!(
+				tokio::task::spawn(async {
+					mkdir(
+						true,
+						false,
+						&subproj_location!("zerOS")
+							.join("bin")
+							.join("zerOS-boot-modules")
+					)
+					.await
+				}),
+				"failed to create directory"
+			)
+		);
 
 		let mut cmd = process::Command::new(cfg.get(&Executable::Cargo));
 		cmd.args(&[
@@ -183,10 +197,42 @@ impl XtaskBuildableSubproj
 		)
 		.await;
 
+		let bootloader_downloads = check_handle!(
+			bootloader_downloads,
+			"could not get bootloader binary files"
+		);
+		let mut mk_iso_flags = vec![];
+		for handle in bootloader_downloads
+		{
+			let mut tmpvec;
+			mk_iso_flags.append({
+				let returned = check_handle!(handle, "could not get bootloader binary files");
+				if let Some(flag) = returned.0
+				{
+					tmpvec = [
+						flag.into(),
+						returned
+							.1
+							.to_string()
+							.strip_prefix(&(iso_root.to_string() + "/"))
+							.unwrap()
+							.to_string()
+					]
+					.to_vec();
+				}
+				else
+				{
+					tmpvec = [].to_vec();
+				}
+				&mut tmpvec
+			});
+		}
+
+		#[cfg(false)]
 		mk_iso::run(
 			zeros_bin.join("zerOS.stripped"),
 			zeros_bin.join("zerOS.iso"),
-			subproj_location!("zerOS").join("iso-root"),
+			&*iso_root,
 			cfg.kcfg.boot.bootloader,
 			*arch,
 			zeros_bin.join("zerOS-boot-modules"),
@@ -202,6 +248,31 @@ impl XtaskBuildableSubproj
 				},
 				_ => None
 			}
+		)
+		.await;
+
+		#[cfg(true)]
+		mk_iso::run_from_rust(
+			cfg.get(&Executable::Xorriso),
+			zeros_bin.join("zerOS.stripped"),
+			zeros_bin.join("zerOS.iso"),
+			&*iso_root,
+			cfg.kcfg.boot.bootloader,
+			*arch,
+			zeros_bin.join("zerOS-boot-modules"),
+			match cfg.kcfg.boot.bootloader
+			{
+				KConfigBootBootloader::Limine =>
+				{
+					Some(
+						subproj_location!("zerOS")
+							.join("config")
+							.join("limine.conf")
+					)
+				},
+				_ => None
+			},
+			mk_iso_flags
 		)
 		.await;
 	}

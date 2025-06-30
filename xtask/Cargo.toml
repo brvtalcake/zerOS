@@ -39,17 +39,6 @@ log = { version = "0.4.27", features = ["kv_unstable_std"] }
 num_cpus = "1.17.0"
 phf = { version = "0.12.1", features = ["std", "macros"] }
 regex = { version = "1.11.1", features = ["unstable", "perf-dfa-full"] }
-reqwest = { version = "0.12.20", features = [
-    "http3",
-    "zstd",
-    "brotli",
-    "deflate",
-    "gzip",
-    "json",
-    "native-tls",
-    "socks",
-    "stream",
-] }
 rmp = "0.8.14"
 rmp-serde = "1.3.0"
 scopeguard = "1.2.0"
@@ -67,3 +56,19 @@ strum = { version = "0.27.1", features = ["derive", "phf", "std"] }
 tempfile = { version = "3.20.0", features = ["nightly"] }
 toml = "0.8.23"
 which = { version = "8.0.0", features = ["regex"] }
+octocrab = "0.44.1"
+versions = { version = "7.0.0", features = ["serde"] }
+remain = "0.2.15"
+fmmap = { version = "0.4.0", features = ["nightly", "tokio"] }
+url = { version = "2.5.4", features = ["serde"] }
+futures = "0.3.31"
+http = "1.3.1"
+hyper = { version = "1.6.0", features = ["client", "http1", "http2", "nightly"] }
+tower = { version = "0.5.2", features = ["full", "tokio", "tokio-stream"] }
+hyper-util = { version = "0.1.14", features = ["client", "client-legacy", "service", "http1", "http2", "tokio"] }
+http-body-util = { version = "0.1.3", features = ["full"] }
+async-ringbuf = "0.3.4"
+ringbuf = "0.4.8"
+http-body = "1.0.1"
+reqwest = { version = "0.12.20", features = ["http3", "zstd", "brotli", "deflate", "gzip", "json", "native-tls", "socks", "stream"] }
+tower-http = { version = "0.6.6", features = ["full"] }

@@ -1,0 +1,95 @@
+use std::{
+	cell::SyncUnsafeCell,
+	mem::MaybeUninit,
+	sync::{
+		Arc,
+		atomic::{self, AtomicBool}
+	}
+};
+
+use http_body_util::Empty;
+use hyper::{
+	Request,
+	body::Bytes,
+	client::conn::{http1 as hypercli1, http2 as hypercli2}
+};
+use hyper_util::rt::{TokioExecutor, TokioIo};
+use tokio::{net::TcpStream, task::JoinHandle};
+use url::Url;
+
+struct GlobalClientHolder
+{
+	client: SyncUnsafeCell<MaybeUninit<Arc<Client>>>
+}
+
+impl Drop for GlobalClientHolder
+{
+	fn drop(&mut self)
+	{
+		if GLOBAL_CLIENT_INITIALIZED.swap(false, atomic::Ordering::AcqRel)
+		{
+			unsafe {
+				self.client.get_mut().assume_init_drop();
+			}
+		}
+	}
+}
+
+static GLOBAL_CLIENT: GlobalClientHolder = GlobalClientHolder {
+	client: SyncUnsafeCell::new(MaybeUninit::uninit())
+};
+static GLOBAL_CLIENT_INITIALIZED: AtomicBool = AtomicBool::new(false);
+
+pub(super) fn init_global_client()
+{
+	// technically this function is called once so we could even just use a raw
+	// `bool`
+	if !GLOBAL_CLIENT_INITIALIZED.swap(true, atomic::Ordering::AcqRel)
+	{
+		let client = unsafe { &mut *GLOBAL_CLIENT.client.get() };
+		client.write(Arc::new(Client::default()));
+	}
+}
+
+pub(crate) struct Client
+{
+	legacy: hyper_util::client::legacy::Client<>
+}
+
+impl Default for Client
+{
+	fn default() -> Self
+	{
+		Self::new()
+	}
+}
+
+impl Client
+{
+	pub(crate) fn new() -> Self
+	{
+		let mut this = Self {
+			http1: hypercli1::Builder::new(),
+			http2: hypercli2::Builder::new(TokioExecutor::new())
+		};
+		this.http1.writev(true);
+		this
+	}
+
+	pub(crate) fn head(url: &Url) {}
+}
+
+pub(crate) struct Response<S: ringbuf::storage::Storage<Item = u8>>
+{
+	tx:  JoinHandle<()>,
+	buf: async_ringbuf::AsyncRb<S>
+}
+
+pub(crate) fn client() -> Arc<Client>
+{
+	debug_assert!(GLOBAL_CLIENT_INITIALIZED.load(atomic::Ordering::Acquire));
+	unsafe {
+		let client = &*GLOBAL_CLIENT.client.get();
+		client.assume_init_ref().clone()
+	}
+}

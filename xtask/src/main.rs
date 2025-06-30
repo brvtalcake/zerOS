@@ -2,7 +2,12 @@
 #![feature(decl_macro)]
 #![feature(cfg_version)]
 #![feature(exit_status_error)]
+#![feature(new_range_api)]
+#![feature(sync_unsafe_cell)]
+#![feature(phantom_variance_markers)]
+#![feature(slice_pattern)]
 #![feature(panic_backtrace_config)]
+#![feature(impl_trait_in_bindings)]
 #![cfg_attr(not(version("1.89")), feature(file_lock))]
 #![forbid(unused_must_use)]
 #![allow(macro_expanded_macro_exports_accessed_by_absolute_paths)]
@@ -15,11 +20,13 @@ extern crate eager2;
 
 use anyhow::{Ok, Result};
 use clap::{ArgAction, Args, Parser, Subcommand, ValueEnum};
+use octocrab::Octocrab;
 use serde::{Deserialize, Serialize};
 
 mod actions;
 mod doc_comments;
 mod limine;
+mod requests;
 mod tools;
 
 use crate::{
@@ -57,16 +64,11 @@ struct XtaskGlobalOptions
 	debug: bool
 }
 
+#[remain::sorted]
 #[derive(Debug, Clone, Subcommand)]
 #[clap(rename_all = "kebab-case")]
 enum XtaskSubcmd
 {
-	/// Configure a subproject
-	Configure
-	{
-		#[command(subcommand)]
-		subproj: XtaskConfigurableSubproj
-	},
 	/// Build a subproject
 	Build
 	{
@@ -85,20 +87,27 @@ enum XtaskSubcmd
 		#[command(subcommand)]
 		subproj: XtaskClippyableSubproj
 	},
-	/// Format code in a subproject
-	Format
+	/// Configure a subproject
+	Configure
 	{
 		#[command(subcommand)]
-		subproj: XtaskFormattableSubproj
+		subproj: XtaskConfigurableSubproj
 	},
 	/// Expand macros in code from a subproject
 	Expand
 	{
 		#[command(subcommand)]
 		subproj: XtaskExpandableSubproj
+	},
+	/// Format code in a subproject
+	Format
+	{
+		#[command(subcommand)]
+		subproj: XtaskFormattableSubproj
 	} // TODO: `Run` variant
 }
 
+#[remain::sorted]
 #[derive(
 	Serialize,
 	Deserialize,
@@ -116,28 +125,28 @@ enum XtaskSubcmd
 #[clap(rename_all = "lower")]
 enum SupportedArch
 {
+	#[value(alias("arm64"))]
+	AArch64,
 	#[default]
 	#[value(alias("x86-64"), alias("x86_64"))]
 	Amd64,
-	#[value(alias("i386"), alias("i486"), alias("i586"), alias("i686"))]
-	X86,
-	#[value(alias("arm64"))]
-	AArch64,
 	#[value(alias("arm"))]
 	Arm32,
-	Riscv32,
-	Riscv64,
+	#[value(alias("avr"))]
+	Avr32,
+	LoongArch64,
+	Mips32,
+	Mips64,
 	#[value(alias("ppc32"))]
 	PowerPC32,
 	#[value(alias("ppc64"), alias("ppc"))]
 	PowerPC64,
+	Riscv32,
+	Riscv64,
 	Sparc32,
 	Sparc64,
-	Mips32,
-	Mips64,
-	#[value(alias("avr"))]
-	Avr32,
-	LoongArch64,
+	#[value(alias("i386"), alias("i486"), alias("i586"), alias("i686"))]
+	X86,
 	#[value(alias("s390x"))]
 	ZArch
 }
@@ -159,6 +168,8 @@ fn main() -> Result<()>
 			.build()
 			.expect("failed to create tokio runtime")
 	);
+	let global_git_instance = Octocrab::builder().build()?;
+	octocrab::initialise(global_git_instance);
 	tokio.block_on(async {
 		init_default_executable_names();
 		colog::init();
@@ -196,13 +207,11 @@ fn main() -> Result<()>
 }
 
 pub(crate) trait IntoArray<T, const N: usize>
-where
-	T: Sized
 {
 	fn into_array(self) -> [T; N];
 }
 
-impl<T: Sized> IntoArray<T, 2> for (T, T)
+impl<T> IntoArray<T, 2> for (T, T)
 {
 	fn into_array(self) -> [T; 2]
 	{
@@ -210,7 +219,7 @@ impl<T: Sized> IntoArray<T, 2> for (T, T)
 	}
 }
 
-impl<T: Sized> IntoArray<T, 3> for (T, T, T)
+impl<T> IntoArray<T, 3> for (T, T, T)
 {
 	fn into_array(self) -> [T; 3]
 	{
@@ -218,7 +227,7 @@ impl<T: Sized> IntoArray<T, 3> for (T, T, T)
 	}
 }
 
-impl<T: Sized> IntoArray<T, 4> for (T, T, T, T)
+impl<T> IntoArray<T, 4> for (T, T, T, T)
 {
 	fn into_array(self) -> [T; 4]
 	{
@@ -226,7 +235,7 @@ impl<T: Sized> IntoArray<T, 4> for (T, T, T, T)
 	}
 }
 
-impl<T: Sized> IntoArray<T, 5> for (T, T, T, T, T)
+impl<T> IntoArray<T, 5> for (T, T, T, T, T)
 {
 	fn into_array(self) -> [T; 5]
 	{

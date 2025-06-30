@@ -1,10 +1,10 @@
 use std::{ffi::OsStr, io, os::unix::ffi::OsStrExt, path::PathBuf, process::abort};
 
-use anyhow::{Result, anyhow};
+use anyhow::{Result, anyhow, bail};
 use camino::{Utf8Path, Utf8PathBuf};
 use itertools::Itertools;
 use log::info;
-use tokio::{fs, process};
+use tokio::{fs, process, task};
 
 pub(crate) mod gentarget;
 pub(crate) mod mk_iso;
@@ -139,6 +139,37 @@ pub(crate) async fn mkdir_fallible(parents: bool, strict: bool, path: &Utf8Path)
 	}
 }
 
+pub(crate) async fn cp_fallible(from: &Utf8Path, to: &Utf8Path) -> Result<()>
+{
+	let is_dir = from.is_dir();
+
+	info!(
+		"{prefix}copying {from} to {to}",
+		prefix = is_dir.then_some("recursively ").unwrap_or("")
+	);
+
+	if is_dir
+	{
+		mkdir_fallible(false, false, to).await?;
+
+		for maybe_entry in from.read_dir_utf8()?
+		{
+			let entry = maybe_entry?;
+
+			let source = entry.path();
+			let dest = to.join(entry.file_name());
+
+			Box::pin(cp_fallible(source, &dest)).await?;
+		}
+
+		Ok(())
+	}
+	else
+	{
+		Ok(fs::copy(from, to).await.map(|_| ())?)
+	}
+}
+
 pub(crate) async fn rm(recursive: bool, strict: bool, path: &Utf8Path)
 {
 	check!(
@@ -155,6 +186,15 @@ pub(crate) async fn mkdir(parents: bool, strict: bool, path: &Utf8Path)
 			.await
 			.expect("could not create directory")
 	)
+}
+
+pub(crate) async fn cp(from: &Utf8Path, to: &Utf8Path)
+{
+	check!(cp_fallible(from, to).await.expect("could not copy file"))
+}
+
+pub(crate) macro check_handle($handle:expr, $msg:expr) {
+	$crate::tools::check!($handle.await.expect($msg))
 }
 
 pub(crate) macro check
