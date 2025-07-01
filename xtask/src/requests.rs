@@ -36,6 +36,7 @@ pub(crate) static REQWEST_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
 	check!(
 		reqwest::Client::builder()
 			.https_only(true)
+            .use_native_tls()
 			.connection_verbose(true)
 			.http2_keep_alive_interval(Some(Duration::from_secs(20)))
 			.http2_keep_alive_timeout(Duration::from_secs(15))

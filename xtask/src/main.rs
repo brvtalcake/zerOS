@@ -5,6 +5,8 @@
 #![feature(new_range_api)]
 #![feature(sync_unsafe_cell)]
 #![feature(phantom_variance_markers)]
+#![feature(specialization)]
+#![feature(trait_alias)]
 #![feature(slice_pattern)]
 #![feature(panic_backtrace_config)]
 #![feature(impl_trait_in_bindings)]
@@ -25,6 +27,7 @@ use serde::{Deserialize, Serialize};
 
 mod actions;
 mod doc_comments;
+mod env;
 mod limine;
 mod requests;
 mod tools;
@@ -168,12 +171,11 @@ fn main() -> Result<()>
 			.build()
 			.expect("failed to create tokio runtime")
 	);
-	let global_git_instance = Octocrab::builder().build()?;
-	octocrab::initialise(global_git_instance);
 	tokio.block_on(async {
+		let global_git_instance = Octocrab::builder().build()?;
+		octocrab::initialise(global_git_instance);
 		init_default_executable_names();
 		colog::init();
-		std::panic::set_backtrace_style(std::panic::BacktraceStyle::Short);
 
 		mkdir(false, false, &config_location!()).await;
 
@@ -181,15 +183,11 @@ fn main() -> Result<()>
 		if cli.globals.debug
 		{
 			dbg!(&cli);
-			unsafe {
-				std::env::set_var("RUST_BACKTRACE", "full");
-			}
+			std::panic::set_backtrace_style(std::panic::BacktraceStyle::Full);
 		}
 		else
 		{
-			unsafe {
-				std::env::set_var("RUST_BACKTRACE", "1");
-			}
+			std::panic::set_backtrace_style(std::panic::BacktraceStyle::Short);
 		}
 
 		match &cli.task

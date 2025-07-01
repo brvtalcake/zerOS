@@ -72,3 +72,4 @@ ringbuf = "0.4.8"
 http-body = "1.0.1"
 reqwest = { version = "0.12.20", features = ["http3", "zstd", "brotli", "deflate", "gzip", "json", "native-tls", "socks", "stream"] }
 tower-http = { version = "0.6.6", features = ["full"] }
+cfg-if = "1.0.1"

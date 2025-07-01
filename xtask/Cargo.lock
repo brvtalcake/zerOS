@@ -3503,6 +3503,7 @@ dependencies = [
  "async-compat",
  "async-ringbuf",
  "camino",
+ "cfg-if",
  "clap",
  "colog",
  "dirs",

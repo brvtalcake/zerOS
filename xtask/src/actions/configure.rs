@@ -26,6 +26,7 @@ use crate::{
 	XtaskGlobalOptions,
 	actions::Xtask,
 	doc_comments::subdir,
+	env,
 	tools::check
 };
 
@@ -301,11 +302,11 @@ impl Xtask for XtaskConfigurableSubproj
 						.flatten()
 						.map(|matched| unsafe { matched.get(2).unwrap_unchecked() }.as_str().into())
 						.or_else(|| {
-							for env in alts.iter().map(|&alt| std::env::var(alt))
+							for env in alts.iter().map(|&alt| env::var(alt))
 							{
-								if let Ok(binding) = env
+								if env.is_some()
 								{
-									return Some(binding.into());
+									return env.map(Into::into);
 								}
 							}
 							None

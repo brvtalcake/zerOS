@@ -1,10 +1,11 @@
 use std::{ffi::OsStr, fmt::Display};
 
+use camino::Utf8PathBuf;
 use itertools::Itertools;
 use log::{error, info};
 use tokio::process;
 
-use crate::tools::{check, objcopy};
+use crate::tools::{CmdIn, check, objcopy};
 
 pub(crate) enum StripFlavor<'path>
 {
@@ -17,22 +18,20 @@ pub(crate) enum StripFlavor<'path>
 
 async fn do_it(strip: impl AsRef<OsStr>, args: &[impl AsRef<OsStr>])
 {
-	let cmdstr = format!(
-		"{} {}",
-		strip.as_ref().display(),
-		args.iter()
-			.map(|it| it.as_ref().to_string_lossy())
-			.join(" ")
-	);
-	check!(
-		process::Command::new(strip)
-			.args(args)
-			.status()
-			.await
-			.expect(format!("could not run `{cmdstr}`").as_str())
-			.exit_ok()
-			.expect(format!("command `{cmdstr}` exited abnormally").as_str())
-	);
+	let mut cmd = process::Command::new(strip);
+	cmd.args(args);
+	CmdIn::new(
+		check!(
+			Utf8PathBuf::from_path_buf(check!(
+				std::env::current_dir().expect("could not retrieve current working directory")
+			))
+			.map_err(|p| p.display().to_string())
+			.expect("PathBuf contains non UTF-8 characters")
+		),
+		cmd
+	)
+	.finalize()
+	.await;
 }
 
 pub(crate) async fn run(

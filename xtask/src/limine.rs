@@ -11,6 +11,7 @@ use std::{
 
 use anyhow::{Result, anyhow};
 use camino::{Utf8Path, Utf8PathBuf};
+use cfg_if::cfg_if;
 use fmmap::tokio::{AsyncMmapFileMut, AsyncOptions};
 use futures::StreamExt;
 use http::header::{CONTENT_LENGTH, LOCATION};
@@ -107,65 +108,76 @@ async fn entry_meta(entry: DiffEntry) -> EntryMetadata
 {
 	if let Some(raw) = &entry.raw_url
 	{
-		let mut url = Url::from_str(&raw).expect(format!("invalid url: {raw}").as_str());
-		let mut resp = check!(
-			REQWEST_CLIENT
-				.head(url.clone())
-				.send()
-				.await
-				.expect(format!("could not reach url: {url}").as_str())
-		);
-		let mut status = resp.status();
+		cfg_if! {
+				if #[cfg(any())]
+				{
+					let mut url = Url::from_str(&raw).expect(format!("invalid url: {raw}").as_str());
+					let mut resp = check!(
+						REQWEST_CLIENT
+							.head(url.clone())
+							.send()
+							.await
+							.expect(format!("could not reach url: {url}").as_str())
+					);
+					let mut status = resp.status();
 
-		while status.as_u16() >= 300 && status.as_u16() < 400
-		{
-			let tmp_url = check!(
-				check_opt!(
-					resp.headers().get(LOCATION).expect(
-						format!(
-							"got status code {} but could not find `location` header in response",
-							resp.status()
-						)
-						.as_str()
-					)
-				)
-				.to_str()
-				.expect("the `location` response header contains some invalid characters")
-			);
-			url = check!(Url::from_str(tmp_url).expect(format!("invalid url: {tmp_url}").as_str()));
-			resp = check!(
-				REQWEST_CLIENT
-					.head(url.clone())
-					.send()
-					.await
-					.expect(format!("could not reach url: {url}").as_str())
-			);
-			status = resp.status();
+					while status.is_redirection()
+					{
+						let tmp_url = check!(
+							check_opt!(
+								resp.headers().get(LOCATION).expect(
+									format!(
+										"got status code {} but could not find `location` header in response",
+										resp.status()
+									)
+									.as_str()
+								)
+							)
+							.to_str()
+							.expect("the `location` response header contains some invalid characters")
+						);
+						url = check!(Url::from_str(tmp_url).expect(format!("invalid url: {tmp_url}").as_str()));
+						resp = check!(
+							REQWEST_CLIENT
+								.head(url.clone())
+								.send()
+								.await
+								.expect(format!("could not reach url: {url}").as_str())
+						);
+						status = resp.status();
+					}
+				}
+			else
+			{
+				let url = Url::from_str(&raw).expect(format!("invalid url: {raw}").as_str());
+				let resp = check!(
+					REQWEST_CLIENT
+						.head(url.clone())
+						.send()
+						.await
+						.expect(format!("could not reach url: {url}").as_str())
+				);
+				let status = resp.status();
+				assert!(status.is_success());
+			}
 		}
 
 		let size = check_opt!(
-			check!(
-				REQWEST_CLIENT
-					.head(url.clone())
-					.send()
-					.await
-					.expect(format!("could not reach url: {url}").as_str())
-					.headers()
-					.get(CONTENT_LENGTH)
-					.map(|hdrval| {
-						check!(
-							hdrval
-								.to_str()
-								.expect(
-									"the `content-length` response header contains some invalid \
-									 characters"
-								)
-								.parse()
-								.expect("could not parse the `content-length` response header")
-						)
-					})
-			)
-			.expect("could not get the `content-length` response header")
+			resp.headers()
+				.get(CONTENT_LENGTH)
+				.map(|hdrval| {
+					check!(
+						hdrval
+							.to_str()
+							.expect(
+								"the `content-length` response header contains some invalid \
+								 characters"
+							)
+							.parse::<usize>()
+							.expect("could not parse the `content-length` response header")
+					)
+				})
+				.expect("could not get the `content-length` response header")
 		);
 		EntryMetadata {
 			url:              DownloadUrl::Raw(url),
@@ -211,6 +223,7 @@ async fn write_content(
 						.create(true)
 						.write(true)
 						.read(false)
+						.truncate(true)
 						.open(&p)
 						.await
 						.expect("could not open or create file")
@@ -219,6 +232,12 @@ async fn write_content(
 			let (mut istream, mut ostream) = (
 				check!(istream.expect("can not create input stream")),
 				check!(ostream.expect("can not create output stream"))
+			);
+			check!(
+				ostream
+					.set_len(entry.approximate_size as _)
+					.await
+					.expect("could not allocate filesystem space for output file")
 			);
 			// TODO: maybe we could gain performance by doing reading and writing in two
 			// separate tasks/threads ?

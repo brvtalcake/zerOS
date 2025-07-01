@@ -1,4 +1,4 @@
-use std::{ffi::OsStr, io, os::unix::ffi::OsStrExt, path::PathBuf, process::abort};
+use std::{ffi::OsStr, fmt::Display, io, os::unix::ffi::OsStrExt, path::PathBuf, process::abort};
 
 use anyhow::{Result, anyhow, bail};
 use camino::{Utf8Path, Utf8PathBuf};
@@ -6,56 +6,27 @@ use itertools::Itertools;
 use log::info;
 use tokio::{fs, process, task};
 
+use crate::env;
+
 pub(crate) mod gentarget;
 pub(crate) mod mk_iso;
 pub(crate) mod objcopy;
 pub(crate) mod strip;
 
-pub(crate) struct PushDir
-{
-	initial: PathBuf,
-	dir:     Utf8PathBuf
-}
-
-impl PushDir
-{
-	pub(crate) fn new(path: impl AsRef<Utf8Path>) -> Self
-	{
-		assert!(path.as_ref().is_dir());
-		let this = Self {
-			initial: std::env::current_dir()
-				.map(|p| p.canonicalize().unwrap())
-				.unwrap(),
-			dir:     path.as_ref().canonicalize_utf8().unwrap()
-		};
-		std::env::set_current_dir(this.dir.as_std_path()).unwrap();
-		this
-	}
-}
-
-impl Drop for PushDir
-{
-	fn drop(&mut self)
-	{
-		std::env::set_current_dir(&self.initial).unwrap_or_else(|_| abort())
-	}
-}
-
 pub(crate) struct CmdIn
 {
-	dir: PushDir,
 	cmd: process::Command
 }
 
 impl CmdIn
 {
 	#[inline]
-	pub(crate) fn new(path: impl AsRef<Utf8Path>, cmd: process::Command) -> Self
+	pub(crate) fn new(path: impl AsRef<Utf8Path>, mut cmd: process::Command) -> Self
 	{
-		Self {
-			dir: PushDir::new(path),
-			cmd
-		}
+		cmd.kill_on_drop(true)
+			.current_dir(path.as_ref())
+			.envs(env::vars_os());
+		Self { cmd }
 	}
 
 	pub(crate) async fn finalize(mut self)
@@ -205,8 +176,8 @@ pub(crate) macro check
 				($($munched)*).unwrap_or_else(
 					|err| {
 						::log::error!(
-							"{___prefix}: {err}",
-							___prefix = $string
+							"{___err_report}",
+							___err_report = (err).report_error_with_prefix($string)
 						);
 						$(
 							::log::error!(
@@ -277,4 +248,68 @@ pub(crate) macro check_opt
 	($($tokens:tt)*) => {
 		$crate::tools::check_opt!(@munch() $($tokens)*)
 	},
+}
+
+pub(crate) trait ReportError: Display
+{
+	fn report_error(&self) -> String;
+	fn report_error_with_prefix(&self, prefix: impl Display) -> String;
+}
+
+impl<T: Display> ReportError for T
+{
+	default fn report_error(&self) -> String
+	{
+		format!("{self}")
+	}
+
+	default fn report_error_with_prefix(&self, prefix: impl Display) -> String
+	{
+		format!("{prefix}: {}", self.report_error())
+	}
+}
+
+impl<T: Display> ReportError for T
+where
+	T: std::error::Error
+{
+	fn report_error(&self) -> String
+	{
+		self::report_error(self as &dyn std::error::Error, Option::<String>::None)
+	}
+
+	fn report_error_with_prefix(&self, prefix: impl Display) -> String
+	{
+		self::report_error(self as &dyn std::error::Error, Some(prefix))
+	}
+}
+
+fn report_error(mut err: &(dyn std::error::Error), prefix: Option<impl Display>) -> String
+{
+	if let Some(prefix) = prefix
+	{
+		let mut i = 0;
+		let mut s = format!("{prefix}:\n\t{i}: {err}");
+		i += 1;
+		while let Some(src) = err.source()
+		{
+			s.push_str(&format!("\n\t{i}: {}", src));
+			err = src;
+			i += 1;
+		}
+		s
+	}
+	else
+	{
+		let mut i = 0;
+		let mut s = format!("{i}: {err}");
+		i += 1;
+		while let Some(src) = err.source()
+		{
+			s.push_str(&format!("\n{i}: {}", src));
+			err = src;
+			i += 1;
+		}
+		s
+	}
 }

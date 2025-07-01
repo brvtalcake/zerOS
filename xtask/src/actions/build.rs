@@ -25,6 +25,7 @@ use crate::{
 		}
 	},
 	doc_comments::subdir,
+	env,
 	limine,
 	tools::{
 		CmdIn,
@@ -92,11 +93,11 @@ impl XtaskBuildableSubproj
 		{
 			unreachable!()
 		};
-		unsafe {
-			std::env::set_var("ZEROS_TARGET_CPU", cpu);
-			std::env::set_var("ZEROS_TARGET_ARCH", arch.as_ref());
-			std::env::set_var("ZEROS_PROFILE", profile.as_ref());
-		}
+
+		env::set_var("ZEROS_TARGET_CPU", cpu);
+		env::set_var("ZEROS_TARGET_ARCH", arch.as_ref());
+		env::set_var("ZEROS_PROFILE", profile.as_ref());
+
 		let iso_root = Arc::new(subproj_location!("zerOS").join("iso-root"));
 
 		// load cfg
@@ -161,7 +162,7 @@ impl XtaskBuildableSubproj
 			format!(
 				"--cfg getrandom_backend=\"rdrand\" -Cforce-unwind-tables -Zmacro-backtrace \
 				 -Ctarget-cpu={}",
-				std::env::var("ZEROS_TARGET_CPU").unwrap()
+				env::var("ZEROS_TARGET_CPU").unwrap()
 			)
 		);
 		let cmd = CmdIn::new(&subproj_location!("zerOS"), cmd);
