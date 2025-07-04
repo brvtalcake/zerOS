@@ -1,7 +1,6 @@
 use std::{
 	collections::HashMap,
-	ffi::OsStr,
-	fs::{self, File, OpenOptions},
+	fs::{File, OpenOptions},
 	io::Write,
 	mem::{self, MaybeUninit},
 	path::PathBuf,

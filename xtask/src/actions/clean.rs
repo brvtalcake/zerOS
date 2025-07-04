@@ -1,6 +1,13 @@
 use clap::Subcommand;
+use tokio::process;
 
-use crate::{actions::Xtask, doc_comments::subdir, XtaskGlobalOptions};
+use crate::{
+	XtaskGlobalOptions,
+	actions::{Xtask, configure::subproj_location},
+	doc_comments::subdir,
+	env,
+	tools::{CmdIn, check_opt}
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Subcommand)]
 #[clap(rename_all = "lowercase")]
@@ -26,13 +33,38 @@ pub(crate) enum XtaskCleanableSubproj
 
 	#[doc = subdir!(docs)]
 	#[clap(about = subdir!(docs))]
-	Docs
+	Docs,
+
+	#[doc = subdir!(generate-target)]
+	#[clap(about = subdir!(generate-target))]
+	GenerateTarget
 }
 
 impl Xtask for XtaskCleanableSubproj
 {
-	async fn execute(&self, globals: &XtaskGlobalOptions)
+	async fn execute(&self, _globals: &XtaskGlobalOptions)
 	{
-		todo!()
+		let path = match self
+		{
+			Self::Zeros => subproj_location!("zerOS"),
+			Self::Docs => subproj_location!("docs"),
+			Self::MacroUtils => subproj_location!("macro-utils"),
+			Self::ProcMacroUtils => subproj_location!("proc-macro-utils"),
+			Self::UnwindTool => subproj_location!("unwindtool"),
+			Self::GenerateTarget => subproj_location!("generate-target")
+		};
+
+		if *self != Self::Docs
+		{
+			let mut cmd = process::Command::new(check_opt!(
+				env::var("CARGO").expect("the CARGO environment variable shall be defined")
+			));
+			cmd.args(&["clean"]);
+			CmdIn::new(path, cmd).finalize().await
+		}
+		else
+		{
+			todo!()
+		}
 	}
 }

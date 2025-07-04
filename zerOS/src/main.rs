@@ -14,7 +14,7 @@
 #![feature(unboxed_closures, fn_traits)] // for crate 'overloadable' and overloadf
 #![feature(const_slice_make_iter)]
 #![feature(const_trait_impl)]
-#![feature(generic_arg_infer)]
+#![cfg_attr(not(version("1.89.0")), feature(generic_arg_infer))]
 #![feature(sync_unsafe_cell)]
 #![feature(trait_alias)]
 #![feature(variant_count)]
@@ -34,6 +34,7 @@
 #![feature(portable_simd)]
 #![feature(ptr_mask)]
 #![feature(cfg_select)]
+#![feature(cfg_version)]
 #![feature(set_ptr_value)]
 #![feature(stmt_expr_attributes)]
 #![feature(ptr_metadata)]

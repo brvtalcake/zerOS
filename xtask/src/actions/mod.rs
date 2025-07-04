@@ -6,6 +6,7 @@ pub(crate) mod clippy;
 pub(crate) mod configure;
 pub(crate) mod expand;
 pub(crate) mod format;
+pub(crate) mod run;
 
 pub(crate) trait Xtask
 {

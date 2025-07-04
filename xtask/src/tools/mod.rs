@@ -1,10 +1,16 @@
-use std::{ffi::OsStr, fmt::Display, io, os::unix::ffi::OsStrExt, path::PathBuf, process::abort};
+use std::{
+	ffi::OsStr,
+	fmt::Display,
+	io,
+	os::unix::ffi::OsStrExt,
+	process::{ExitStatus, Stdio}
+};
 
-use anyhow::{Result, anyhow, bail};
-use camino::{Utf8Path, Utf8PathBuf};
+use anyhow::{Result, anyhow};
+use camino::Utf8Path;
 use itertools::Itertools;
 use log::info;
-use tokio::{fs, process, task};
+use tokio::{fs, process};
 
 use crate::env;
 
@@ -25,11 +31,36 @@ impl CmdIn
 	{
 		cmd.kill_on_drop(true)
 			.current_dir(path.as_ref())
+			.stdin(Stdio::null())
 			.envs(env::vars_os());
 		Self { cmd }
 	}
 
-	pub(crate) async fn finalize(mut self)
+	pub(crate) fn detach(&mut self, detach: bool) -> &mut Self
+	{
+		if detach
+		{
+			self.cmd.stdout(Stdio::null()).stderr(Stdio::null());
+		}
+		else
+		{
+			self.cmd.stdout(Stdio::inherit()).stderr(Stdio::inherit());
+		}
+		self
+	}
+
+	pub(crate) async fn finalize(self)
+	{
+		check!(
+			self.finalize_fallible()
+				.await
+				.expect("failed to spawn process")
+				.exit_ok()
+				.expect("program terminated abnormally")
+		)
+	}
+
+	pub(crate) async fn finalize_fallible(mut self) -> Result<ExitStatus>
 	{
 		info!(
 			"running `{executable} {args}`",
@@ -42,14 +73,7 @@ impl CmdIn
 				.join(OsStr::from_bytes(b" "))
 				.display()
 		);
-		check!(
-			self.cmd
-				.status()
-				.await
-				.expect("failed to spawn process")
-				.exit_ok()
-				.expect("program terminated abnormally")
-		)
+		Ok(self.cmd.status().await?)
 	}
 }
 

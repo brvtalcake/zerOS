@@ -4,8 +4,6 @@ use std::{
 	sync::{LazyLock, RwLock}
 };
 
-use itertools::Itertools;
-
 use crate::tools::check;
 
 static ENV: RwLock<LazyLock<HashMap<OsString, OsString>>> = RwLock::new(LazyLock::new(|| {
@@ -40,6 +38,7 @@ pub(crate) fn vars_os() -> HashMap<OsString, OsString>
 	check!(ENV.read().expect("lock is poisoned")).clone()
 }
 
+#[allow(dead_code)]
 pub(crate) fn vars() -> HashMap<String, String>
 {
 	check!(ENV.read().expect("lock is poisoned"))

@@ -1,8 +1,7 @@
 use std::{ffi::OsStr, fmt::Display};
 
 use camino::Utf8PathBuf;
-use itertools::Itertools;
-use log::{error, info};
+use log::info;
 use tokio::process;
 
 use crate::tools::{CmdIn, check, objcopy};
@@ -75,11 +74,6 @@ pub(crate) async fn run(
 		(None, StripFlavor::ElfUtils) =>
 		{
 			do_it(strip, &[infile.as_ref(), "-o", stripped.as_ref()]).await;
-		},
-		_ =>
-		{
-			error!("unknown strip binary");
-			std::process::abort();
 		}
 	}
 }

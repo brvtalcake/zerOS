@@ -3,13 +3,18 @@
 #![feature(cfg_version)]
 #![feature(exit_status_error)]
 #![feature(new_range_api)]
+#![feature(more_qualified_paths)]
 #![feature(sync_unsafe_cell)]
 #![feature(phantom_variance_markers)]
+#![feature(derive_const)]
+#![feature(const_clone)]
+#![feature(f128)]
 #![feature(specialization)]
 #![feature(trait_alias)]
 #![feature(slice_pattern)]
 #![feature(panic_backtrace_config)]
 #![feature(impl_trait_in_bindings)]
+#![cfg_attr(test, feature(test))]
 #![cfg_attr(not(version("1.89")), feature(file_lock))]
 #![forbid(unused_must_use)]
 #![allow(macro_expanded_macro_exports_accessed_by_absolute_paths)]
@@ -30,6 +35,7 @@ mod doc_comments;
 mod env;
 mod limine;
 mod requests;
+mod term;
 mod tools;
 
 use crate::{
@@ -40,7 +46,8 @@ use crate::{
 		clippy::XtaskClippyableSubproj,
 		configure::{XtaskConfigurableSubproj, config_location, init_default_executable_names},
 		expand::XtaskExpandableSubproj,
-		format::XtaskFormattableSubproj
+		format::XtaskFormattableSubproj,
+		run::XtaskRunnableSubproj
 	},
 	tools::{check, mkdir}
 };
@@ -64,7 +71,34 @@ struct XtaskCLI
 struct XtaskGlobalOptions
 {
 	#[arg(short, long, default_value_t = false, action = ArgAction::SetTrue)]
-	debug: bool
+	/// Debugging mode.
+	///
+	/// Only for developers
+	debug: bool,
+
+	#[arg(short, long, default_value_t = 0, action = ArgAction::Count)]
+	/// Increase verbosity
+	verbose: u8,
+
+	#[arg(short, long, default_value_t = 0, action = ArgAction::Count)]
+	/// Decrease verbosity
+	quiet: u8
+}
+
+impl XtaskGlobalOptions
+{
+	pub(crate) fn verbosity(&self) -> u8
+	{
+		self.verbose.saturating_sub(self.quiet)
+	}
+
+	pub(crate) fn to_verbose_flags(&self) -> Vec<&'static str>
+	{
+		let verbosity = self.verbosity();
+		let mut ret = vec![];
+		(0..verbosity).for_each(|_| ret.push("--verbose"));
+		ret
+	}
 }
 
 #[remain::sorted]
@@ -102,12 +136,18 @@ enum XtaskSubcmd
 		#[command(subcommand)]
 		subproj: XtaskExpandableSubproj
 	},
+	#[command(visible_alias("fmt"))]
 	/// Format code in a subproject
 	Format
 	{
 		#[command(subcommand)]
 		subproj: XtaskFormattableSubproj
-	} // TODO: `Run` variant
+	},
+	Run
+	{
+		#[command(subcommand)]
+		subproj: XtaskRunnableSubproj
+	} // TODO: `Test` variant
 }
 
 #[remain::sorted]
@@ -161,6 +201,32 @@ enum Endianness
 	Big
 }
 
+impl Endianness
+{
+	pub(crate) const fn qemu_default_for(arch: SupportedArch) -> Option<Self>
+	{
+		match arch
+		{
+			SupportedArch::AArch64 => None,
+			SupportedArch::Amd64 => None,
+			SupportedArch::Arm32 => None,
+			SupportedArch::Avr32 => None,
+			SupportedArch::LoongArch64 => None,
+			SupportedArch::Mips32 => Some(Self::Big),
+			SupportedArch::Mips64 => Some(Self::Big),
+			SupportedArch::PowerPC32 => None,
+			SupportedArch::PowerPC64 => None,
+			SupportedArch::Riscv32 => None,
+			SupportedArch::Riscv64 => None,
+			SupportedArch::Sparc32 => None,
+			SupportedArch::Sparc64 => None,
+			SupportedArch::X86 => None,
+			SupportedArch::ZArch => None
+		}
+	}
+}
+
+#[remain::check]
 fn main() -> Result<()>
 {
 	let tokio = check!(
@@ -190,14 +256,16 @@ fn main() -> Result<()>
 			std::panic::set_backtrace_style(std::panic::BacktraceStyle::Short);
 		}
 
+		#[sorted]
 		match &cli.task
 		{
-			XtaskSubcmd::Configure { subproj } => subproj.execute(&cli.globals).await,
 			XtaskSubcmd::Build { subproj } => subproj.execute(&cli.globals).await,
 			XtaskSubcmd::Clean { subproj } => subproj.execute(&cli.globals).await,
 			XtaskSubcmd::Clippy { subproj } => subproj.execute(&cli.globals).await,
+			XtaskSubcmd::Configure { subproj } => subproj.execute(&cli.globals).await,
+			XtaskSubcmd::Expand { subproj } => subproj.execute(&cli.globals).await,
 			XtaskSubcmd::Format { subproj } => subproj.execute(&cli.globals).await,
-			XtaskSubcmd::Expand { subproj } => subproj.execute(&cli.globals).await
+			XtaskSubcmd::Run { subproj } => subproj.execute(&cli.globals).await
 		}
 
 		Ok(())
@@ -207,6 +275,22 @@ fn main() -> Result<()>
 pub(crate) trait IntoArray<T, const N: usize>
 {
 	fn into_array(self) -> [T; N];
+}
+
+impl<T> IntoArray<T, 0> for ()
+{
+	fn into_array(self) -> [T; 0]
+	{
+		[]
+	}
+}
+
+impl<T> IntoArray<T, 1> for (T,)
+{
+	fn into_array(self) -> [T; 1]
+	{
+		[self.0]
+	}
 }
 
 impl<T> IntoArray<T, 2> for (T, T)

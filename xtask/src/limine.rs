@@ -1,20 +1,12 @@
 // TODO: download limine binaries manually
 
-use std::{
-	collections::HashMap,
-	ffi::OsStr,
-	marker::{PhantomCovariantLifetime, variance},
-	pin::Pin,
-	str::FromStr,
-	sync::{Arc, LazyLock}
-};
+use std::{str::FromStr, sync::LazyLock};
 
 use anyhow::{Result, anyhow};
 use camino::{Utf8Path, Utf8PathBuf};
 use cfg_if::cfg_if;
-use fmmap::tokio::{AsyncMmapFileMut, AsyncOptions};
 use futures::StreamExt;
-use http::header::{CONTENT_LENGTH, LOCATION};
+use http::header::CONTENT_LENGTH;
 use hyper::body::Buf;
 use log::info;
 use octocrab::{
@@ -22,7 +14,6 @@ use octocrab::{
 	models::repos::{DiffEntry, RepoCommit}
 };
 use regex::Regex;
-use tempfile::tempfile;
 use tokio::{fs, io::AsyncWriteExt, task};
 use url::Url;
 use versions::Version;
@@ -260,7 +251,7 @@ async fn write_content(
 					.expect("could not flush and the syncronize the file with filesystem")
 			);
 		},
-		DownloadUrl::Content(url) =>
+		DownloadUrl::Content(_url) =>
 		{
 			todo!()
 		}

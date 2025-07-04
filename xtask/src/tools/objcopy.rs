@@ -1,7 +1,6 @@
 use std::ffi::OsStr;
 
 use camino::Utf8PathBuf;
-use itertools::Itertools;
 use tokio::process;
 
 use crate::tools::{CmdIn, check};

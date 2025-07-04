@@ -144,7 +144,7 @@
         "${workspaceFolder}/rustfmt.toml",
     ],
     "rust-analyzer.inlayHints.implicitDrops.enable": true,
-    "rust-analyzer.cargo.target": "/home/axel/tmp/x86_64-unknown-kernel.json",
+    "rust-analyzer.cargo.target": "${workspaceFolder}/../.xtask-cache/x86_64-unknown-kernel.json",
     "rust-analyzer.cargo.extraEnv": {
         "ZEROS_TARGET_CPU": "skylake",
         /* "RUSTUP_TOOLCHAIN": "stable", */

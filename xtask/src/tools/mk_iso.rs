@@ -1,4 +1,4 @@
-use std::{ffi::OsStr, ops::Deref, sync::Arc};
+use std::{ffi::OsStr, sync::Arc};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use tokio::{process, task};
@@ -10,6 +10,7 @@ use crate::{
 	tools::{CmdIn, check, check_opt, cp, mkdir}
 };
 
+#[allow(dead_code)]
 /// TODO: the script shall accept a command-line parameter to specify the
 /// `xorriso` binary
 ///
@@ -46,6 +47,7 @@ pub(crate) fn run_in(
 	CmdIn::new(pwd, cmd)
 }
 
+#[allow(dead_code)]
 pub(crate) async fn run(
 	infile: impl AsRef<str>,
 	outfile: impl AsRef<str>,
@@ -81,7 +83,7 @@ pub(crate) async fn run_from_rust(
 	outfile: impl AsRef<str>,
 	iso_root: impl AsRef<Utf8Path>,
 	bootloader: KConfigBootBootloader,
-	arch: SupportedArch,
+	_arch: SupportedArch,
 	boot_modules_dir: impl AsRef<Utf8Path>,
 	bootloader_config: Option<impl AsRef<Utf8Path>>,
 	other_args: impl IntoIterator<Item = impl AsRef<OsStr>>

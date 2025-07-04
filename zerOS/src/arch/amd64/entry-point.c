@@ -1,5 +1,5 @@
 #ifdef __INTELLISENSE__
-	#define zerOS_INIT_BOOTLOADER_IS_LIMINE 1
+#	define zerOS_INIT_BOOTLOADER_IS_LIMINE 1
 #endif
 
 // leaf 0x1
@@ -65,7 +65,7 @@ static inline bool can_enable_avx512(void)
 	return can_enable_avx() && (feature_buffer & HAVE_AVX512);
 }
 
-[[gnu::section(".bootcode")]]
+[[__gnu__::__section__(".bootcode")]]
 static void detect_features(void)
 {
 	uint32_t eax, ebx, ecx, edx;
@@ -121,7 +121,7 @@ next_check2:
 		feature_buffer |= HAVE_AVX512;
 }
 
-[[gnu::section(".bootcode")]]
+[[__gnu__::__section__(".bootcode")]]
 static inline uint64_t read_cr0(void)
 {
 	uint64_t cr0;
@@ -130,7 +130,7 @@ static inline uint64_t read_cr0(void)
 	return cr0;
 }
 
-[[gnu::section(".bootcode")]]
+[[__gnu__::__section__(".bootcode")]]
 static inline uint64_t read_cr4(void)
 {
 	uint64_t cr4;
@@ -139,7 +139,7 @@ static inline uint64_t read_cr4(void)
 	return cr4;
 }
 
-[[gnu::section(".bootcode")]]
+[[__gnu__::__section__(".bootcode")]]
 static inline void write_cr0(uint64_t cr0)
 {
 	asm volatile("mov %0, %%cr0"
@@ -147,7 +147,7 @@ static inline void write_cr0(uint64_t cr0)
 				 : "r"(cr0));
 }
 
-[[gnu::section(".bootcode")]]
+[[__gnu__::__section__(".bootcode")]]
 static inline void write_cr4(uint64_t cr4)
 {
 	asm volatile("mov %0, %%cr4"
@@ -155,7 +155,7 @@ static inline void write_cr4(uint64_t cr4)
 				 : "r"(cr4));
 }
 
-[[gnu::section(".bootcode")]]
+[[__gnu__::__section__(".bootcode")]]
 static inline uint64_t read_xcr0(void)
 {
 	uint32_t xcr0_hi, xcr0_lo;
@@ -167,7 +167,7 @@ static inline uint64_t read_xcr0(void)
 	return ((uint64_t)xcr0_hi << 32) | xcr0_lo;
 }
 
-[[gnu::section(".bootcode")]]
+[[__gnu__::__section__(".bootcode")]]
 static inline void write_xcr0(uint64_t xcr0)
 {
 	const uint32_t xcr0_hi = (xcr0 >> 32) & UINT32_MAX;
@@ -179,16 +179,16 @@ static inline void write_xcr0(uint64_t xcr0)
 				 : "rcx");
 }
 
-[[gnu::section(".bootcode")]] [[__noreturn__]]
+[[__gnu__::__section__(".bootcode")]] [[__noreturn__]]
 extern void
 #if zerOS_INIT_BOOTLOADER_IS_LIMINE
 zerOS_entry_point(void)
 #elif zerOS_INIT_BOOTLOADER_IS_GRUB2
-	#error "this is yet to be done"
+#	error "this is yet to be done"
 #elif zerOS_INIT_BOOTLOADER_IS_UEFI
-	#error "this is yet to be done"
+#	error "this is yet to be done"
 #else
-	#error "no bootloader has been defined"
+#	error "no bootloader has been defined"
 #endif
 {
 	detect_features();
@@ -238,11 +238,11 @@ zerOS_entry_point(void)
 	extern void zerOS_boot_setup(void);
 	zerOS_boot_setup();
 #elif zerOS_INIT_BOOTLOADER_IS_GRUB2
-	#error "this is yet to be done"
+#	error "this is yet to be done"
 #elif zerOS_INIT_BOOTLOADER_IS_UEFI
-	#error "this is yet to be done"
+#	error "this is yet to be done"
 #else
-	#error "no bootloader has been defined"
+#	error "no bootloader has been defined"
 #endif
 
 	unreachable();

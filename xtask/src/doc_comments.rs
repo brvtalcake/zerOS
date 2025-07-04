@@ -1,6 +1,6 @@
 pub(crate) macro subdir {
     (zerOS) => {
-        "The `zerOS` subdirectory (the kernel)"
+        "The `zerOS` subdirectory (the actual kernel)"
     },
     (unwindtool) => {
         "The `unwindtool` subdirectory (a tool to inspect `DWARF` and custom `TROLL` formats)"

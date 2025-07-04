@@ -1,8 +1,4 @@
-use std::{
-	ffi::{OsStr, OsString},
-	str::FromStr,
-	sync::Arc
-};
+use std::sync::Arc;
 
 use anyhow::anyhow;
 use camino::Utf8PathBuf;
@@ -86,7 +82,7 @@ pub(crate) enum ZerosBuildProfile
 impl XtaskBuildableSubproj
 {
 	#[allow(non_snake_case)]
-	async fn execute_zerOS(&self, globals: &XtaskGlobalOptions)
+	async fn execute_zerOS(&self, _globals: &XtaskGlobalOptions)
 	{
 		let Self::Zeros { arch, profile, cpu } = self
 		else
