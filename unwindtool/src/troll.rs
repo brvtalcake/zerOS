@@ -2,7 +2,7 @@ use std::{borrow::Cow, collections::HashMap};
 
 use anyhow::{Result, anyhow};
 use fallible_iterator::FallibleIterator;
-use gimli::{BaseAddresses, CfiEntriesIter, CieOrFde, EhFrame, EhFrameOffset, UnwindContext, UnwindSection};
+use gimli::{BaseAddresses, CfiEntriesIter, CieOrFde, EhFrame, EhFrameOffset, Register, UnwindContext, UnwindSection, UnwindTableRow};
 use object::{
 	Endian,
 	Endianness,
@@ -12,6 +12,8 @@ use object::{
 	elf::SHF_EXECINSTR,
 	read::elf::{ElfFile64, SectionHeader}
 };
+
+use crate::SupportedArch;
 
 pub type Troll64PCRange = (u64, u64);
 pub struct TrollData<'data>
@@ -30,12 +32,14 @@ pub struct TrollLocation<'data>
 pub struct Troll64<'data, 'file, R: ReadRef<'data>>
 {
 	elf:    &'file ElfFile64<'data, Endianness, R>,
-	pc_map: HashMap<Troll64PCRange, TrollData<'data>>
+	pc_map: HashMap<Troll64PCRange, TrollData<'data>>,
+	arch: SupportedArch,
 }
 
 impl<'data, 'file, R: ReadRef<'data>> Troll64<'data, 'file, R>
 {
 	fn map_from_elf(
+		arch: SupportedArch,
 		elf: &'file ElfFile64<'data, Endianness, R>
 	) -> Result<HashMap<Troll64PCRange, TrollData<'data>>>
 	{
@@ -77,7 +81,7 @@ impl<'data, 'file, R: ReadRef<'data>> Troll64<'data, 'file, R>
         let mut ctx = UnwindContext::new();
 		while let Some(entry) = entries.next()?
 		{
-			// TODO: when we hiy a CIE, save it somewhere to somehow re-use it when hitting
+			// TODO: when we hit a CIE, save it somewhere to somehow re-use it when hitting
 			// an FDE (?)
 			match entry
 			{
@@ -97,6 +101,7 @@ impl<'data, 'file, R: ReadRef<'data>> Troll64<'data, 'file, R>
                     while let Some(row) = rows.next_row()?
                     {
                         let range = (row.start_address(), row.end_address());
+						let regs = get_regs(arch, row);
                         todo!("do something with row");
                     }
 				},
@@ -109,12 +114,24 @@ impl<'data, 'file, R: ReadRef<'data>> Troll64<'data, 'file, R>
 		Ok(map)
 	}
 
-	pub fn new(elf: &'file ElfFile64<'data, Endianness, R>) -> Result<Self>
+	pub fn new(arch: SupportedArch, elf: &'file ElfFile64<'data, Endianness, R>) -> Result<Self>
 	{
 		Ok(Self {
 			elf,
-			pc_map: Self::map_from_elf(elf)?
+			pc_map: Self::map_from_elf(arch, elf)?,
+			arch
 		})
+	}
+}
+
+fn get_regs(arch: SupportedArch, row: &UnwindTableRow<usize>) -> TrollRegisterSet
+{
+	todo!();
+	match arch
+	{
+		SupportedArch::Amd64 => {
+			/* let ra = row.register(gimli::X86_64::RA); */
+		}
 	}
 }
 

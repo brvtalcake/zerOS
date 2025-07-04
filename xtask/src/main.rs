@@ -143,6 +143,9 @@ enum XtaskSubcmd
 		#[command(subcommand)]
 		subproj: XtaskFormattableSubproj
 	},
+	/// Run a subproject
+	///
+	/// Potentially needs Qemu or some other emulator (e.g. Bochs)
 	Run
 	{
 		#[command(subcommand)]

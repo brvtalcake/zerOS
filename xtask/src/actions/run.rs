@@ -12,7 +12,7 @@ use crate::{
 		configure::{Executable, ZerosConfig, get_topdir}
 	},
 	doc_comments::subdir,
-	tools::{CmdIn, check}
+	tools::{CmdIn, check, rm}
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Subcommand)]
@@ -282,7 +282,8 @@ fn run_zerOS_qemu_cmd(
 
 			if matches!(accelerator, Accelerator::Kvm)
 			{
-				qemu_args.extend_from_slice(&["-accel", "kvm"]);
+				// qemu_args.extend_from_slice(&["-accel", "kvm"]);
+				qemu_args.extend_from_slice(&["-enable-kvm", "-accel", "kvm"]);
 			}
 
 			if gdb_stub || *initial_wait
@@ -333,6 +334,7 @@ impl Xtask for XtaskRunnableSubproj
 				emulator_args
 			} =>
 			{
+				rm(false, false, &get_topdir().join("debugcon.log")).await;
 				spawned.push(task::spawn(
 					run_zerOS_qemu_cmd(
 						globals,
@@ -348,10 +350,8 @@ impl Xtask for XtaskRunnableSubproj
 					)
 					.finalize()
 				));
-                if *gdb_window
-                {
-                    todo!()
-                }
+				if *gdb_window
+				{ /* todo!() */ }
 			},
 			Self::UnwindTool { .. } => todo!()
 		}
