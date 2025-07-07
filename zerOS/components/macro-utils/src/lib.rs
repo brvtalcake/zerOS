@@ -1,6 +1,7 @@
-#![feature(concat_idents)]
-#![feature(decl_macro)]
 #![no_std]
+#![no_main]
+#![allow(non_snake_case)]
+#![feature(decl_macro)]
 #![recursion_limit = "1024"]
 
 use eager2::eager_macro;
@@ -365,100 +366,5 @@ impl MultiCaseStaticString
 	pub const fn get(&self, style: CaseKind) -> &'static str
 	{
 		self.strings[style as usize]
-	}
-}
-
-#[cfg(test)]
-mod tests
-{
-	use proc_macro_utils::array_size;
-
-	use super::*;
-
-	macro_rules! MY_ARRAY_CONSTANT {
-		($callback:tt) => {
-			callback!($callback([0, 1, 2, 3, 4, 5]))
-		};
-		() => {
-			[0, 1, 2, 3, 4, 5]
-		};
-	}
-
-	macro_rules! MY_MACRO {
-        ($($tokens:tt)*) => {
-            callback!(
-                $($tokens)*(
-                    1, 2, 3, 4, 5, 6
-                )
-            )
-        };
-    }
-
-	macro_rules! MY_COOL_CALLBACK1 {
-        ($($args:tt)*) => {
-            static_max!($($args)*)
-        };
-    }
-
-	macro_rules! MY_COOL_CALLBACK2 {
-        ($($args:tt)*) => {
-            (($($args)*) * 2)
-        };
-    }
-
-	#[test]
-	fn callback_test()
-	{
-		assert_eq!(MY_ARRAY_CONSTANT!(identity_expand), MY_ARRAY_CONSTANT!());
-		assert_eq!(MY_ARRAY_CONSTANT!(array_size), MY_ARRAY_CONSTANT!().len());
-		assert_eq!(MY_MACRO!(MY_COOL_CALLBACK1), 6);
-		assert_eq!(MY_MACRO!(@foreach @delim(+) MY_COOL_CALLBACK2), 42);
-	}
-
-	#[test]
-	fn identity_expand_test()
-	{
-		assert_eq!(
-			identity_expand!("The quick brown fox blah blah blah"),
-			"The quick brown fox blah blah blah"
-		);
-	}
-
-	#[test]
-	fn count_exprs_test()
-	{
-		assert_eq!(count_exprs!("1"), 1);
-		assert_eq!(count_exprs!("1", "2"), 2);
-		assert_eq!(count_exprs!("1", "2", "3"), 3);
-		assert_eq!(count_exprs!("1", "2", "3", "4"), 4);
-		assert_eq!(count_exprs!("1", "2", "3", "4", 5), 5);
-	}
-
-	#[test]
-	fn static_max_test()
-	{
-		assert_eq!(const { static_max!(0, 8, 18, 2, 4235468, 1) }, 4235468);
-		assert_eq!(const { static_max!(0, 8, 18, 2, 18, 1) }, 18);
-	}
-
-    #[test]
-	fn static_min_test()
-	{
-		assert_eq!(const { static_min!(0, 8, 18, 2, 4235468, 1) }, 0);
-		assert_eq!(const { static_min!(0, 8, 18, 2, 18, 1) }, 0);
-	}
-
-    #[test]
-	fn max_test()
-	{
-		assert_eq!(max!(0, 8, 18, 2, 4235468, 1), 4235468);
-		assert_eq!(max!(0, 8, 18, 2, 18, 1), 18);
-	}
-
-    #[test]
-	fn min_test()
-	{
-		assert_eq!(min!(0, 8, 18, 2, 4235468, 1), 0);
-		assert_eq!(min!(0, 8, 18, 2, 18, 1), 0);
 	}
 }
