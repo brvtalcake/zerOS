@@ -1,0 +1,182 @@
+#![recursion_limit = "512"]
+#![allow(unused_macros)]
+#![feature(exit_status_error)]
+
+use core::panic;
+use std::{
+	ffi::OsString,
+	fs,
+	io::{self, Write},
+	path::{self, Path, PathBuf},
+	process::{Command, exit}
+};
+
+use cfg_aliases::cfg_aliases;
+use macro_utils::{callback, identity_expand};
+use proc_macro_utils::array_size;
+use serde::Deserialize;
+use strum::VariantNames;
+
+fn compile_region_allocator() -> Vec<PathBuf>
+{
+	// clang -march=x86-64 -O3 -ffreestanding -fno-builtin -nostdlib
+	// --target=x86_64-unknown-none-elf zerOS/src/kernel/memory/allocators/region.c
+	// -c -mfloat-abi=soft
+	// -Wall -Wextra -std=gnu23 	-xc -ffreestanding -fno-stack-protector
+	// -fno-stack-check -m64 -mno-mmx 	$(call CC_TUNE_FOR,$(KCPU))	-mno-sse
+	// -mno-sse2 	-mno-red-zone -mno-avx -mno-avx2 -mno-avx512f 	-nodefaultlibs
+	// -nostdlib -nostartfiles 	-m128bit-long-double -fno-lto -msoft-float
+	// and maybe `-fno-builtin` when compiling the four aformentioned `mem...`
+	// functions
+	let outdir = get_outdir();
+	if outdir.is_none()
+	{
+		return vec![];
+	}
+
+	let files = vec![
+		(
+			"./src/utils/rbtree.c",
+			path::PathBuf::from(outdir.unwrap()).join("rbtree.o")
+		),
+		(
+			"./src/kernel/memory/allocators/region.c",
+			path::PathBuf::from(outdir.unwrap()).join("region.o")
+		),
+	];
+
+	for (inf, outf) in &files
+	{
+		compile_c_code(&inf, &outf, COptsConfig::Normal, &[]);
+	}
+
+	let mut target_triple = get_target_arch().unwrap().to_owned();
+	if target_triple.ends_with("-none")
+	{
+		target_triple.push_str("-elf");
+	}
+	let target_ptr_width = get_target_ptr_width().unwrap();
+	bindgen::builder()
+		.clang_args([
+			"-I./include",
+			format!("--target={target_triple}").as_ref(),
+			"-xc",
+			"-std=gnu23",
+			"-O3",
+			"-Wall",
+			"-Wextra",
+			// "-flto",
+			"-ffreestanding",
+			"-fno-stack-protector",
+			"-fno-stack-check",
+			format!("-m{target_ptr_width}").as_ref(),
+			"-masm=att",
+			"-nodefaultlibs",
+			"-nostdlib"
+		])
+		.header("./include/zerOS/region_allocator.h")
+		.opaque_type("zerOS_region_allocator")
+		.newtype_enum("zerOS_allocation_strategy")
+		.prepend_enum_name(false)
+		.allowlist_file(r"\./include/.+\.h")
+		.blocklist_function(r"mem(cpy|move|set)")
+		.parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
+		.rustfmt_configuration_file(Some("./rustfmt.toml".into()))
+		.use_core()
+		.generate()
+		.unwrap()
+		.write_to_file("./src/kernel/memory/allocators/bindings/region.rs")
+		.unwrap();
+	files.iter().cloned().unzip::<_, _, Vec<_>, _>().1
+}
+
+fn generate_kconfig_aliases()
+{
+	let kconfig = parse_kconfig();
+	let bootconf = &kconfig.boot;
+	let bootloader = bootconf.bootloader;
+	custom_kcfg!(bootloader: KConfigBootBootloader = bootloader.as_ref());
+}
+
+fn compile_c_init_code() -> Vec<PathBuf>
+{
+	let kconfig = parse_kconfig();
+	let defines = [format!(
+		"-DzerOS_INIT_BOOTLOADER_IS_{}=1",
+		kconfig
+			.boot
+			.bootloader
+			.as_ref()
+			.to_uppercase()
+			.replace("-", "_")
+	)];
+
+	let outdir = get_outdir();
+	if outdir.is_none()
+	{
+		return vec![];
+	}
+
+	let arch_dir = get_target_arch().unwrap().split('-').collect::<Vec<_>>()[0]
+		.replace("x86-64", "amd64")
+		.replace("x86_64", "amd64")
+		.replace("arm64", "aarch64");
+
+	let outf = path::PathBuf::from(outdir.unwrap()).join("entry-point.o");
+	compile_c_code(
+		format!("./src/arch/{arch_dir}/entry-point.c").as_ref(),
+		&outf,
+		COptsConfig::InitCode,
+		&defines
+	);
+	vec![outf]
+}
+
+pub fn main()
+{
+	generate_config_arch_aliases();
+	generate_kconfig_aliases();
+	declare_c_source_code_in(&["./include", "./src"], true);
+
+	let relpath: &'static str = "../scripts/gensectioninfo.py";
+	let abspath = match realpath(relpath)
+	{
+		Ok(path) => path,
+		Err(e) => panic!("can not find {relpath}: {}", e.to_string())
+	};
+	let out_dir = get_outdir();
+
+	to_cargo!("rerun-if-changed" => abspath
+		.clone()
+		.into_os_string()
+		.into_string()
+		.expect("invalid path !"));
+	to_cargo!("rerun-if-changed" => "build.rs");
+	to_cargo!("rerun-if-changed" => "linker/linker-x86_64.ld.template");
+
+	let mut c_objs = vec![];
+	// TODO: change clang target based on target arch
+	c_objs.append(&mut compile_region_allocator());
+	// TODO: change clang target based on target arch
+	c_objs.append(&mut compile_c_init_code());
+
+	if let Some(odir) = out_dir
+	{
+		make_lib_with(&c_objs, &PathBuf::from(odir).join("libzerOS-c.a"));
+	}
+
+	lalrpop_compile();
+
+	let linker_script = update_linker_script_and_related(&abspath)
+		.into_os_string()
+		.into_string()
+		.expect("unreachable");
+	to_cargo!("rustc-link-arg" => format!("-T{linker_script}"));
+}
+
+fn realpath<P: AsRef<std::path::Path> + Clone>(path: P) -> io::Result<std::path::PathBuf>
+{
+	let thispath: &std::path::Path = ".".as_ref();
+	fs::canonicalize(thispath.join(path))
+}
+

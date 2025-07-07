@@ -1,0 +1,20 @@
+[package]
+name = "zerOS-llvm-intrinsics"
+description = "zerOS llvm intrinsics"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license-file.workspace = true
+readme.workspace = true
+
+autobins = false
+autoexamples = false
+autotests = false
+autobenches = false
+
+[lib]
+name = "zerOS_llvm_intrinsics"
+crate-type = ["rlib"]
+harness = false

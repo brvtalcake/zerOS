@@ -40,14 +40,7 @@ mod tools;
 
 use crate::{
 	actions::{
-		Xtask,
-		build::XtaskBuildableSubproj,
-		clean::XtaskCleanableSubproj,
-		clippy::XtaskClippyableSubproj,
-		configure::{XtaskConfigurableSubproj, config_location, init_default_executable_names},
-		expand::XtaskExpandableSubproj,
-		format::XtaskFormattableSubproj,
-		run::XtaskRunnableSubproj
+		build::XtaskBuildableSubproj, clean::XtaskCleanableSubproj, clippy::XtaskClippyableSubproj, configure::{config_location, get_topdir, init_default_executable_names, XtaskConfigurableSubproj}, expand::XtaskExpandableSubproj, format::XtaskFormattableSubproj, run::XtaskRunnableSubproj, Xtask
 	},
 	tools::{check, mkdir}
 };
@@ -258,6 +251,8 @@ fn main() -> Result<()>
 		{
 			std::panic::set_backtrace_style(std::panic::BacktraceStyle::Short);
 		}
+
+		env::set_var("ZEROS_TOPDIR", get_topdir());
 
 		#[sorted]
 		match &cli.task

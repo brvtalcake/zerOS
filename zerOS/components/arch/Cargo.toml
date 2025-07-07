@@ -1,0 +1,50 @@
+[package]
+name = "zerOS-arch"
+description = "Architecture specific code"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license-file.workspace = true
+readme.workspace = true
+
+autobins = false
+autoexamples = false
+autotests = false
+autobenches = false
+
+[lib]
+name = "zerOS_arch"
+crate-type = ["rlib"]
+harness = false
+
+[dependencies]
+zerOS-proc-macro-utils = { path = "../proc-macro-utils" }
+overloadable = "0.4"
+cfg-if = "1"
+
+[build-dependencies]
+zerOS-buildrs-utils = { path = "../../buildrs-utils" }
+
+[features]
+# Architectures
+amd64 = []
+x86 = []
+aarch64 = []
+arm32 = []
+riscv64 = []
+riscv32 = []
+ppc64 = []
+ppc32 = []
+mips64 = []
+mips32 = []
+sparc64 = []
+sparc32 = []
+loongarch64 = []
+avr32 = []
+zarch = []
+# Bootloaders
+limine = []
+grub2 = []
+uefi = []

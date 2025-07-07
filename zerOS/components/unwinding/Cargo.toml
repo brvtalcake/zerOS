@@ -1,0 +1,19 @@
+[package]
+name = "zerOS-unwinding"
+description = "zerOS unwinding code"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license-file.workspace = true
+readme.workspace = true
+
+autobins = false
+autoexamples = false
+autotests = false
+autobenches = false
+
+[lib]
+name = "zerOS_unwinding"
+crate-type = ["rlib"]

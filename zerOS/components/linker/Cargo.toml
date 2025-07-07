@@ -1,0 +1,27 @@
+[package]
+name = "zerOS-linker"
+description = "zerOS linker symbols related code"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license-file.workspace = true
+readme.workspace = true
+
+autobins = false
+autoexamples = false
+autotests = false
+autobenches = false
+
+[lib]
+name = "zerOS_linker"
+crate-type = ["rlib"]
+harness = false
+
+[dependencies]
+lazy_static = { version = "1.5", default-features = false }
+
+[build-dependencies]
+eager2 = "1.1.2"
+zerOS-buildrs-utils = { path = "../../buildrs-utils" }

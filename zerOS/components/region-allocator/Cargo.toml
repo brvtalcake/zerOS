@@ -1,0 +1,19 @@
+[package]
+name = "zerOS-region-allocator"
+description = "zerOS region allocator"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license-file.workspace = true
+readme.workspace = true
+
+autobins = false
+autoexamples = false
+autotests = false
+autobenches = false
+
+[lib]
+name = "zerOS_region_allocator"
+crate-type = ["rlib"]

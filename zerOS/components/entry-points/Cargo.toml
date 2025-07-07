@@ -1,0 +1,30 @@
+[package]
+name = "zerOS-entry-points"
+description = "zerOS entry points"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license-file.workspace = true
+readme.workspace = true
+
+autobins = false
+autoexamples = false
+autotests = false
+autobenches = false
+
+[lib]
+name = "zerOS_entry_points"
+crate-type = ["rlib"]
+
+[dependencies]
+overloadable = "0.4"
+cfg-if = "1"
+limine = { version = "0.5.0", features = ["ipaddr", "uuid"], optional = true }
+multiboot2 = { version = "0.24", optional = true }
+
+[features]
+limine = ["dep:limine"]
+grub2 = ["dep:multiboot2"]
+uefi = []

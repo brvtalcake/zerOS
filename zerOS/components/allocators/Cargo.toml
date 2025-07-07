@@ -1,0 +1,22 @@
+[package]
+name = "zerOS-allocators"
+description = "Various allocators to use on top of the global allocator or on top of a region allocator"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license-file.workspace = true
+readme.workspace = true
+
+autobins = false
+autoexamples = false
+autotests = false
+autobenches = false
+
+[lib]
+name = "zerOS_allocators"
+crate-type = ["rlib"]
+harness = false
+
+[dependencies]
