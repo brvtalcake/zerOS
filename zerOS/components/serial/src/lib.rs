@@ -1,8 +1,11 @@
 #![no_std]
+#![no_main]
+#![allow(non_snake_case)]
+#![feature(trait_alias)]
 
 use core::fmt;
 
-use crate::kernel::io::{KernelOutput, KernelOutputExt};
+use zerOS_macro_utils::max;
 
 pub trait SerialInput
 {

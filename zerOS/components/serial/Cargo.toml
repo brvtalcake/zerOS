@@ -17,3 +17,8 @@ autobenches = false
 [lib]
 name = "zerOS_serial"
 crate-type = ["rlib"]
+harness = false
+
+[dependencies]
+zerOS-macro-utils = { path = "../macro-utils" }
+zerOS-io = { path = "../io" }

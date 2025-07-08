@@ -1,11 +1,10 @@
 #![no_std]
 #![no_main]
 #![allow(non_snake_case)]
-
-#[macro_use]
-extern crate zerOS_proc_macro_utils;
+#![feature(variant_count)]
 
 use cfg_if::cfg_if;
+use zerOS_static_assertions::static_assert;
 
 // sanity check
 static_assert!(

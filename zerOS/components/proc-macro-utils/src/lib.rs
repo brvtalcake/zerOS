@@ -1,3 +1,4 @@
+#![allow(non_snake_case)]
 #![feature(proc_macro_expand)]
 
 use proc_macro::TokenStream as TokenStreamClassic;

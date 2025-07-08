@@ -1,4 +1,8 @@
 #![no_std]
+#![no_main]
+#![allow(non_snake_case)]
+#![feature(transmutability)]
+#![feature(decl_macro)]
 
 use core::mem::{self, Assume, TransmuteFrom};
 
@@ -65,7 +69,7 @@ macro_rules! alignment_of {
 		16
 	};
 	($other:ty) => {
-		const { align_of::<$other>() }
+		const { ::core::mem::align_of::<$other>() }
 	};
 }
 
@@ -130,7 +134,7 @@ macro_rules! size_of {
 		16
 	};
 	($other:ty) => {
-		const { size_of::<$other>() }
+		const { ::core::mem::size_of::<$other>() }
 	};
 }
 

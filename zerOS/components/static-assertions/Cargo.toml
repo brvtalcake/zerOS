@@ -15,7 +15,7 @@ autotests = false
 autobenches = false
 
 [lib]
-name = "zerOS_static_assert"
+name = "zerOS_static_assertions"
 proc-macro = true
 
 [dependencies]

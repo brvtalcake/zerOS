@@ -4,18 +4,11 @@ use core::{
 };
 
 use lazy_static::lazy_static;
+use zerOS_proc_macro_utils::constinit_array;
 
-use crate::{
-	arch::x86_common::cpu::{
-		io::{inb, outb},
-		misc::hcf
-	},
-	kernel::{
-		hypervisor,
-		logging::{self, ZEROS_GLOBAL_LOGGER},
-		serial::{SerialInput, SerialKernelOutput, SerialOutput},
-		sync::BasicMutex
-	}
+use crate::target::cpu::{
+	io::{inb, outb},
+	misc::hcf
 };
 
 static mut SERIAL_INIT_STATES: [AtomicBool; variant_count::<SerialPortId>() as usize] = constinit_array!([AtomicBool; variant_count::<SerialPortId>() as usize] with AtomicBool::new(false));

@@ -269,25 +269,22 @@ macro_rules! static_max {
 
 #[macro_export]
 macro_rules! max {
-    () => { 0_usize };
-    ($expr:expr) => { { ($expr) } };
-    ($first:expr $(,$rest:expr)*)
-        => { {
-            let recursed_max = max!(@inner $(,$rest)*);
-            if ($first) >= (recursed_max)
-            { ($first) }
-            else
-            { recursed_max }
-         } };
-    (@inner, $expr:expr) => { { ($expr) } };
-    (@inner, $first:expr $(,$rest:expr)*)
-        => { {
-            let recursed_max = max!(@inner $(,$rest)*);
-            if ($first) >= (recursed_max)
-            { ($first) }
-            else
-            { recursed_max }
-         } };
+    ($expr:expr $(,)?) => { ($expr) };
+
+    ($first:expr, $($rest:expr),+ $(,)?) =>
+    {{
+        let recursed_max_rest = max!($($rest),+);
+        let recursed_max_first = $first;
+
+        if recursed_max_first >= recursed_max_rest
+        {
+            recursed_max_first
+        }
+        else
+        {
+            recursed_max_rest
+        }
+    }};
 }
 
 #[macro_export]
@@ -315,25 +312,22 @@ macro_rules! static_min {
 
 #[macro_export]
 macro_rules! min {
-    () => { 0_usize };
-    ($expr:expr) => { { ($expr) } };
-    ($first:expr $(,$rest:expr)*)
-        => { {
-            let recursed_min = min!(@inner $(,$rest)*);
-            if ($first) <= (recursed_min)
-            { ($first) }
-            else
-            { recursed_min }
-         } };
-    (@inner, $expr:expr) => { { ($expr) } };
-    (@inner, $first:expr $(,$rest:expr)*)
-        => { {
-            let recursed_min = min!(@inner $(,$rest)*);
-            if ($first) <= (recursed_min)
-            { ($first) }
-            else
-            { recursed_min }
-         } };
+    ($expr:expr $(,)?) => { ($expr) };
+
+    ($first:expr, $($rest:expr),+ $(,)?) =>
+    {{
+        let recursed_min_rest = min!($($rest),+);
+        let recursed_min_first = $first;
+
+        if recursed_min_first <= recursed_min_rest
+        {
+            recursed_min_first
+        }
+        else
+        {
+            recursed_min_rest
+        }
+    }};
 }
 
 #[repr(usize)]
