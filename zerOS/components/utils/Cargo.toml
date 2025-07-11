@@ -21,4 +21,11 @@ harness = false
 
 [dependencies]
 rustc-demangle = { version = "0.1.25", default-features = false }
-simdutf8 = { version = "0.1.5", default-features = false, features = ["aarch64_neon", "aarch64_neon_prefetch", "hints"] }
+sealed = "0.6.0"
+simdutf8 = { version = "0.1.5", default-features = false, features = [
+    "aarch64_neon",
+    "aarch64_neon_prefetch",
+    "hints",
+] }
+typenum = { version = "1.18.0", features = ["const-generics"] }
+zerOS-static-assertions = { path = "../static-assertions" }

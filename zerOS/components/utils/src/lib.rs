@@ -1,13 +1,39 @@
+// #![cfg_attr(not(test), no_std)]
+// #![cfg_attr(not(test), no_main)]
 #![no_std]
 #![no_main]
 #![allow(non_snake_case)]
+#![allow(incomplete_features)]
+#![allow(internal_features)]
 #![feature(transmutability)]
 #![feature(decl_macro)]
+#![feature(associated_type_defaults)]
+/* #![feature(generic_const_exprs)] */
+#![feature(const_trait_impl)]
+#![feature(auto_traits)]
+#![feature(core_intrinsics)]
+#![feature(phantom_variance_markers)]
+#![feature(f16)]
+#![feature(f128)]
+#![feature(custom_test_frameworks)]
+#![feature(never_type)]
+#![feature(min_specialization)]
+#![feature(const_destruct)]
+#![feature(sized_hierarchy)]
+#![feature(cfg_select)]
 
-use core::mem::{self, Assume, TransmuteFrom};
+use core::{
+	hint::assert_unchecked,
+	mem::{self, Assume, TransmuteFrom}
+};
 
 pub use rustc_demangle::{demangle, try_demangle};
 
+use crate::cmp::ConstOrd;
+
+pub mod cmp;
+#[cfg(false)]
+pub mod meta;
 pub mod str;
 
 pub macro likely($boolean:expr) {
@@ -228,4 +254,121 @@ pub const unsafe fn with_lifetime<'from, 'to, T: ?Sized>(from: &'from T) -> &'to
 pub const unsafe fn with_lifetime_mut<'from, 'to, T: ?Sized>(from: &'from mut T) -> &'to mut T
 {
 	unsafe { mem::transmute(from) }
+}
+
+pub const fn static_assume_lt<T: Copy>(value: T, max: T) -> T
+where
+	T: ~const ConstOrd
+{
+	assert!(value.const_lt(&max));
+	unsafe {
+		assert_unchecked(value.const_lt(&max));
+	}
+	value
+}
+
+/// Trait to retrieve the size of a type.
+///
+/// # Examples
+/// TODO
+//#[sealed]
+// pub trait GetSize
+//{
+// 	type Value;
+//
+// 	const VALUE: usize;
+//}
+//
+//#[sealed]
+// impl<T: ?Sized> GetSize for T
+//{
+// 	default type Value = U<0>;
+//
+// 	default const VALUE: usize = 0;
+//}
+//
+//#[sealed]
+// impl<T: Sized> GetSize for T
+// where
+// 	Const<{ mem::size_of::<T>() }>: ToUInt
+//{
+// 	type Value = U<{ mem::size_of::<T>() }>;
+//
+// 	const VALUE: usize = mem::size_of::<T>();
+//}
+
+#[cfg(false)]
+mod sanity_checks
+{
+	use typenum::{U0, U4, U8, assert_type_eq};
+	use zerOS_static_assertions::static_assert;
+
+	use crate::meta::*;
+
+	struct Zst;
+
+	struct Dependant<T: ?Sized>(T);
+
+	type Dst = Dependant<[u8]>;
+
+	// assert_type_eq!(<Zst as GetSize>::Value, U0);
+	// static_assert!(<Zst as GetSize>::VALUE == 0);
+	//
+	// assert_type_eq!(<Dst as GetSize>::Value, U0);
+	// static_assert!(<Dst as GetSize>::VALUE == 0);
+	//
+	// assert_type_eq!(<() as GetSize>::Value, U0);
+	// static_assert!(<() as GetSize>::VALUE == 0);
+	//
+	// assert_type_eq!(<i32 as GetSize>::Value, U4);
+	// static_assert!(<i32 as GetSize>::VALUE == 4);
+	//
+	// assert_type_eq!(<Dependant<Zst> as GetSize>::Value, U0);
+	// static_assert!(<Dependant<Zst> as GetSize>::VALUE == 0);
+	//
+	// assert_type_eq!(<Dependant<i32> as GetSize>::Value, U4);
+	// static_assert!(<Dependant<i32> as GetSize>::VALUE == 4);
+	//
+	// cfg_select! {
+	// target_pointer_width = "64" => {
+	// assert_type_eq!(<&i32 as GetSize>::Value, U8);
+	// static_assert!(<&i32 as GetSize>::VALUE == 8);
+	// },
+	// target_pointer_width = "32" => {
+	// assert_type_eq!(<&i32 as GetSize>::Value, U4);
+	// static_assert!(<&i32 as GetSize>::VALUE == 4);
+	// },
+	// _ => {
+	// compile_error!();
+	// }
+	// }
+
+	assert_type_eq!(tuint!(SizeOf<Zst>), U0);
+	static_assert!(val!(SizeOf<Zst>) == 0);
+
+	assert_type_eq!(tuint!(SizeOf<Dst>), U0);
+	static_assert!(val!(SizeOf<Dst>) == 0);
+
+	assert_type_eq!(tuint!(SizeOf<i32>), U4);
+	static_assert!(val!(SizeOf<i32>) == 4);
+
+	assert_type_eq!(tuint!(SizeOf<Dependant<Zst>>), U0);
+	static_assert!(val!(SizeOf<Dependant<Zst>>) == 0);
+
+	assert_type_eq!(tuint!(SizeOf<Dependant<i32>>), U4);
+	static_assert!(val!(SizeOf<Dependant<i32>>) == 4);
+
+	cfg_select! {
+		target_pointer_width = "64" => {
+			assert_type_eq!(tuint!(SizeOf<&i32>), U8);
+			static_assert!(val!(SizeOf<&i32>) == 8);
+		},
+		target_pointer_width = "32" => {
+			assert_type_eq!(tuint!(SizeOf<&i32>), U4);
+			static_assert!(val!(SizeOf<&i32>) == 4);
+		},
+		_ => {
+			compile_error!();
+		}
+	}
 }

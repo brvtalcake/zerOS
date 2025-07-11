@@ -87,6 +87,7 @@ pub fn compile_c_code(
 			"-Werror",
 			"-ffreestanding",
 			"-funwind-tables",
+			"-fexceptions",
 			"-fno-stack-protector",
 			"-fno-stack-check",
 			"-fcolor-diagnostics",

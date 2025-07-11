@@ -21,7 +21,21 @@ harness = false
 
 [dependencies]
 zerOS-macro-utils = { path = "../macro-utils" }
+zerOS-static-assertions = { path = "../static-assertions" }
 zerOS-utils = { path = "../utils" }
-bstr = { version = "1.12.0", default-features = false, features = ["alloc", "serde"] }
+bstr = { version = "1.12.0", default-features = false, features = [
+    "alloc",
+    "serde",
+] }
 unicode-normalization = { version = "0.1.24", default-features = false }
 sealed = "0.6.0"
+eager2 = "1.1.2"
+typenum = { version = "1.18.0", features = ["const-generics"] }
+crabtime.workspace = true
+downcast-rs = { version = "2.0.1", default-features = false, features = [
+    "sync",
+] }
+impls = "1.0.3"
+delegate = "0.13.3"
+num = { version = "0.4.3", default-features = false, features = ["alloc"] }
+zerocopy = "0.8.26"

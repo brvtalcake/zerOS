@@ -12,6 +12,9 @@ package.repository = "https://github.com/brvtalcake/zerOS"
 package.license-file = "../LICENSE"
 package.readme = "../README.md"
 
+[workspace.dependencies]
+crabtime = { git = "https://github.com/wdanilo/crabtime", branch = "main" }
+
 [package]
 name = "zerOS-kernel"
 description = "The zerOS kernel"
@@ -41,27 +44,27 @@ doc = true
 harness = false
 
 [dependencies]
-zerOS-global-allocator = { path = "components/global-allocator"}
-zerOS-proc-macro-utils = { path = "components/proc-macro-utils"}
-zerOS-hypervisors = { path = "components/hypervisors"}
-zerOS-linker = { path = "components/linker"}
-zerOS-kmain = { path = "components/kmain"}
-zerOS-arch = { path = "components/arch"}
-zerOS-utils = { path = "components/utils"}
-zerOS-unwinding = { path = "components/unwinding"}
-zerOS-macro-utils = { path = "components/macro-utils"}
-zerOS-allocators = { path = "components/allocators"}
-zerOS-ctors = { path = "components/ctors"}
-zerOS-entry-points = { path = "components/entry-points"}
-zerOS-llvm-intrinsics = { path = "components/llvm-intrinsics"}
-zerOS-region-allocator = { path = "components/region-allocator"}
-zerOS-serial = { path = "components/serial"}
-zerOS-io = { path = "components/io"}
-zerOS-error = { path = "components/error"}
-zerOS-panic = { path = "components/panic"}
-zerOS-sync = { path = "components/sync"}
-zerOS-kcmdline = { path = "components/kcmdline"}
-zerOS-logging = { path = "components/logging"}
+zerOS-global-allocator = { path = "components/global-allocator" }
+zerOS-proc-macro-utils = { path = "components/proc-macro-utils" }
+zerOS-hypervisors = { path = "components/hypervisors" }
+zerOS-linker = { path = "components/linker" }
+zerOS-kmain = { path = "components/kmain" }
+zerOS-arch = { path = "components/arch" }
+zerOS-utils = { path = "components/utils" }
+zerOS-unwinding = { path = "components/unwinding" }
+zerOS-macro-utils = { path = "components/macro-utils" }
+zerOS-allocators = { path = "components/allocators" }
+zerOS-ctors = { path = "components/ctors" }
+zerOS-entry-points = { path = "components/entry-points" }
+zerOS-llvm-intrinsics = { path = "components/llvm-intrinsics" }
+zerOS-region-allocator = { path = "components/region-allocator" }
+zerOS-serial = { path = "components/serial" }
+zerOS-io = { path = "components/io" }
+zerOS-error = { path = "components/error" }
+zerOS-panic = { path = "components/panic" }
+zerOS-sync = { path = "components/sync" }
+zerOS-kcmdline = { path = "components/kcmdline" }
+zerOS-logging = { path = "components/logging" }
 
 [profile.dev]
 #rustflags = [--cfg getrandom_backend="rdrand", "-C" , "force-unwind-tables", "-Z", "macro-backtrace"]
