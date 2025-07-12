@@ -8,7 +8,7 @@
 #![feature(transmutability)]
 #![feature(decl_macro)]
 #![feature(associated_type_defaults)]
-/* #![feature(generic_const_exprs)] */
+// #![feature(generic_const_exprs)]
 #![feature(const_trait_impl)]
 #![feature(auto_traits)]
 #![feature(core_intrinsics)]
@@ -21,6 +21,7 @@
 #![feature(const_destruct)]
 #![feature(sized_hierarchy)]
 #![feature(cfg_select)]
+#![feature(const_type_name)]
 
 use core::{
 	hint::assert_unchecked,
@@ -28,13 +29,40 @@ use core::{
 };
 
 pub use rustc_demangle::{demangle, try_demangle};
+use zerOS_static_assertions::static_assert;
 
-use crate::cmp::ConstOrd;
+use crate::cmp::{ConstOrd, ConstPartialEq};
 
 pub mod cmp;
 #[cfg(false)]
 pub mod meta;
 pub mod str;
+
+pub macro function() {{
+	fn f() {}
+	const fn type_name_of<T: ~const core::marker::Destruct>(_: T) -> &'static str
+	{
+		::core::any::type_name::<T>()
+	}
+	const {
+		const TMP: &'static [u8] = type_name_of(f).as_bytes();
+		unsafe { str::from_utf8_unchecked(TMP.first_chunk::<{ TMP.len() - 3 }>().unwrap()) }
+	}
+}}
+
+mod function_macro_sanity_checks
+{
+	use super::*;
+
+	const fn fnname() -> &'static str
+	{
+		function!()
+	}
+
+	static_assert!(fnname().const_eq("zerOS_utils::function_macro_sanity_checks::fnname"));
+}
+
+pub type VoidResult<E> = Result<(), E>;
 
 pub macro likely($boolean:expr) {
 	::core::hint::likely(($boolean) as bool)

@@ -39,3 +39,18 @@ impls = "1.0.3"
 delegate = "0.13.3"
 num = { version = "0.4.3", default-features = false, features = ["alloc"] }
 zerocopy = "0.8.26"
+thiserror = { version = "2.0.12", default-features = false }
+anyhow = { version = "1.0.98", default-features = false }
+overloadf.workspace = true
+regex = { version = "1.11.1", default-features = false, features = [
+    "unstable",
+    "unicode",
+    "logging",
+    "perf-dfa-full",
+    "pattern",
+    "perf-cache",
+    "perf-dfa",
+    "perf-onepass",
+    "perf-backtrack",
+    "perf-inline",
+] }

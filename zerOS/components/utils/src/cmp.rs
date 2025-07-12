@@ -4,6 +4,8 @@ use core::{
 	marker::{Destruct, PointeeSized}
 };
 
+use zerOS_macro_utils::min;
+
 /// Like `core::cmp::PartialEq`, but as a `#[const_trait]`
 #[const_trait]
 pub trait ConstPartialEq<Rhs: PointeeSized = Self>: PointeeSized
@@ -465,6 +467,69 @@ impl const ConstOrd for !
 	fn const_cmp(&self, _: &!) -> cmp::Ordering
 	{
 		*self
+	}
+}
+
+impl const ConstPartialEq for str
+{
+	#[inline]
+	fn const_eq(&self, other: &str) -> bool
+	{
+		let len = self.as_bytes().len();
+		if other.as_bytes().len() != len
+		{
+			return false;
+		}
+		unsafe {
+			core::intrinsics::compare_bytes(
+				self.as_bytes().as_ptr(),
+				other.as_bytes().as_ptr(),
+				len
+			) == 0
+		}
+	}
+}
+
+impl const ConstEq for str {}
+
+impl const ConstPartialOrd for str
+{
+	#[inline]
+	fn const_partial_cmp(&self, other: &str) -> Option<cmp::Ordering>
+	{
+		let (self_bytes, other_bytes) = (self.as_bytes(), other.as_bytes());
+		let (self_len, other_len) = (self_bytes.len(), other_bytes.len());
+		unsafe {
+			Some({
+				let res = core::intrinsics::compare_bytes(
+					self_bytes.as_ptr(),
+					other_bytes.as_ptr(),
+					min!(self_len, other_len)
+				);
+				if res < 0
+				{
+					cmp::Ordering::Less
+				}
+				else if res > 0
+				{
+					cmp::Ordering::Greater
+				}
+				else
+				{
+					// TODO: is it even true ?
+					self_len.const_partial_cmp(&other_len).unwrap_unchecked()
+				}
+			})
+		}
+	}
+}
+
+impl const ConstOrd for str
+{
+	#[inline]
+	fn const_cmp(&self, other: &str) -> cmp::Ordering
+	{
+		unsafe { self.const_partial_cmp(other).unwrap_unchecked() }
 	}
 }
 

@@ -1,257 +1,70 @@
-use core::{convert::Infallible, error::Error as CoreError, mem};
+use core::{any::Any, ops::DerefMut};
 
-use eager2::*;
-use sealed::sealed;
-use typenum::{Bit, False, GrEq, True, U, op};
-use zerOS_macro_utils::{min, static_max, static_min};
-use zerOS_static_assertions::static_assert;
-use zerocopy::{transmute_mut, transmute_ref};
+use downcast_rs::{impl_downcast, Downcast};
+use zerOS_utils::VoidResult;
 
-use crate::{FromIO, KernelInputBase, KernelOutputBase, ToIO};
+use crate::KernelIOTypes;
 
-/// A trait implemented by devices which we can read from by means of reading
-/// some memory-mapped registers or (only for x86) port IO (e.g. the `in{b|...}`
-/// instruction)
-pub trait KernelPortInput<T: FromIO = Self::OptimalInput>: KernelInputBase
+pub trait KernelPortInput: KernelIOTypes + Downcast
 {
-	/// Read a value from a port.
-	fn read_port(&mut self, buffer: &mut T) -> Result<(), Self::InputError>
+	fn port_read(&mut self, read: &mut dyn Any) -> VoidResult<Self::Error>;
+
+	fn port_read_multiple(&mut self, read: &mut [&mut dyn Any])
+	-> VoidResult<(Self::Error, usize)>
 	{
-		const TSIZE: usize = mem::size_of::<T>();
-		const OPTSIZE: usize = mem::size_of::<Self::OptimalInput>();
-
-		let buffer_bytes: &mut [u8] = transmute_mut!(buffer);
-		if TSIZE < OPTSIZE
+		let mut successful = 0;
+		for el in read.iter_mut().map(DerefMut::deref_mut)
 		{
-			const MINSIZE: usize = mem::size_of::<Self::MinimalInput>();
-			static_assert!(TSIZE >= MINSIZE);
-			static_assert!(TSIZE % MINSIZE == 0);
-			const NEEDED: usize = TSIZE / MINSIZE;
-
-			let mut minimal = Default::default();
-			for i in 0..NEEDED
-			{
-				self.read_minimal(&mut minimal)?;
-				unsafe {
-					let addr: *mut Self::MinimalInput =
-						(&raw mut *buffer_bytes.get_unchecked_mut(i * MINSIZE)).cast();
-					addr.write_unaligned(minimal);
-				}
-			}
+			self.port_read(el).map_err(|err| (err, successful))?;
+			successful += 1;
 		}
-		else
-		{
-			debug_assert!(TSIZE >= OPTSIZE);
-			debug_assert_eq!(TSIZE % OPTSIZE, 0);
-			const NEEDED: usize = TSIZE / OPTSIZE;
-
-			let mut opt = Default::default();
-			for i in 0..NEEDED
-			{
-				self.read_optimal(&mut opt)?;
-				unsafe {
-					let addr: *mut Self::OptimalInput =
-						(&raw mut *buffer_bytes.get_unchecked_mut(i * OPTSIZE)).cast();
-					addr.write_unaligned(opt);
-				}
-			}
-		}
-
 		Ok(())
 	}
-
-	/// Read multiple successive values from a port.
-	///
-	/// # Return value
-	/// The default implementation just reads the values one-by-one and
-	/// forwards the potential errors.
-	fn read_port_multiple(
-		&mut self,
-		slice: &mut [T],
-		max: Option<usize>
-	) -> Result<usize, Self::InputError>
-	{
-		let slice_len = slice.len();
-		let max = max.map_or(slice_len, |requested| min!(requested, slice_len));
-		for i in 0..max
-		{
-			unsafe {
-				self.read_port(slice.get_unchecked_mut(i))?;
-			}
-		}
-		Ok(max)
-	}
-
-	/// Read from the port while a predicate holds.
-	///
-	/// # Warning
-	/// The last value read (i.e. when the predicate becomes false), can not be
-	/// re-read afterwards.
-	///
-	/// # Return value
-	/// A `Result` with the amount of values that could be read successfully, or
-	/// an error if a read error occurred.
-	fn read_port_while(
-		&mut self,
-		slice: &mut [T],
-		mut predicate: &dyn FnMut(&T) -> bool
-	) -> Result<usize, Self::InputError>
-	{
-		let (mut i, max) = (0, slice.len());
-		while i < max
-		{
-			let mut val = Default::default();
-			self.read_port(&mut val)?;
-			if !predicate(&val)
-			{
-				return Ok(i);
-			}
-			// SAFETY: the loop invariant holds here
-			unsafe {
-				*slice.get_unchecked_mut(i) = val;
-			}
-			i += 1;
-		}
-		Ok(i)
-	}
-
-	/// Read from the port while a predicate does _*not*_ hold.
-	///
-	/// # Warning
-	/// The last value read (i.e. when the predicate becomes true), can not be
-	/// re-read afterwards.
-	///
-	/// # Return value
-	/// A `Result` with the amount of values that could be read successfully, or
-	/// an error if a read error occurred.
-	fn read_port_until(
-		&mut self,
-		slice: &mut [T],
-		mut predicate: &dyn FnMut(&T) -> bool
-	) -> Result<usize, Self::InputError>
-	{
-		self.read_port_while(slice, |val| !predicate(val))
-	}
 }
+impl_downcast!(KernelPortInput);
 
-/// A trait implemented by devices which we can write to by means of writing to
-/// some memory-mapped registers or (only for x86) port IO (e.g. the
-/// `out{b|...}` instruction)
-pub trait KernelPortOutput<T: ToIO = Self::OptimalOutput>: KernelOutputBase
+pub trait KernelPortOutput: KernelIOTypes + Downcast
 {
-	/// Write a value to the port.
-	fn write_port(&mut self, value: &T) -> Result<(), Self::OutputError>
-	{
-		const TSIZE: usize = mem::size_of::<T>();
-		const OPTSIZE: usize = mem::size_of::<Self::OptimalOutput>();
-
-		if TSIZE < OPTSIZE
-		{
-			const MINSIZE: usize = mem::size_of::<Self::MinimalOutput>();
-			static_assert!(TSIZE >= MINSIZE);
-			static_assert!(TSIZE % MINSIZE == 0);
-
-			let value_bytes: &[Self::MinimalOutput] = transmute_ref!(value);
-			for b in value_bytes
-			{
-				self.write_minimal(b)?;
-			}
-		}
-		else
-		{
-			debug_assert!(TSIZE >= OPTSIZE);
-			debug_assert_eq!(TSIZE % OPTSIZE, 0);
-
-			let value_bytes: &[Self::OptimalOutput] = transmute_ref!(value);
-			for b in value_bytes
-			{
-				self.write_optimal(b)?;
-			}
-		}
-
-		Ok(())
-	}
-
-	/// Write multiple value to the port.
-	///
-	/// # Return value
-	/// The default implementation just writes the values one-by-one and
-	/// forwards the potential errors.
-	fn write_port_multiple(
-		&mut self,
-		slice: &[T],
-		max: Option<usize>
-	) -> Result<usize, Self::OutputError>
-	{
-		let slice_len = slice.len();
-		let max = max.map_or(slice_len, |requested| min!(requested, slice_len));
-		for i in 0..max
-		{
-			// SAFETY: unsafe here is fine since we just verified that the index is
-			// in-bounds
-			unsafe {
-				self.write_port(*slice.get_unchecked(i))?;
-			}
-		}
-		Ok(max)
-	}
+	fn port_write(&mut self, written: &dyn Any) -> VoidResult<Self::Error>;
 }
+impl_downcast!(KernelPortOutput);
 
-pub trait KernelPortIO<T: FromIO + ToIO> = KernelPortInput<T> + KernelPortOutput<T>;
-
-pub trait KernelPortInputExt<T: FromIO = Self::OptimalInput>: KernelPortInput<T>
+mod tests
 {
-	fn read_port_while_inclusive(
-		&mut self,
-		slice: &mut [T],
-		mut predicate: &dyn FnMut(&T) -> bool
-	) -> Result<usize, Self::InputError>
+	use core::fmt::Display;
+
+	use downcast_rs::impl_downcast;
+
+	use crate::{KernelIOTypes, KernelPortInput};
+
+	struct Test;
+
+	#[derive(Debug)]
+	struct ErrType;
+
+	impl Display for ErrType
 	{
-		let (mut i, max) = (0, slice.len());
-		while i < max
+		fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 		{
-			let mut val = Default::default();
-			self.read_port(&mut val)?;
-			if !predicate(&val)
-			{
-				unsafe {
-					*slice.get_unchecked_mut(i) = val;
-				}
-				return Ok(i);
-			}
-			// SAFETY: the loop invariant holds here
-			unsafe {
-				*slice.get_unchecked_mut(i) = val;
-			}
-			i += 1;
+			Ok(())
 		}
-		Ok(i)
 	}
 
-	fn read_port_until_inclusive(
-		&mut self,
-		slice: &mut [T],
-		mut predicate: &dyn FnMut(&T) -> bool
-	) -> Result<usize, Self::InputError>
+	impl core::error::Error for ErrType {}
+
+	impl KernelIOTypes for Test
 	{
-		self.read_port_while_inclusive(slice, |val| !predicate(val))
+		type Error = ErrType;
 	}
-}
 
-pub trait KernelPortOutputExt<T: ToIO = Self::OptimalOutput>: KernelPortOutput<T> {}
-
-pub trait KernelPortIOExt<T: FromIO + ToIO> = KernelPortInputExt<T> + KernelPortOutputExt<T>;
-
-pub trait AsKernelPortInput<T: FromIO>: KernelInputBase
-{
-	fn as_kernel_port_input(&self) -> Option<&dyn KernelPortInput<T>>;
-
-	fn as_mut_kernel_port_input(&mut self) -> Option<&mut dyn KernelPortInput<T>>;
-}
-
-pub trait AsKernelPortOutput<T: FromIO>: KernelOutputBase
-{
-	fn as_kernel_port_output(&self) -> Option<&dyn KernelPortOutput<T>>;
-
-	fn as_mut_kernel_port_output(&mut self) -> Option<&mut dyn KernelPortOutput<T>>;
+	impl KernelPortInput for Test
+	{
+		fn port_read(
+			&mut self,
+			read: &mut dyn core::any::Any
+		) -> zerOS_utils::VoidResult<Self::Error>
+		{
+			Err(ErrType)
+		}
+	}
 }

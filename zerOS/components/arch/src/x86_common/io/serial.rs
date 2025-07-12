@@ -5,6 +5,7 @@ use core::{
 
 use lazy_static::lazy_static;
 use zerOS_proc_macro_utils::constinit_array;
+use zerOS_static_assertions::static_assert;
 
 use crate::target::cpu::{
 	io::{inb, outb},
@@ -114,6 +115,11 @@ impl SerialPort
 
 	pub fn is_transmit_empty(&self) -> bool
 	{
+		static_assert!(
+			false,
+			"the `0x20` value might be wrong (see the OsDev `Talk: Serial Ports` page for more \
+			 informations)"
+		);
 		inb((self.id as u16) + 5) & 0x20 != 0
 	}
 

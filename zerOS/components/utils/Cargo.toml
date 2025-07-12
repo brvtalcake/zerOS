@@ -29,3 +29,4 @@ simdutf8 = { version = "0.1.5", default-features = false, features = [
 ] }
 typenum = { version = "1.18.0", features = ["const-generics"] }
 zerOS-static-assertions = { path = "../static-assertions" }
+zerOS-macro-utils = { path = "../macro-utils" }

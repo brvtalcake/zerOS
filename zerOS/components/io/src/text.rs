@@ -1,4 +1,4 @@
-use core::{bstr::ByteStr, fmt};
+/* use core::{bstr::ByteStr, fmt};
 
 use bstr::BStr;
 use unicode_normalization::UnicodeNormalization;
@@ -105,3 +105,4 @@ pub trait KernelTextInputExt: KernelTextInput
 pub trait KernelTextOutputExt: KernelTextOutput {}
 
 pub trait KernelTextIOExt = KernelTextInputExt + KernelTextOutputExt;
+ */
