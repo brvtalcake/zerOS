@@ -1,3 +1,4 @@
+#![recursion_limit = "256"]
 #![no_std]
 #![no_main]
 #![allow(non_snake_case)]
@@ -7,14 +8,23 @@
 #![feature(decl_macro)]
 #![feature(bstr)]
 #![feature(unboxed_closures)]
+#![feature(allocator_api)]
+#![feature(coerce_unsized)]
 #![feature(fn_traits)]
 
-use core::{any, cell::LazyCell, error::Error as CoreError, panic::Location as SourceLocation};
+use alloc::{format, string::ToString};
+use core::{
+	any,
+	fmt::{Debug, Display},
+	panic::Location as SourceLocation
+};
 
-use downcast_rs::Downcast;
+use downcast_rs::{Downcast, impl_downcast};
+use impls::impls;
 use overloadf::overload;
 use thiserror::Error;
-use zerOS_utils::{VoidResult, function};
+use zerOS_static_assertions::static_assert;
+use zerOS_utils::VoidResult;
 
 extern crate alloc;
 
@@ -22,11 +32,55 @@ mod block;
 mod memory;
 mod port;
 mod text;
-
-//#[sealed]
-// pub trait FundamentalIO: 'static {}
+mod wrapper;
 
 const IO_ERROR_DISPLAY_PREFIX: &'static str = "io error:";
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum StreamKind
+{
+	/// A stream that you can read from and write to unit-by-unit (e.g. byte by
+	/// byte), whether it is through io-port assembly instructions (as for x86),
+	/// or with memory-mapped registers
+	Port,
+	/// An in-memory contiguous stream, akin to an mmaped-file (but could
+	/// reference any valid memory)
+	// TODO: add a `VirtAddr` member
+	Memory,
+	/// Block io, e.g. disk io
+	Block
+}
+static_assert!(impls!(StreamKind: Display & Debug & ToString));
+
+impl StreamKind
+{
+	const fn prefix(&self) -> &'static str
+	{
+		match self
+		{
+			Self::Memory => "an",
+			_ => "a"
+		}
+	}
+
+	const fn describe(&self) -> &'static str
+	{
+		match self
+		{
+			Self::Port => "port io",
+			Self::Memory => "in-memory (contiguous) io",
+			Self::Block => "block io"
+		}
+	}
+}
+
+impl Display for StreamKind
+{
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+	{
+		f.write_str(format!("{} `{}`", self.prefix(), self.describe()).as_str())
+	}
+}
 
 #[derive(Debug, Error)]
 pub enum IOError
@@ -42,13 +96,25 @@ pub enum IOError
 		minimum:   usize
 	},
 	#[error(
-		"{IO_ERROR_DISPLAY_PREFIX} unhandled type `{type_name}` in function `{fn_name}` at {location}"
+		"{IO_ERROR_DISPLAY_PREFIX} unhandled type `{type_name}` in function `{fn_name}` at \
+		 {location}"
 	)]
 	UnhandledType
 	{
 		type_name: &'static str,
 		fn_name:   &'static str,
 		location:  &'static SourceLocation<'static>
+	},
+	#[error(
+		"{IO_ERROR_DISPLAY_PREFIX} method `{method_name}` (at {location}) can be called with \
+		 {expected} kind of underlying stream, but the current one is {actual}"
+	)]
+	WrongStreamKind
+	{
+		method_name: &'static str,
+		expected:    StreamKind,
+		actual:      StreamKind,
+		location:    &'static SourceLocation<'static>
 	},
 	#[error("{IO_ERROR_DISPLAY_PREFIX} {0}")]
 	Other(anyhow::Error)
@@ -89,25 +155,40 @@ impl IOError
 			location: SourceLocation::caller()
 		}
 	}
+
+	#[track_caller]
+	pub fn wrong_stream_kind(
+		method_name: &'static str,
+		expected: StreamKind,
+		actual: StreamKind
+	) -> Self
+	{
+		Self::WrongStreamKind {
+			method_name,
+			expected,
+			actual,
+			location: SourceLocation::caller()
+		}
+	}
 }
 
-pub trait KernelInputBase: Downcast
+pub trait KernelInput: Downcast
 {
 	/// Fills the buffer with read bytes
 	fn read_bytes(&mut self, buffer: &mut [u8]) -> VoidResult<IOError>;
 }
+impl_downcast!(KernelInput);
 
-pub trait KernelOutputBase: Downcast
+pub trait KernelOutput: Downcast
 {
 	/// Writes bytes
 	fn write_bytes(&mut self, bytes: &[u8]) -> VoidResult<IOError>;
 }
+impl_downcast!(KernelOutput);
 
-pub trait KernelIOBase = KernelInputBase + KernelOutputBase;
+pub trait KernelIO: KernelInput + KernelOutput {}
 
-pub trait KernelInput: KernelInputBase {}
-
-pub trait KernelOutput: KernelOutputBase {}
+impl<T: KernelInput + KernelOutput> KernelIO for T {}
 
 // mod impls;
 //
@@ -121,3 +202,4 @@ pub use block::*;
 pub use memory::*;
 pub use port::*;
 pub use text::*;
+pub use wrapper::*;

@@ -1,19 +1,21 @@
-use core::{any::Any, ops::DerefMut};
+use core::any::Any;
 
-use downcast_rs::{impl_downcast, Downcast};
+use downcast_rs::{Downcast, impl_downcast};
 use zerOS_utils::VoidResult;
 
-use crate::KernelIOTypes;
+use crate::IOError;
 
-pub trait KernelPortInput: KernelIOTypes + Downcast
+pub trait KernelPortInput: Downcast
 {
-	fn port_read(&mut self, read: &mut dyn Any) -> VoidResult<Self::Error>;
+	fn port_read(&mut self, read: &mut dyn Any) -> VoidResult<IOError>;
 
-	fn port_read_multiple(&mut self, read: &mut [&mut dyn Any])
-	-> VoidResult<(Self::Error, usize)>
+	fn port_read_multiple(
+		&mut self,
+		read: &mut dyn Iterator<Item = &mut dyn Any>
+	) -> VoidResult<(IOError, usize)>
 	{
 		let mut successful = 0;
-		for el in read.iter_mut().map(DerefMut::deref_mut)
+		for el in read
 		{
 			self.port_read(el).map_err(|err| (err, successful))?;
 			successful += 1;
@@ -23,48 +25,12 @@ pub trait KernelPortInput: KernelIOTypes + Downcast
 }
 impl_downcast!(KernelPortInput);
 
-pub trait KernelPortOutput: KernelIOTypes + Downcast
+pub trait KernelPortOutput: Downcast
 {
-	fn port_write(&mut self, written: &dyn Any) -> VoidResult<Self::Error>;
+	fn port_write(&mut self, written: &dyn Any) -> VoidResult<IOError>;
 }
 impl_downcast!(KernelPortOutput);
 
-mod tests
-{
-	use core::fmt::Display;
+pub trait KernelPortIO: KernelPortInput + KernelPortOutput {}
 
-	use downcast_rs::impl_downcast;
-
-	use crate::{KernelIOTypes, KernelPortInput};
-
-	struct Test;
-
-	#[derive(Debug)]
-	struct ErrType;
-
-	impl Display for ErrType
-	{
-		fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-		{
-			Ok(())
-		}
-	}
-
-	impl core::error::Error for ErrType {}
-
-	impl KernelIOTypes for Test
-	{
-		type Error = ErrType;
-	}
-
-	impl KernelPortInput for Test
-	{
-		fn port_read(
-			&mut self,
-			read: &mut dyn core::any::Any
-		) -> zerOS_utils::VoidResult<Self::Error>
-		{
-			Err(ErrType)
-		}
-	}
-}
+impl<T: KernelPortInput + KernelPortOutput> KernelPortIO for T {}

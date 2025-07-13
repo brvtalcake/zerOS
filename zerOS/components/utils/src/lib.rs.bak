@@ -30,7 +30,6 @@ use core::{
 };
 
 pub use rustc_demangle::{demangle, try_demangle};
-use typenum::{Bit, False, True};
 use zerOS_static_assertions::static_assert;
 
 use crate::cmp::{ConstOrd, ConstPartialEq};
@@ -64,48 +63,47 @@ mod function_macro_sanity_checks
 	static_assert!(fnname().const_eq("zerOS_utils::function_macro_sanity_checks::fnname"));
 }
 
-pub trait ToAnyIter<'item>
+pub trait IntoAnyIter<'item, 'collection>
 {
-	fn to_any_iter<'collection>(
-		&'collection self
-	) -> impl Iterator<Item = &'item dyn Any> + 'collection;
+	fn into_any_iter(self) -> impl Iterator<Item = &'item (dyn Any + 'static)> + 'collection;
 }
 
-pub trait ToAnyIterMut<'item>
+pub trait IntoAnyIterMut<'item, 'collection>
 {
-	fn to_any_iter_mut<'collection>(
-		&'collection mut self
-	) -> impl Iterator<Item = &'item mut dyn Any> + 'collection
-	where
-		'collection: 'item;
+	fn into_any_iter_mut(self) -> impl Iterator<Item = &'item mut (dyn Any + 'static)> + 'collection;
 }
 
-impl<'item, C, I> ToAnyIter<'item> for C
+impl<'item, 'collection, C, I> IntoAnyIter<'item, 'collection> for &'collection C
 where
-	for<'collection> &'collection Self: IntoIterator<Item = &'collection &'item I>,
+	&'collection C: IntoIterator<Item = &'item I>,
 	I: Any
 {
-	fn to_any_iter<'collection>(
-		&'collection self
-	) -> impl Iterator<Item = &'item dyn Any> + 'collection
+	fn into_any_iter(self) -> impl Iterator<Item = &'item (dyn Any + 'static)> + 'collection
 	{
-		self.into_iter().map(move |elem| (*elem) as &dyn Any)
+		let tmp = self.into_iter().map(|elem| elem as &dyn Any);
+		tmp
 	}
 }
 
-impl<'item, C, I> ToAnyIterMut<'item> for C
+impl<'item, 'collection, C, I> IntoAnyIter<'item, 'collection> for &'collection mut C
 where
-	for<'collection> &'collection mut Self: IntoIterator<Item = &'collection mut &'item mut I>,
+	&'collection mut C: IntoIterator<Item = &'item mut I>,
 	I: Any
 {
-	fn to_any_iter_mut<'collection>(
-		&'collection mut self
-	) -> impl Iterator<Item = &'item mut dyn Any> + 'collection
-	where
-		'collection: 'item
+	fn into_any_iter(self) -> impl Iterator<Item = &'item (dyn Any + 'static)> + 'collection
 	{
-		self.into_iter()
-			.map(move |elem| ((*elem) as &mut I) as &mut dyn Any)
+		self.into_iter().map(|elem| elem as &dyn Any)
+	}
+}
+
+impl<'item, 'collection, C, I> IntoAnyIterMut<'item, 'collection> for &'collection mut C
+where
+	&'collection mut C: IntoIterator<Item = &'item mut I>,
+	I: Any
+{
+	fn into_any_iter_mut(self) -> impl Iterator<Item = &'item mut (dyn Any + 'static)> + 'collection
+	{
+		self.into_iter().map(|elem| elem as &mut dyn Any)
 	}
 }
 
@@ -340,18 +338,6 @@ where
 		assert_unchecked(value.const_lt(&max));
 	}
 	value
-}
-
-pub trait IsTrueVal: Bit
-{
-	type Value: Bit = False;
-}
-
-impl IsTrueVal for False {}
-
-impl IsTrueVal for True
-{
-	type Value = True;
 }
 
 /// Trait to retrieve the size of a type.

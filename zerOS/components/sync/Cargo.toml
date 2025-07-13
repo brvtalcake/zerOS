@@ -17,3 +17,13 @@ autobenches = false
 [lib]
 name = "zerOS_sync"
 crate-type = ["rlib"]
+harness = false
+
+[dependencies]
+lock_api = { version = "0.4.13", default-features = false, features = [
+    "nightly",
+    "arc_lock"
+] }
+portable-atomic = { version = "1.11.1", default-features = false, features = [
+    "require-cas",
+] }

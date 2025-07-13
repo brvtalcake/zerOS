@@ -111,4 +111,12 @@ unsafe impl RawRwLock for BasicRwLockRaw
 	}
 }
 
+impl BasicRwLockRaw
+{
+	pub const fn new() -> Self
+	{
+		Self::INIT
+	}
+}
+
 pub type BasicRwLock<T> = RwLock<BasicRwLockRaw, T>;

@@ -1,4 +1,7 @@
 #![no_std]
+#![no_main]
+#![allow(non_snake_case)]
+#![feature(ptr_as_ref_unchecked)]
 
 mod mutex;
 mod rwlock;
