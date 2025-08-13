@@ -1,4 +1,3 @@
-use lock_api::{GuardSend, RawMutex};
 use portable_atomic::{AtomicBool, Ordering};
 
 /// TODO: also store cpu core id:
@@ -35,9 +34,9 @@ impl BasicMutexRaw
 	}
 }
 
-unsafe impl RawMutex for BasicMutexRaw
+unsafe impl lock_api::RawMutex for BasicMutexRaw
 {
-	type GuardMarker = GuardSend;
+	type GuardMarker = lock_api::GuardSend;
 
 	const INIT: Self = Self::new();
 

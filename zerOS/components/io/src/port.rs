@@ -3,9 +3,9 @@ use core::any::Any;
 use downcast_rs::{Downcast, impl_downcast};
 use zerOS_utils::VoidResult;
 
-use crate::IOError;
+use crate::{IOError, KernelInput, KernelOutput};
 
-pub trait KernelPortInput: Downcast
+pub trait KernelPortInput: KernelInput
 {
 	fn port_read(&mut self, read: &mut dyn Any) -> VoidResult<IOError>;
 
@@ -23,14 +23,15 @@ pub trait KernelPortInput: Downcast
 		Ok(())
 	}
 }
-impl_downcast!(KernelPortInput);
+impl_downcast!(sync KernelPortInput);
 
-pub trait KernelPortOutput: Downcast
+pub trait KernelPortOutput: KernelOutput
 {
 	fn port_write(&mut self, written: &dyn Any) -> VoidResult<IOError>;
 }
-impl_downcast!(KernelPortOutput);
+impl_downcast!(sync KernelPortOutput);
 
 pub trait KernelPortIO: KernelPortInput + KernelPortOutput {}
+impl_downcast!(sync KernelPortIO);
 
 impl<T: KernelPortInput + KernelPortOutput> KernelPortIO for T {}

@@ -330,6 +330,22 @@ macro_rules! min {
     }};
 }
 
+#[macro_export]
+macro_rules! dangerous {
+    ($expr:expr) => {{
+        #[expect(unsafe_code)]
+        unsafe {
+            $expr
+        }
+    }};
+	($($statements:stmt)*) => {
+        #[expect(unsafe_code)]
+        unsafe {
+            $($statements)*
+        }
+    };
+}
+
 #[repr(usize)]
 pub enum CaseKind
 {

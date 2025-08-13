@@ -1,6 +1,6 @@
 [package]
-name = "zerOS-linker"
-description = "zerOS linker symbols related code"
+name = "zerOS-constructors-macro"
+description = "crate for `zerOS_constructors::constructors!` proc-macro"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -15,13 +15,11 @@ autotests = false
 autobenches = false
 
 [lib]
-name = "zerOS_linker"
-crate-type = ["rlib"]
-harness = false
+proc-macro = true
 
 [dependencies]
-lazy_static = { version = "1.5", default-features = false }
-
-[build-dependencies]
+proc-macro2 = "1.0.94"
+quote = "1.0.40"
+syn = { version = "2.0", features = ["full", "parsing", "extra-traits"] }
+proc-macro-error2 = { version = "2.0.1", features = ["nightly"] }
 eager2.workspace = true
-zerOS-buildrs-utils = { path = "../../buildrs-utils" }

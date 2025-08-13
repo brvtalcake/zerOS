@@ -20,6 +20,6 @@ harness = false
 crate-type = ["rlib"]
 
 [dependencies]
-eager2 = "1.0.1"
+eager2.workspace = true
 lazy_static = { version = "1.5", features = [ "spin_no_std" ]}
 zerOS-proc-macro-utils = { path = "../proc-macro-utils" }

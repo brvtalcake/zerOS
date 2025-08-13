@@ -26,6 +26,8 @@ zerOS/bin
 zerOS/build
 zerOS/llvm-targets
 zerOS/vendor
+zerOS/tmp
+zerOS/lintcfg/*
 
 intel-manual.pdf
 amd-manual.pdf

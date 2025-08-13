@@ -149,6 +149,14 @@ impl XtaskBuildableSubproj
 			format!("--target={json_target}").as_str(),
 			"-Z",
 			"unstable-options",
+			"-Z",
+			format!(
+				"build-std={}",
+				["core", "compiler_builtins", "alloc"].join(",")
+			)
+			.as_str(),
+			"-Z",
+			format!("build-std-features={}", ["compiler-builtins-mem"].join(",")).as_str(),
 			"--artifact-dir",
 			"./bin",
 			format!("--profile={profile}").as_str()
@@ -157,9 +165,22 @@ impl XtaskBuildableSubproj
 			"RUSTFLAGS",
 			format!(
 				"--cfg getrandom_backend=\"rdrand\" -Cforce-unwind-tables -Zmacro-backtrace \
-				 -Ctarget-cpu={}",
-				env::var("ZEROS_TARGET_CPU").unwrap()
+				 -Ctarget-cpu={} {}",
+				env::var("ZEROS_TARGET_CPU").unwrap(),
+				[
+					"unqualified_local_imports",
+					"non_exhaustive_omitted_patterns_lint",
+					"must_not_suspend",
+					"multiple_supertrait_upcastable",
+					"strict_provenance_lints",
+				]
+				.map(|feat| format!("-Zcrate-attr=feature({feat})"))
+				.join(" ")
 			)
+		)
+		.env(
+			"ZEROS_RUST_CONFIG",
+			subproj_location!("zerOS").join("config").join("lints.rs")
 		);
 		let cmd = CmdIn::new(&subproj_location!("zerOS"), cmd);
 		cmd.finalize().await;

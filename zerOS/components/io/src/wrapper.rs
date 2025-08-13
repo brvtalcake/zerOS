@@ -3,103 +3,88 @@ use alloc::{
 	boxed::Box,
 	sync::Arc
 };
-use core::ops::CoerceUnsized;
+use core::{fmt::Debug, mem, ops::CoerceUnsized};
 
+use impls::impls;
 use typenum::{Bit, False, True};
+use zerOS_static_assertions::static_assert;
 use zerOS_sync::BasicRwLock;
+use zerocopy::TryFromBytes;
 
-use crate::{KernelIO, KernelInput, KernelOutput, KernelPortIO, KernelPortInput, KernelPortOutput};
+use crate::{
+	IOError,
+	KernelIO,
+	KernelInput,
+	KernelOutput,
+	KernelPortIO,
+	KernelPortInput,
+	KernelPortOutput
+};
 
 pub struct StreamRead;
 pub struct StreamWrite;
 pub struct StreamReadWrite;
 
-pub mod traits
-{
-	use crate::{
-		KernelIO,
-		KernelInput,
-		KernelOutput,
-		KernelPortIO,
-		KernelPortInput,
-		KernelPortOutput
-	};
-
-	macro autoimpl(
-        $(
-            $trait:ident ( $($tokens:tt)+ )
-        ),* $(,)?
-    ) {
-        $(
-            pub trait $trait: $($tokens)+
-            {
-            }
-            impl<T> $trait for T
-                where T: $($tokens)+
-            {
-            }
-        )*
-    }
-	autoimpl! {
-		KPortIn ( KernelInput + KernelPortInput ),
-		KPortOut ( KernelOutput + KernelPortOutput ),
-		KPortIO ( KernelIO + KernelPortIO ),
-	}
-}
-use traits::*;
-
 pub trait StreamDirection
 {
 	type IsRead: Bit;
 	type IsWrite: Bit;
-	type Type: ?Sized;
-	type PortType: ?Sized;
+	type Type: ?Sized + Debug + Send + Sync;
+	type PortType: ?Sized + Debug + Send + Sync;
 }
 
 impl StreamDirection for StreamRead
 {
 	type IsRead = True;
 	type IsWrite = False;
-	type PortType = dyn KPortIn + Send;
-	type Type = dyn KernelInput + Send;
+	type PortType = dyn KernelPortInput + Send + Sync;
+	type Type = dyn KernelInput + Send + Sync;
 }
 
 impl StreamDirection for StreamWrite
 {
 	type IsRead = False;
 	type IsWrite = True;
-	type PortType = dyn KPortOut + Send;
-	type Type = dyn KernelOutput + Send;
+	type PortType = dyn KernelPortOutput + Send + Sync;
+	type Type = dyn KernelOutput + Send + Sync;
 }
 
 impl StreamDirection for StreamReadWrite
 {
 	type IsRead = True;
 	type IsWrite = True;
-	type PortType = dyn KPortIO + Send;
-	type Type = dyn KernelIO + Send;
+	type PortType = dyn KernelPortIO + Send + Sync;
+	type Type = dyn KernelIO + Send + Sync;
 }
 
-fn coerce_box<F: ?Sized, T: ?Sized, A: Allocator>(from: Box<F, A>) -> Box<T, A>
+fn coerce_box<F: ?Sized, T: ?Sized, A: Allocator + Sync + Send>(from: Box<F, A>) -> Box<T, A>
 where
 	Box<F, A>: CoerceUnsized<Box<T, A>>
 {
 	from
 }
 
-pub struct Wrapper<'a, T: StreamDirection, A: Allocator = Global>
+#[derive(Debug, Clone)]
+pub struct Wrapper<'a, T: StreamDirection, A: Allocator + Sync + Send = Global>
 {
 	inner: WrapperInner<'a, T, A>
 }
 
-enum WrapperInner<'a, T: StreamDirection, A: Allocator>
+#[derive(Debug, Clone)]
+enum WrapperInner<'a, T: StreamDirection, A: Allocator + Sync + Send>
 {
 	Uninit,
+	Basic(Arc<BasicRwLock<Box<<T as StreamDirection>::Type, &'a A>>, &'a A>),
 	Port(Arc<BasicRwLock<Box<<T as StreamDirection>::PortType, &'a A>>, &'a A>)
 }
 
-impl<'a, T: StreamDirection, A: Allocator> WrapperInner<'a, T, A>
+impl<'a, T: StreamDirection, A: Allocator + Sync + Send> WrapperInner<'a, T, A>
 {
+	fn new_basic(boxed: Box<<T as StreamDirection>::Type, &'a A>, allocator: &'a A) -> Self
+	{
+		Self::Basic(Arc::new_in(BasicRwLock::new(boxed), allocator))
+	}
+
 	fn new_port(boxed_port: Box<<T as StreamDirection>::PortType, &'a A>, allocator: &'a A)
 	-> Self
 	{
@@ -107,9 +92,16 @@ impl<'a, T: StreamDirection, A: Allocator> WrapperInner<'a, T, A>
 	}
 }
 
-impl<'a, A: Allocator> Wrapper<'a, StreamRead, A>
+impl<'a, A: Allocator + Sync + Send> Wrapper<'a, StreamRead, A>
 {
-	pub fn new_port_in<P: KernelInput + KernelPortInput + Send>(port: P, allocator: &'a A) -> Self
+	pub fn new_basic_in<B: KernelInput + Send + Sync>(basic: B, allocator: &'a A) -> Self
+	{
+		Self {
+			inner: WrapperInner::new_basic(coerce_box(Box::new_in(basic, allocator)), allocator)
+		}
+	}
+
+	pub fn new_port_in<P: KernelPortInput + Send + Sync>(port: P, allocator: &'a A) -> Self
 	{
 		Self {
 			inner: WrapperInner::new_port(coerce_box(Box::new_in(port, allocator)), allocator)
@@ -117,10 +109,16 @@ impl<'a, A: Allocator> Wrapper<'a, StreamRead, A>
 	}
 }
 
-impl<'a, A: Allocator> Wrapper<'a, StreamWrite, A>
+impl<'a, A: Allocator + Sync + Send> Wrapper<'a, StreamWrite, A>
 {
-	pub fn new_port_in<P: KernelOutput + KernelPortOutput + Send>(port: P, allocator: &'a A)
-	-> Self
+	pub fn new_basic_in<B: KernelOutput + Send + Sync>(basic: B, allocator: &'a A) -> Self
+	{
+		Self {
+			inner: WrapperInner::new_basic(coerce_box(Box::new_in(basic, allocator)), allocator)
+		}
+	}
+
+	pub fn new_port_in<P: KernelPortOutput + Send + Sync>(port: P, allocator: &'a A) -> Self
 	{
 		Self {
 			inner: WrapperInner::new_port(coerce_box(Box::new_in(port, allocator)), allocator)
@@ -128,24 +126,31 @@ impl<'a, A: Allocator> Wrapper<'a, StreamWrite, A>
 	}
 }
 
-impl<'a, A: Allocator> Wrapper<'a, StreamReadWrite, A>
+impl<'a, A: Allocator + Sync + Send> Wrapper<'a, StreamReadWrite, A>
 {
-	pub fn new_port_in<P: KernelIO + KernelPortIO + Send>(port: P, allocator: &'a A) -> Self
+	pub fn new_basic_in<B: KernelIO + Send + Sync>(basic: B, allocator: &'a A) -> Self
+	{
+		Self {
+			inner: WrapperInner::new_basic(coerce_box(Box::new_in(basic, allocator)), allocator)
+		}
+	}
+
+	pub fn new_port_in<P: KernelPortIO + Send + Sync>(port: P, allocator: &'a A) -> Self
 	{
 		Self {
 			inner: WrapperInner::new_port(coerce_box(Box::new_in(port, allocator)), allocator)
 		}
 	}
-}
-
-impl<T: StreamDirection<IsRead = True>, A: Allocator> Wrapper<'_, T, A>
-{
-	fn read(&self) {}
 }
 
 impl Wrapper<'_, StreamRead, Global>
 {
-	pub fn new_port<P: KernelInput + KernelPortInput + Send>(port: P) -> Self
+	pub fn new_basic<B: KernelInput + Send + Sync>(basic: B) -> Self
+	{
+		Self::new_basic_in(basic, &Global)
+	}
+
+	pub fn new_port<P: KernelPortInput + Send + Sync>(port: P) -> Self
 	{
 		Self::new_port_in(port, &Global)
 	}
@@ -153,7 +158,12 @@ impl Wrapper<'_, StreamRead, Global>
 
 impl Wrapper<'_, StreamWrite, Global>
 {
-	pub fn new_port<P: KernelOutput + KernelPortOutput + Send>(port: P) -> Self
+	pub fn new_basic<B: KernelOutput + Send + Sync>(basic: B) -> Self
+	{
+		Self::new_basic_in(basic, &Global)
+	}
+
+	pub fn new_port<P: KernelPortOutput + Send + Sync>(port: P) -> Self
 	{
 		Self::new_port_in(port, &Global)
 	}
@@ -161,12 +171,31 @@ impl Wrapper<'_, StreamWrite, Global>
 
 impl Wrapper<'_, StreamReadWrite, Global>
 {
-	pub fn new_port<P: KernelIO + KernelPortIO + Send>(port: P) -> Self
+	pub fn new_basic<B: KernelIO + Send + Sync>(basic: B) -> Self
+	{
+		Self::new_basic_in(basic, &Global)
+	}
+
+	pub fn new_port<P: KernelPortIO + Send + Sync>(port: P) -> Self
 	{
 		Self::new_port_in(port, &Global)
+	}
+}
+
+impl<T: StreamDirection<IsRead = True>, A: Allocator + Sync + Send> Wrapper<'_, T, A>
+{
+	pub fn read_from_bytes<R: TryFromBytes>(
+		&mut self
+	) -> Result<([u8; const { mem::size_of::<R>() }], R), IOError>
+	{
+		todo!()
 	}
 }
 
 pub type InputStream<'a, A = Global> = Wrapper<'a, StreamRead, A>;
 pub type OutputStream<'a, A = Global> = Wrapper<'a, StreamWrite, A>;
 pub type IOStream<'a, A = Global> = Wrapper<'a, StreamReadWrite, A>;
+
+static_assert!(impls!(InputStream<'_>: Send & Sync));
+static_assert!(impls!(OutputStream<'_>: Send & Sync));
+static_assert!(impls!(IOStream<'_>: Send & Sync));

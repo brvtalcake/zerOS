@@ -1,3 +1,3 @@
 #![no_std]
 #![no_main]
-#![allow(non_snake_case)]
+#![expect(non_snake_case)]

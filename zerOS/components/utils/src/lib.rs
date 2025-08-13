@@ -3,12 +3,12 @@
 #![no_std]
 #![no_main]
 #![allow(non_snake_case)]
-#![allow(incomplete_features)]
-#![allow(internal_features)]
+// #![allow(incomplete_features)]
+// #![allow(internal_features)]
 #![feature(transmutability)]
 #![feature(decl_macro)]
 #![feature(associated_type_defaults)]
-// #![feature(generic_const_exprs)]
+#![feature(generic_const_exprs)]
 #![feature(const_trait_impl)]
 #![feature(auto_traits)]
 #![feature(core_intrinsics)]
@@ -22,6 +22,12 @@
 #![feature(sized_hierarchy)]
 #![feature(cfg_select)]
 #![feature(const_type_name)]
+#![feature(const_cmp)]
+#![feature(const_default)]
+#![feature(tuple_trait)]
+#![feature(unboxed_closures)]
+#![feature(fn_traits)]
+#![feature(const_clone)]
 
 use core::{
 	any::Any,
@@ -29,20 +35,25 @@ use core::{
 	mem::{self, Assume, TransmuteFrom}
 };
 
+use elain::{Align, Alignment};
 pub use rustc_demangle::{demangle, try_demangle};
 use typenum::{Bit, False, True};
 use zerOS_static_assertions::static_assert;
 
 use crate::cmp::{ConstOrd, ConstPartialEq};
 
+mod aligned_buffer;
 pub mod cmp;
+mod constructor_trait;
 #[cfg(false)]
 pub mod meta;
 pub mod str;
+pub use aligned_buffer::*;
+pub use constructor_trait::*;
 
 pub macro function() {{
 	fn f() {}
-	const fn type_name_of<T: ~const core::marker::Destruct>(_: T) -> &'static str
+	const fn type_name_of<T: [const] core::marker::Destruct>(_: T) -> &'static str
 	{
 		::core::any::type_name::<T>()
 	}
@@ -333,7 +344,7 @@ pub const unsafe fn with_lifetime_mut<'from, 'to, T: ?Sized>(from: &'from mut T)
 
 pub const fn static_assume_lt<T: Copy>(value: T, max: T) -> T
 where
-	T: ~const ConstOrd
+	T: [const] ConstOrd
 {
 	assert!(value.const_lt(&max));
 	unsafe {
@@ -352,6 +363,41 @@ impl IsTrueVal for False {}
 impl IsTrueVal for True
 {
 	type Value = True;
+}
+
+#[derive(Debug, Copy)]
+pub struct Aligned<const ALIGN: usize, T>
+where
+	Align<ALIGN>: Alignment
+{
+	_alignment:  Align<ALIGN>,
+	pub aligned: T
+}
+
+impl<const ALIGN: usize, T: [const] Default> const Default for Aligned<ALIGN, T>
+where
+	Align<ALIGN>: Alignment
+{
+	fn default() -> Self
+	{
+		Self {
+			_alignment: Align::NEW,
+			aligned:    T::default()
+		}
+	}
+}
+
+impl<const ALIGN: usize, T: [const] Clone> const Clone for Aligned<ALIGN, T>
+where
+	Align<ALIGN>: Alignment
+{
+	fn clone(&self) -> Self
+	{
+		Self {
+			_alignment: Align::NEW,
+			aligned:    self.aligned.clone()
+		}
+	}
 }
 
 /// Trait to retrieve the size of a type.

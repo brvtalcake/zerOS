@@ -143,17 +143,21 @@
         "--config-path",
         "${workspaceFolder}/rustfmt.toml",
     ],
-    "rust-analyzer.inlayHints.implicitDrops.enable": true,
+    /* "rust-analyzer.inlayHints.implicitDrops.enable": true, */
     "rust-analyzer.cargo.target": "${workspaceFolder}/../.xtask-cache/x86_64-unknown-kernel.json",
     "rust-analyzer.cargo.extraEnv": {
         "ZEROS_TARGET_CPU": "skylake",
-        "ZEROS_TOPDIR": "${workspaceFolder}/../"
-        /* "RUSTUP_TOOLCHAIN": "stable", */
-        /* "__CARGO_TEST_CHANNEL_OVERRIDE_DO_NOT_USE_THIS": "nightly" */
+        "ZEROS_TOPDIR": "${workspaceFolder}/../",
+        /* "RUSTFLAGS": "--cfg getrandom_backend=\"rdrand\" -Cforce-unwind-tables -Zmacro-backtrace -Ctarget-cpu=native -Zcrate-attr=feature(unqualified_local_imports) -Zcrate-attr=feature(non_exhaustive_omitted_patterns_lint) -Zcrate-attr=feature(must_not_suspend) -Zcrate-attr=feature(multiple_supertrait_upcastable) -Zcrate-attr=feature(strict_provenance_lints)", */
+        "RUSTFLAGS": "--cfg getrandom_backend=\"rdrand\" -Cforce-unwind-tables -Zmacro-backtrace -Ctarget-cpu=native",
+        "ZEROS_RUST_CONFIG": "${workspaceFolder}/config/lints.rs"
     },
-    //"rust-analyzer.cargo.extraArgs": [
-    //    "+nightly"
-    //],
+    "rust-analyzer.cargo.extraArgs": [
+        /* "+nightly", */
+        "-Zunstable-options",
+        "-Zbuild-std=core,compiler_builtins,alloc",
+        "-Zbuild-std-features=compiler-builtins-mem"
+    ],
     /* "rust-analyzer.cargo.sysroot": "/home/axel/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu", */
     "rust-analyzer.procMacro.attributes.enable": true,
 }

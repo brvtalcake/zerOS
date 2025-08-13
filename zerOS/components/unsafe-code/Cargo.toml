@@ -1,0 +1,39 @@
+[package]
+name = "zerOS-unsafe-code"
+description = "unsafe-code-related macros and attributes"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license-file.workspace = true
+readme.workspace = true
+
+autobins = false
+autoexamples = false
+autotests = false
+autobenches = false
+
+[lib]
+name = "zerOS_unsafe"
+proc-macro = true
+
+[[test]]
+path = "tests/block.rs"
+name = "block"
+[[test]]
+path = "tests/func.rs"
+name = "func"
+
+[dependencies]
+proc-macro2 = "1.0.94"
+quote = "1.0.40"
+syn = { version = "2.0", features = ["full", "parsing", "extra-traits"] }
+proc-macro-error2 = { version = "2.0.1", features = ["nightly"] }
+unicode-xid = "0.2.6"
+eager2.workspace = true
+#markdown = "1.0.0"
+#either = "1.15.0"
+
+[dev-dependencies]
+contracts.workspace = true

@@ -1,4 +1,4 @@
-use lock_api::{GuardSend, RawMutex, RawRwLock, RwLock};
+use lock_api::RawMutex;
 
 use super::BasicMutex;
 
@@ -20,9 +20,9 @@ pub struct BasicRwLockRaw
 	inner: BasicMutex<BasicRwLockRawInner>
 }
 
-unsafe impl RawRwLock for BasicRwLockRaw
+unsafe impl lock_api::RawRwLock for BasicRwLockRaw
 {
-	type GuardMarker = GuardSend;
+	type GuardMarker = lock_api::GuardSend;
 
 	const INIT: Self = Self {
 		inner: BasicMutex::new(BasicRwLockRawInner { readers: 0 })
@@ -115,8 +115,8 @@ impl BasicRwLockRaw
 {
 	pub const fn new() -> Self
 	{
-		Self::INIT
+		<Self as lock_api::RawRwLock>::INIT
 	}
 }
 
-pub type BasicRwLock<T> = RwLock<BasicRwLockRaw, T>;
+pub type BasicRwLock<T> = lock_api::RwLock<BasicRwLockRaw, T>;

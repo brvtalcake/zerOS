@@ -19,7 +19,7 @@ use core::{
 	panic::Location as SourceLocation
 };
 
-use downcast_rs::{Downcast, impl_downcast};
+use downcast_rs::{impl_downcast, DowncastSync};
 use impls::impls;
 use overloadf::overload;
 use thiserror::Error;
@@ -117,7 +117,7 @@ pub enum IOError
 		location:    &'static SourceLocation<'static>
 	},
 	#[error("{IO_ERROR_DISPLAY_PREFIX} {0}")]
-	Other(anyhow::Error)
+	Other(#[source] anyhow::Error)
 }
 
 #[overload]
@@ -172,29 +172,24 @@ impl IOError
 	}
 }
 
-pub trait KernelInput: Downcast
+pub trait KernelInput: DowncastSync + Debug + Send + Sync
 {
 	/// Fills the buffer with read bytes
 	fn read_bytes(&mut self, buffer: &mut [u8]) -> VoidResult<IOError>;
 }
-impl_downcast!(KernelInput);
+impl_downcast!(sync KernelInput);
 
-pub trait KernelOutput: Downcast
+pub trait KernelOutput: DowncastSync + Debug + Send + Sync
 {
 	/// Writes bytes
 	fn write_bytes(&mut self, bytes: &[u8]) -> VoidResult<IOError>;
 }
-impl_downcast!(KernelOutput);
+impl_downcast!(sync KernelOutput);
 
 pub trait KernelIO: KernelInput + KernelOutput {}
+impl_downcast!(sync KernelIO);
 
 impl<T: KernelInput + KernelOutput> KernelIO for T {}
-
-// mod impls;
-//
-// verify_impls! {
-// 	from + to: u8 i8 u16 i16 u32 i32 u64 i64
-//}
 
 // TODO: block IO variants
 pub use block::*;

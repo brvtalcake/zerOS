@@ -86,6 +86,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 
 [[package]]
+name = "contracts"
+version = "0.6.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc486fc59d4d0e52ea0b4461a12720c8617338c9ee955cc4013fb7319d264abd"
+dependencies = [
+ "proc-macro2 1.0.95",
+ "quote 1.0.40",
+ "syn 2.0.104",
+]
+
+[[package]]
 name = "convert_case"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -145,6 +156,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "derive-where"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "510c292c8cf384b1a340b816a9a6cf2599eb8f566a44949024af88418000c50b"
+dependencies = [
+ "proc-macro2 1.0.95",
+ "quote 1.0.40",
+ "syn 2.0.104",
+]
+
+[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -163,8 +185,7 @@ checksum = "ea8a8b81cacc08888170eef4d13b775126db426d0b348bee9d18c2c1eaf123cf"
 [[package]]
 name = "eager2"
 version = "1.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32005a22a1ccf85b9cf89dcfb3f62f01c750a80f8dbae5bd4765b248e2567a2c"
+source = "git+https://github.com/brvtalcake/eager2.git?branch=master#58a572bd9ca1f8ad05df2f876f0f941e83318800"
 dependencies = [
  "convert_case",
  "eager2-core",
@@ -174,14 +195,19 @@ dependencies = [
 [[package]]
 name = "eager2-core"
 version = "1.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6575629a42f31b31321dafdbdeba21d8ba7e7c7bd36ade193af2903db121c666"
+source = "git+https://github.com/brvtalcake/eager2.git?branch=master#58a572bd9ca1f8ad05df2f876f0f941e83318800"
 
 [[package]]
 name = "either"
 version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "48c757948c5ede0e46177b7add2e67155f70e33c07fea8284df6576da70b3719"
+
+[[package]]
+name = "elain"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6ba39bdf557eef05f2c1c2e986cbab6b85329b922e7606e5b63ee4c5037ba77a"
 
 [[package]]
 name = "ena"
@@ -584,6 +610,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "925383efa346730478fb4838dbe9137d2a47675ad789c546d150a6e1dd4ab31c"
 
 [[package]]
+name = "proc-macro-error-attr2"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "96de42df36bb9bba5542fe9f1a054b8cc87e172759a1868aa05c1f3acc89dfc5"
+dependencies = [
+ "proc-macro2 1.0.95",
+ "quote 1.0.40",
+]
+
+[[package]]
+name = "proc-macro-error2"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11ec05c52be0a07b08061f7dd003e7d7092e0472bc731b4af7bb1ef876109802"
+dependencies = [
+ "proc-macro-error-attr2",
+ "proc-macro2 1.0.95",
+ "quote 1.0.40",
+ "syn 2.0.104",
+]
+
+[[package]]
 name = "proc-macro2"
 version = "0.4.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -832,6 +880,12 @@ name = "spin"
 version = "0.9.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
+
+[[package]]
+name = "stable_deref_trait"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 
 [[package]]
 name = "string_cache"
@@ -1205,6 +1259,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "zerOS-constructors-macro"
+version = "0.1.0"
+dependencies = [
+ "eager2",
+ "proc-macro-error2",
+ "proc-macro2 1.0.95",
+ "quote 1.0.40",
+ "syn 2.0.104",
+]
+
+[[package]]
 name = "zerOS-ctors"
 version = "0.1.0"
 dependencies = [
@@ -1241,6 +1306,7 @@ dependencies = [
  "bstr",
  "crabtime",
  "delegate",
+ "derive-where",
  "downcast-rs",
  "eager2",
  "impls",
@@ -1248,6 +1314,7 @@ dependencies = [
  "overloadf",
  "regex",
  "sealed",
+ "stable_deref_trait",
  "thiserror",
  "typenum",
  "unicode-normalization",
@@ -1285,6 +1352,7 @@ dependencies = [
  "zerOS-region-allocator",
  "zerOS-serial",
  "zerOS-sync",
+ "zerOS-unsafe-code",
  "zerOS-unwinding",
  "zerOS-utils",
 ]
@@ -1375,6 +1443,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "zerOS-unsafe-code"
+version = "0.1.0"
+dependencies = [
+ "contracts",
+ "eager2",
+ "proc-macro-error2",
+ "proc-macro2 1.0.95",
+ "quote 1.0.40",
+ "syn 2.0.104",
+ "unicode-xid 0.2.6",
+]
+
+[[package]]
 name = "zerOS-unwinding"
 version = "0.1.0"
 
@@ -1382,12 +1463,15 @@ version = "0.1.0"
 name = "zerOS-utils"
 version = "0.1.0"
 dependencies = [
+ "derive-where",
+ "elain",
  "rustc-demangle",
  "sealed",
  "simdutf8",
  "typenum",
  "zerOS-macro-utils",
  "zerOS-static-assertions",
+ "zerocopy",
 ]
 
 [[package]]
