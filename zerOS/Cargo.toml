@@ -86,7 +86,7 @@ psm = "0.1"
 logos = { version = "0.15.0", default-features = false, features = [
     "export_derive",
 ] }
-indexmap = { version = "2.9.0", default-features = false }
+indexmap = { version = "2.11.0", default-features = false }
 corosensei = { version = "0.2.1", default-features = false }
 futures = { version = "0.3", default-features = false }
 eager2 = "1.0.1"
